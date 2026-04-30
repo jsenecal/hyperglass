@@ -2,7 +2,6 @@
 
 # Standard Library
 import os
-import sys
 
 # Third Party
 import pytest
