@@ -3,6 +3,12 @@
   "name": "ui",
   "description": "UI for hyperglass, the modern network looking glass",
   "author": "Matt Love",
+  "contributors": [
+    {
+      "name": "Jonathan Senecal",
+      "email": "jonathan.senecal@metrooptic.com"
+    }
+  ],
   "license": "BSD-3-Clause-Clear",
   "private": true,
   "scripts": {

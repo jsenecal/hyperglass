@@ -3,7 +3,8 @@ name = "hyperglass"
 version = "2.0.4+jsenecal.2"
 description = "hyperglass is the modern network looking glass that tries to make the internet better."
 authors = [
-    { name = "thatmattlove", email = "matt@hyperglass.dev" }
+    { name = "thatmattlove", email = "matt@hyperglass.dev" },
+    { name = "Jonathan Senecal", email = "jonathan.senecal@metrooptic.com" }
 ]
 dependencies = [
     "Pillow>=10.4.0,<11.0",

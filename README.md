@@ -9,6 +9,32 @@
 
 <hr/>
 
+> ### Fork notice
+>
+> This repository is a maintained fork of [**thatmattlove/hyperglass**](https://github.com/thatmattlove/hyperglass). The upstream project has been quiet for an extended period, so this fork carries production-oriented fixes that hadn't landed upstream as of v2.0.4.
+>
+> **Container images** are published to GHCR on every push to `main` and on tag pushes:
+>
+> | Tag | Updated by | Use case |
+> | --- | --- | --- |
+> | `ghcr.io/jsenecal/hyperglass:2.0.4-jsenecal.2` | tag push | immutable, recommended for production |
+> | `ghcr.io/jsenecal/hyperglass:sha-<short>` | every build | per-commit immutable |
+> | `ghcr.io/jsenecal/hyperglass:main` | every push to `main` | rolling HEAD |
+> | `ghcr.io/jsenecal/hyperglass:latest` | every build | rolling whatever's freshest |
+>
+> **Maintained by** Jonathan Senecal &lt;jonathan.senecal@metrooptic.com&gt;. **Issues** belong in the [fork's tracker](https://github.com/jsenecal/hyperglass/issues), not upstream's.
+
+#### Changes from upstream v2.0.4
+
+- **[#356](https://github.com/thatmattlove/hyperglass/issues/356)** — Worker count is now cgroup- and affinity-aware (`os.process_cpu_count` / `sched_getaffinity`), capped at 8 by default, and overridable via the new `HYPERGLASS_WORKERS` env var. Stops containerized deployments on high-core hosts from OOM-killing themselves at startup.
+- **[#354](https://github.com/thatmattlove/hyperglass/pull/354) / [#318](https://github.com/thatmattlove/hyperglass/issues/318)** — Pass `request_timeout` to netmiko's `send_command()` so long-running commands like traceroute don't fail at the 10s default.
+- **[#341](https://github.com/thatmattlove/hyperglass/issues/341) / [#348](https://github.com/thatmattlove/hyperglass/issues/348)** — Pin `click<8.2` so fresh Docker / `pip install -e .` installs don't pick up a click release that's incompatible with `typer 0.9.0` and crash on startup.
+- **[#330](https://github.com/thatmattlove/hyperglass/issues/330)** — Make the `Device.http` field optional so the existing "platform: http but no http params" validator branch is actually reachable.
+- **[#334](https://github.com/thatmattlove/hyperglass/issues/334)** — Targeted CVE patches: bump Next.js to 13.5.11, Pillow ≥10.4, httpx ≥0.27, h11 ≥0.16, base image to rolling `python:3.12-alpine` with `apk upgrade`, setuptools ≥78.1.1.
+- **CI** — Tag- and push-triggered multi-tag GHCR publish workflow (lifted from upstream's never-merged `docker-build` branch).
+
+<hr/>
+
 <div align="center">
 
 [**Documentation**](https://hyperglass.dev)&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[**Live Demo**](https://demo.hyperglass.dev/)
