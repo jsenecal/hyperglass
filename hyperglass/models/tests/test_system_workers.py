@@ -23,7 +23,7 @@ def test_debug_defaults_to_one(tmp_path):
 
 
 def test_unset_non_debug_uses_cpu_default(tmp_path):
-    assert _settings(tmp_path, debug=False).worker_count == cpu_count(2)
+    assert _settings(tmp_path, debug=False).worker_count == min(cpu_count(2), 8)
 
 
 def test_explicit_workers_overrides_debug(tmp_path):

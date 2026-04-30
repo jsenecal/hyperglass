@@ -79,6 +79,7 @@ class HyperglassSettings(BaseSettings):
                 "redis_dsn",
                 "host",
                 "port",
+                "workers",
             )
         )
         for attr in params:
@@ -141,13 +142,16 @@ class HyperglassSettings(BaseSettings):
         """Number of web-server workers.
 
         Honors an explicit ``HYPERGLASS_WORKERS`` (the ``workers`` field, clamped
-        to at least 1) when set; otherwise 1 in debug mode, else 2x CPU cores.
+        to at least 1) when set; otherwise 1 in debug mode, else 2x the CPUs this
+        process may use, capped at 8. The cap keeps the default sensible for
+        low-QPS looking-glass workloads on high-core hosts; set
+        ``HYPERGLASS_WORKERS`` to go higher.
         """
         if self.workers is not None:
             return max(1, self.workers)
         if self.debug:
             return 1
-        return cpu_count(2)
+        return min(cpu_count(2), 8)
 
     @property
     def redis(self: "HyperglassSettings") -> t.Dict[str, t.Union[None, int, str]]:
@@ -165,7 +169,7 @@ class HyperglassSettings(BaseSettings):
     @property
     def redis_connection_pool(self: "HyperglassSettings") -> t.Dict[str, t.Any]:
         """Get Redis ConnectionPool keyword arguments."""
-        return {"url": str(self.redis_dsn), "max_connections": at_least(8, cpu_count(2))}
+        return {"url": str(self.redis_dsn), "max_connections": at_least(8, self.worker_count)}
 
     @property
     def dev_url(self: "HyperglassSettings") -> str:
