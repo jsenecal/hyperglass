@@ -1,6 +1,6 @@
 [project]
 name = "hyperglass"
-version = "2.0.4+jsenecal.1"
+version = "2.0.4+jsenecal.2"
 description = "hyperglass is the modern network looking glass that tries to make the internet better."
 authors = [
     { name = "thatmattlove", email = "matt@hyperglass.dev" }
@@ -12,7 +12,7 @@ dependencies = [
     "aiofiles>=23.2.1",
     "distro==1.8.0",
     "favicons==0.2.2",
-    "httpx==0.24.0",
+    "httpx>=0.27.0,<0.28",
     "h11>=0.16.0",
     "loguru>=0.7.2",
     "netmiko==4.1.2",
