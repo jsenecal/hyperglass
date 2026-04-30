@@ -50,6 +50,7 @@ class HyperglassSettings(BaseSettings):
     port: int = 8001
     ca_cert: t.Optional[FilePath] = None
     container: bool = False
+    workers: t.Optional[int] = None
 
     def __init__(self, **kwargs) -> None:
         """Create hyperglass Settings instance."""
@@ -78,6 +79,7 @@ class HyperglassSettings(BaseSettings):
                 "redis_dsn",
                 "host",
                 "port",
+                "workers",
             )
         )
         for attr in params:
@@ -135,12 +137,24 @@ class HyperglassSettings(BaseSettings):
             return "DEBUG"
         return "WARNING"
 
-    @property
-    def workers(self: "HyperglassSettings") -> int:
-        """Get worker count, inferred from debug mode."""
-        if self.debug:
+    @field_validator("workers", mode="after")
+    def validate_workers(
+        cls: "HyperglassSettings", value: t.Optional[int], info: ValidationInfo
+    ) -> int:
+        """Resolve worker count.
+
+        Precedence: explicit override (``HYPERGLASS_WORKERS`` / kwarg) > debug
+        mode (1) > auto-detected ``cpu_count(2)`` capped at 8. The cap keeps
+        the default useful for typical low-QPS looking-glass workloads while
+        still letting operators pin a higher value explicitly.
+        """
+        if value is not None:
+            if value < 1:
+                raise ValueError("workers must be at least 1")
+            return value
+        if info.data.get("debug") is True:
             return 1
-        return cpu_count(2)
+        return min(cpu_count(2), 8)
 
     @property
     def redis(self: "HyperglassSettings") -> t.Dict[str, t.Union[None, int, str]]:
@@ -158,7 +172,7 @@ class HyperglassSettings(BaseSettings):
     @property
     def redis_connection_pool(self: "HyperglassSettings") -> t.Dict[str, t.Any]:
         """Get Redis ConnectionPool keyword arguments."""
-        return {"url": str(self.redis_dsn), "max_connections": at_least(8, cpu_count(2))}
+        return {"url": str(self.redis_dsn), "max_connections": at_least(8, self.workers)}
 
     @property
     def dev_url(self: "HyperglassSettings") -> str:
