@@ -52,7 +52,10 @@ class NetmikoConnection(SSHConnection):
 
         global_args = netmiko_device_globals.get(self.device.platform, {})
 
-        send_args = netmiko_device_send_args.get(self.device.platform, {})
+        send_args = {
+            "read_timeout": params.request_timeout,
+            **netmiko_device_send_args.get(self.device.platform, {}),
+        }
 
         driver_kwargs = {
             "host": host or self.device._target,
