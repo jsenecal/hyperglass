@@ -1,4 +1,4 @@
-FROM python:3.12.3-alpine as base
+FROM python:3.12-alpine as base
 WORKDIR /opt/hyperglass
 ENV HYPERGLASS_APP_PATH=/etc/hyperglass
 ENV HYPERGLASS_HOST=0.0.0.0
@@ -8,6 +8,7 @@ ENV HYPERGLASS_DEV_MODE=false
 ENV HYPERGLASS_REDIS_HOST=redis
 ENV HYPEGLASS_DISABLE_UI=true
 ENV HYPERGLASS_CONTAINER=true
+RUN apk upgrade --no-cache && pip3 install --no-cache-dir --upgrade "setuptools>=78.1.1" pip
 COPY . .
 
 FROM base as ui

@@ -19,6 +19,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - [#341](https://github.com/thatmattlove/hyperglass/issues/341) / [#348](https://github.com/thatmattlove/hyperglass/issues/348): Pin `click<8.2` so fresh installs (Docker, manual `pip install -e .`) don't pull a click release that is incompatible with `typer 0.9.0` and crashes on startup with `Secondary flag is not valid for non-boolean flag.`
 - [#356](https://github.com/thatmattlove/hyperglass/issues/356): Make worker count cgroup/affinity-aware (use `os.process_cpu_count` / `sched_getaffinity`), cap auto-detected workers at 8, and add a `HYPERGLASS_WORKERS` override so containerized deployments on high-core hosts no longer OOM.
 
+### Security
+- [#334](https://github.com/thatmattlove/hyperglass/issues/334): Address runtime-relevant CVEs surfaced by container scanners — bump Next.js to `13.5.11` (covers CVE-2025-29927 middleware bypass, CVE-2024-34351 SSRF, CVE-2024-46982 cache poisoning, CVE-2024-51479 auth bypass), bump Pillow to `>=10.4.0` (CVE-2024-28219), pin `h11>=0.16.0` (CVE-2025-43859 request smuggling), use the rolling `python:3.12-alpine` base with `apk upgrade` (CVE-2024-6119 / CVE-2024-12797 OpenSSL, CVE-2025-31115 xz), and bump `setuptools>=78.1.1` (CVE-2025-47273) inside the image.
+
 ### Updated
 
 - [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
