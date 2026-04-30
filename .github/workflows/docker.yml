@@ -1,6 +1,7 @@
 name: Create and publish a Docker image
 on:
   push:
+    branches: [main]
     tags: ["*"]
 
 env:
@@ -27,6 +28,18 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Mark every build as :latest (including pre-release semver
+          # tags like 2.0.4-jsenecal.1, which the default "latest=auto"
+          # would otherwise skip).
+          flavor: |
+            latest=true
+          tags: |
+            # Branch pushes -> :main (or whatever branch pushed)
+            type=ref,event=branch
+            # Tag pushes -> :2.0.4-jsenecal.1 (strips leading "v")
+            type=semver,pattern={{version}}
+            # Every build -> :sha-abc1234 (immutable, pin-friendly)
+            type=sha
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
