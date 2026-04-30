@@ -60,15 +60,36 @@ def get_node_version() -> t.Tuple[int, int, int]:
     return tuple((int(v) for v in version.split(".")))
 
 
-def cpu_count(multiplier: int = 0) -> int:
-    """Get server's CPU core count.
+def cpu_count(multiplier: int = 1) -> int:
+    """Get the process-allowed CPU core count.
 
-    Used to determine the number of web server workers.
+    Prefers cgroup- and affinity-aware APIs so deployments inside
+    containers or under cpuset constraints see the real allowed CPU
+    count rather than the host's logical core count. On bare metal the
+    result matches the host CPU count.
     """
-    # Standard Library
-    import multiprocessing
+    n: t.Optional[int] = None
 
-    return multiprocessing.cpu_count() * multiplier
+    # Python 3.13+: respects cgroup cpu.max and sched_getaffinity.
+    process_cpu_count = getattr(os, "process_cpu_count", None)
+    if callable(process_cpu_count):
+        n = process_cpu_count()
+
+    # Fallback for Python 3.12 and earlier on Linux.
+    if n is None and hasattr(os, "sched_getaffinity"):
+        try:
+            n = len(os.sched_getaffinity(0))
+        except OSError:
+            pass
+
+    # Final fallback for non-Linux platforms.
+    if n is None:
+        # Standard Library
+        import multiprocessing
+
+        n = multiprocessing.cpu_count()
+
+    return max(n * multiplier, 1)
 
 
 def check_python() -> str:

@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - [#315](https://github.com/thatmattlove/hyperglass/issues/187): Error in bgp_router query on Huawei
 - [#325](https://github.com/thatmattlove/hyperglass/pull/325): Fix code block padding in the documentation - @jagardaniel
 - [#332](https://github.com/thatmattlove/hyperglass/pull/332): Fix custom proxy port support in SSH proxy tunnels @jessiebryan 
+- [#356](https://github.com/thatmattlove/hyperglass/issues/356): Make worker count cgroup/affinity-aware (use `os.process_cpu_count` / `sched_getaffinity`), cap auto-detected workers at 8, and add a `HYPERGLASS_WORKERS` override so containerized deployments on high-core hosts no longer OOM.
 
 ### Updated
 
