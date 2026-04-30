@@ -12,8 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - [#311](https://github.com/thatmattlove/hyperglass/issues/311): Fix: device and directive errors.
 - [#315](https://github.com/thatmattlove/hyperglass/issues/315): Impossibile to use command "BGP Route" with Huawei NetEngine 8000 
 - [#315](https://github.com/thatmattlove/hyperglass/issues/187): Error in bgp_router query on Huawei
+- [#318](https://github.com/thatmattlove/hyperglass/issues/318) / [#354](https://github.com/thatmattlove/hyperglass/pull/354): Pass `request_timeout` as netmiko `read_timeout` so long-running commands like traceroute do not fail at the 10s default.
 - [#325](https://github.com/thatmattlove/hyperglass/pull/325): Fix code block padding in the documentation - @jagardaniel
+- [#330](https://github.com/thatmattlove/hyperglass/issues/330): Fix unreachable validator branch when a device is configured with `platform: http` but no `http` parameters.
 - [#332](https://github.com/thatmattlove/hyperglass/pull/332): Fix custom proxy port support in SSH proxy tunnels @jessiebryan 
+- [#341](https://github.com/thatmattlove/hyperglass/issues/341) / [#348](https://github.com/thatmattlove/hyperglass/issues/348): Pin `click<8.2` so fresh installs (Docker, manual `pip install -e .`) don't pull a click release that is incompatible with `typer 0.9.0` and crashes on startup with `Secondary flag is not valid for non-boolean flag.`
+- [#356](https://github.com/thatmattlove/hyperglass/issues/356): Make worker count cgroup/affinity-aware (use `os.process_cpu_count` / `sched_getaffinity`), cap auto-detected workers at 8, and add a `HYPERGLASS_WORKERS` override so containerized deployments on high-core hosts no longer OOM.
 
 ### Updated
 
