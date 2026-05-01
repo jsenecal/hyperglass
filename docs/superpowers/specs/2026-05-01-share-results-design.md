@@ -37,7 +37,8 @@ We want every result to be sharable as a permalink with a meaningful retention w
 | 4 | **TTL**: configurable via two new fields under `params.cache`: `share_timeout` (default `604800` = 7 days) and `share_sliding` (default `false`). Fixed-from-creation by default. | Operator can extend; sliding is available as a knob, not a default. |
 | 5 | **Bump default `params.cache.timeout` from `120` to `600`** (10 min). | Gives the user a forgiving window between query and share-click before the source cache entry expires. |
 | 6 | **Add a `force` flag to the query request body**, default `false`. The UI's existing refresh button enables after 120s and posts `force: true`, bypassing the cache and re-executing. | Decouples UI cooldown (120s, controllable by operator) from cache TTL (600s). |
-| 7 | **Expose share configuration to the frontend** via `/api/info` (specifically: `share_enabled`, `share_timeout`, `refresh_min_interval`). | UI hides Share button when disabled and shows accurate "expires in N days" copy. |
+| 7 | **Expose share configuration to the frontend via build-time `UIParameters`** (the `hyperglass.json` static asset that ships with the SPA). The new fields on `UIParameters`: `share_enabled`, `share_timeout`, `refresh_min_interval`. | UI hides Share button when disabled and shows accurate "expires in N days" copy. This matches how all other UI-affecting config flows today (`hyperglass/frontend/__init__.py` writes `hyperglass.json` at build time; the SPA imports it via `_app.tsx`/`_document.tsx`). Flipping `share_enabled` therefore requires a UI rebuild — consistent with existing config behavior in this codebase. The `/api/info` runtime endpoint remains untouched. |
+| 8 | **Add `params.public_url` config field** (optional string, default `null`). When set, used to build absolute share URLs. When unset, the share-create endpoint derives the base from the incoming request's `Host` header and `X-Forwarded-Proto`. | No existing `public_url` source exists in the codebase (`Settings.prod_url` returns `/api/`, not a public base URL). Operators behind reverse proxies who want stable share URLs configure it explicitly; everyone else gets sensible defaults from request headers. |
 
 ## Architecture
 
@@ -109,8 +110,8 @@ cache.set_map_item(cache_key, "output", raw_output)
 cache.set_map_item(cache_key, "timestamp", timestamp)
 cache.set_map_item(cache_key, "query", data.dict())
 cache.set_map_item(cache_key, "query_labels", {
-    "location": data.device.name,                  # frozen display name
-    "type": data.directive.name,                   # frozen directive label
+    "location": data.device.display_name or data.device.name,  # frozen display name
+    "type": data.directive.name,                                # frozen directive label
 })
 cache.set_map_item(cache_key, "format", response_format)
 cache.set_map_item(cache_key, "runtime", runtime)
@@ -119,15 +120,23 @@ cache.set_map_item(cache_key, "keywords", [])
 cache.expire(cache_key, expire_in=_state.params.cache.timeout)
 ```
 
+`Device` exposes both `name` (unique identifier-ish) and `display_name` (optional human label) per `hyperglass/models/config/devices.py:55-63`. We freeze `display_name or name` so a renamed/removed device does not break a snapshot's header. `Directive.name` is the human label (`hyperglass/models/directive.py:265`), distinct from `Directive.id`.
+
 `response_format` is computed before the existing line that re-reads the entry; we move that determination earlier. The full set of stored fields makes both routes (`/api/query` and `/api/query/share`) able to return identical payloads without re-deriving anything.
 
-When `force=True`, the route handler bypasses the initial `cache.get_map(...)` lookup and proceeds straight to execution. The cache entry is overwritten on completion, so subsequent non-force calls see the fresh result.
+When `force=True`, the route handler bypasses the initial `cache.get_map(...)` lookup and proceeds straight to execution. The cache entry is overwritten on completion, so subsequent non-force calls see the fresh result. **On execution failure under `force=True`, the existing cache entry is left intact** — we do not pre-delete the cache key before execution, so a stale-but-valid entry remains available rather than disappearing.
 
 ### Share endpoints — `hyperglass/api/routes.py`
 
 ```python
+from litestar.exceptions import HTTPException, NotFoundException
+
 @post("/api/query/share/{cache_id:str}", dependencies={"_state": Provide(get_state)})
-async def share_create(_state: HyperglassState, cache_id: str) -> ShareCreateResponse:
+async def share_create(
+    _state: HyperglassState,
+    request: Request,
+    cache_id: str,
+) -> ShareCreateResponse:
     """Promote a cached query result to a long-lived shareable snapshot."""
     if not _state.params.cache.share_enabled:
         raise NotFoundException("Sharing is disabled.")
@@ -139,7 +148,12 @@ async def share_create(_state: HyperglassState, cache_id: str) -> ShareCreateRes
     cache = _state.redis
     output = cache.get_map(cache_key, "output")
     if output is None:
-        raise GoneException("Result has expired. Refresh the query and try again.")
+        # 410 Gone — original cache entry has expired. Litestar has no
+        # GoneException type, so raise HTTPException directly.
+        raise HTTPException(
+            status_code=410,
+            detail="Result has expired. Refresh the query and try again.",
+        )
 
     share_id = _generate_share_id(cache, max_attempts=3)
     share_key = f"hyperglass.share.{share_id}"
@@ -156,7 +170,7 @@ async def share_create(_state: HyperglassState, cache_id: str) -> ShareCreateRes
 
     return ShareCreateResponse(
         id=share_id,
-        url=f"{_state.params.public_url()}/result/{share_id}",
+        url=_build_share_url(_state.params, request, share_id),
         expires_at=expires_at,
     )
 
@@ -195,29 +209,45 @@ async def share_get(_state: HyperglassState, share_id: str) -> ShareResponse:
 
 `_generate_share_id` produces an opaque token (`secrets.token_urlsafe(8)` ≈ 11 URL-safe characters, 64 bits of entropy). The function checks for an existing entry and retries on the astronomically unlikely collision; after `max_attempts=3` it raises an internal error.
 
-`GoneException` and `NotFoundException` are Litestar-native exception types; no new exception classes needed.
+`_build_share_url(params, request, share_id)`: returns `f"{base}/result/{share_id}"` where `base` is `params.public_url` if configured, else derived from the incoming request — `f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('host') or request.url.netloc}"`. Trusting `X-Forwarded-Proto` is fine because the URL is informational (sent back to the same client) — it's not used as a security boundary.
+
+`HTTPException(status_code=410, ...)` is used for the cache-expired case; Litestar does not ship a `GoneException`. Disabled-or-missing share returns `404` via `NotFoundException` (deliberate — does not advertise the feature exists on instances that disable it).
 
 ### Public URL — `hyperglass/models/config/params.py`
 
-Add a `public_url()` helper to `Params` that returns the operator-configured base URL. Hyperglass already needs to know its own URL for some behaviors (webhooks, OG tags); reuse the existing source if there is one (`web.location`, `general.public_url`, etc. — to be confirmed during implementation). If none exists, derive from the request host as a fallback for share-create response building.
-
-### `/api/info` payload
-
-`Params.export_api()` is extended to include:
+Add an optional field on `Params`:
 
 ```python
-{
-    ...,
-    "cache": {
-        "show_text": ...,
-        "share_enabled": ...,
-        "share_timeout": ...,
-        "refresh_min_interval": ...,
-    },
-}
+public_url: t.Optional[AnyHttpUrl] = None  # e.g. "https://lg.example.com"
 ```
 
-Non-public fields (`timeout`, `share_sliding`) stay private. The UI uses `share_enabled` to conditionally render the share button, `share_timeout` for "expires in N days" copy, and `refresh_min_interval` to gate the existing refresh button.
+Used by `_build_share_url(...)` (above). When unset, the helper falls back to deriving the base from the incoming request's `Host` and `X-Forwarded-Proto` headers. Documented in operator docs as "set this if running behind a reverse proxy where you want stable share URLs."
+
+There is **no existing public-URL source** in the codebase — `Settings.prod_url` returns `/api/`, and `web.*` has no public-URL field. This is a new field; do not assume one already exists.
+
+### UI configuration — build-time via `UIParameters`
+
+The hyperglass UI does **not** consume `/api/info` at runtime. UI config is built into `hyperglass/ui/hyperglass.json` at UI-build time by `hyperglass/frontend/__init__.py:280` (writing the result of `Params.frontend()` into the static SPA bundle). The SPA imports it via `_app.tsx`/`_document.tsx`.
+
+The new share knobs land in `UIParameters` (`hyperglass/models/ui.py`) and in whatever `Params.frontend()` produces:
+
+```python
+class UIParameters(...):
+    ...
+    cache: UICacheParameters
+
+class UICacheParameters(...):
+    show_text: bool
+    share_enabled: bool        # NEW
+    share_timeout: int         # NEW
+    refresh_min_interval: int  # NEW
+```
+
+Non-UI fields (`timeout`, `share_sliding`) stay private to the backend. The UI uses `share_enabled` to conditionally render the Share button, `share_timeout` for "expires in N days" copy on the share popover, and `refresh_min_interval` to gate the existing refresh button.
+
+**Operator-visible consequence:** flipping `share_enabled` (or any of the other UI-relevant share knobs) requires a UI rebuild — same as flipping any other UI-affecting config in hyperglass today. Document this in operator docs alongside the feature.
+
+The runtime `/api/info` endpoint is **untouched**. `APIParams` (the response shape from `/api/info`) is also untouched.
 
 ### Response models — `hyperglass/models/api/response.py`
 
@@ -240,7 +270,13 @@ A dedicated read-only result view. Behavior:
 4. On 404: show a configurable "Share not found or expired" message, with a CTA back to `/`.
 5. The page provides a "Run a fresh query" button that links to `/?location=<>&target=<>&type=<>` to pre-fill the form.
 
-Because hyperglass uses `next export`, `[id].tsx` cannot pre-render unknown IDs. The build emits a single `result/[id].html` that the SPA hydrates client-side. Litestar must serve this single HTML for any path matching `/result/{id:str}` so bookmarked share URLs resolve. This is added in `hyperglass/api/__init__.py` alongside the existing static-file routing for the SPA.
+**Static-export routing.** Because hyperglass uses `next export`, `pages/result/[id].tsx` cannot pre-render unknown IDs. Concrete approach:
+
+1. **Frontend.** `pages/result/[id].tsx` is a normal client-rendered page. At build time, Next emits an HTML placeholder for the route. We do not rely on `getStaticPaths` returning specific IDs.
+2. **Backend.** Add a Litestar route handler in `hyperglass/api/__init__.py` that matches `/result/{share_id:str}` and returns the contents of `hyperglass/static/ui/index.html` with `Content-Type: text/html`. This handler is registered **before** the static-file mount so it takes precedence. The SPA boots, reads `share_id` from `window.location.pathname`, and fetches `/api/query/share/<share_id>`.
+3. **Reserved-path safety.** Share IDs are constrained to URL-safe-base64 chars (`[A-Za-z0-9_-]{11}`) by `secrets.token_urlsafe(8)`. The handler enforces this format with a regex; non-matching paths fall through to the existing 404 path. There is no risk of conflict with `/api/*` (different prefix) or static assets (mounted under `/_next/`, `/favicon.ico` etc., already disjoint).
+
+This is the simplest viable approach: no Next.js config changes, no `getStaticPaths` gymnastics, just one Litestar route handler.
 
 ### Results component — small refactor
 
@@ -267,14 +303,17 @@ Add a `refresh_min_interval` cooldown gate (read from `/api/info`, default 120s)
 2. When clicked, sends `POST /api/query` with the same body but `force: true`.
 3. The result replaces the prior result in store; `id` updates accordingly so a subsequent share captures the new snapshot.
 
-### TypeScript types — `hyperglass/ui/types/globals.d.ts`
+### TypeScript types
 
-Add:
+In `hyperglass/ui/types/globals.d.ts`:
 
-- `id: string` to `QueryResponse`.
-- `ShareResponse` mirroring the backend model.
-- `force?: boolean` to the request type.
-- `share_enabled`, `share_timeout`, `refresh_min_interval` to whatever type holds the `/api/info` response.
+- Add `id: string` to `QueryResponse` (the field is already returned today but absent from the type).
+- Add `ShareResponse` mirroring the backend `ShareResponse` model.
+- Add `force?: boolean` to the query request type.
+
+In `hyperglass/ui/types/config.d.ts` (the type of the build-time `hyperglass.json` shape):
+
+- Add `share_enabled: boolean`, `share_timeout: number`, `refresh_min_interval: number` under the `cache` block — the UI reads these from the static config, not from `/api/info`.
 
 ### i18n — no hard-coded strings
 
@@ -333,5 +372,6 @@ All new user-visible strings — Share button label, copy-link tooltip, snapshot
 
 - **Redis footprint growth.** Worst case a popular looking glass mints thousands of shares per day. At ~10 KB/share (average textual command output) × 7 days × 1k/day = ~70 MB. Operators with high traffic may want to lower `share_timeout` or disable the feature. Documented in operator docs; no hard cap in v1.
 - **Cache-write change risk.** Expanding the cache map might surface subtle bugs in `cache.get_map` deserialization for new field types (especially `dict` for `query`/`query_labels`). The Redis layer pickles values, so any picklable type works; tests cover the round-trip.
-- **Static-export SPA fallback.** The Litestar route addition to serve `result/[id].html` for arbitrary IDs is a small change but it's the kind of thing that's easy to break in future Next.js upgrades. Documented inline.
-- **Trust model under share-by-URL with no auth.** Anyone with the URL can view; that is intended for a public looking glass but worth highlighting in operator docs (do not share output that includes operationally sensitive context, e.g. internal hostnames in BGP communities).
+- **Cache TTL default change (120s → 600s)** is operator-visible behavior. Anyone who relied on the prior 2-minute staleness window will now see 10-minute caching. The end-user UX is preserved by `refresh_min_interval` (UI cooldown, default 120s) and the `force=true` re-execution path, but operator expectations may not be. Call out in release notes and operator-facing docs.
+- **Static-export SPA fallback.** The Litestar route addition to serve `index.html` for `/result/{id}` is a small change but it's the kind of thing that's easy to break in future Next.js upgrades — if a future Next version emits a fundamentally different output structure, the fallback may need updating.
+- **Trust model under share-by-URL with no auth.** Anyone with the URL can view; that is intended for a public looking glass but worth highlighting in operator docs (do not share output that includes operationally sensitive context, e.g. internal hostnames in BGP communities). Share IDs are 64-bit capability tokens, not cryptographic secrets — adequate given 7-day expiry and no enumeration vector, but they should not be considered confidential.
