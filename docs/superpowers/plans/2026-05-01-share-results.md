@@ -1098,41 +1098,16 @@ def test_share_create_410_when_cache_expired(client, state):
     assert r.status_code == 410
 
 
-def test_share_create_404_when_disabled(client):
-    """When cache.share_enabled is False, share-create returns 404."""
-    pass
-
-
-@pytest.fixture
-def params_share_disabled() -> dict:
-    return {"fake_output": True, "cache": {"share_enabled": False}}
-
-
-def test_share_create_404_when_share_disabled(client_with_share_disabled):
-    """Verifies the disabled-feature kill switch."""
-    # See conftest fixture variant below for client_with_share_disabled.
-```
-
-For the `share_enabled=False` test, the simplest pattern is a parametrized variant. Add a second client fixture in `hyperglass/api/tests/conftest.py`:
-
-```python
-@pytest.fixture
-def client_with_share_disabled(request, monkeypatch):
-    """Like `client`, but with cache.share_enabled=False."""
-    # Override the params fixture for this test by monkeypatching state.
-    pass  # See implementation step below.
-```
-
-Realistically, the cleanest approach is to write `test_share_create_404_when_share_disabled` as its own module-level test that overrides the `params` fixture:
-
-```python
 class TestShareDisabled:
+    """Verifies the disabled-feature kill switch by overriding the
+    module-level `params` fixture for tests in this class."""
+
     @pytest.fixture
     def params(self) -> dict:
         return {"fake_output": True, "cache": {"share_enabled": False}}
 
     def test_share_create_404(self, client):
-        # Even with no cache entry, disabled gate should fire first.
+        # Even with no cache entry, the disabled gate fires first.
         r = client.post("/api/query/share/hyperglass.query.deadbeef")
         assert r.status_code == 404
 ```
@@ -1244,11 +1219,6 @@ def test_share_get_returns_full_snapshot(client):
 def test_share_get_404_when_missing(client):
     r = client.get("/api/query/share/nonexistent1")
     assert r.status_code == 404
-
-
-def test_share_get_sliding_extends_ttl(client, state):
-    """When share_sliding=True, GET resets the share TTL."""
-    pass  # see TestShareSliding below
 
 
 class TestShareSliding:
@@ -1711,20 +1681,20 @@ Note `LGQueryKey = [string, FormQuery]` (line 14) and the `useQuery` call at lin
 
 - [ ] **Step 2: Extend the body and queryKey**
 
-In `useLGQuery`'s `runQuery` (around line 36), the POST body is constructed from the query object. The fields are already serialized with snake_case keys via the existing `queryLocation` → `query_location` rewrite (look for the existing `body` literal). Add `force` pass-through there:
+In `useLGQuery`'s `runQuery` (around line 36), the POST body is constructed from the query object. The hook currently sends **camelCase** keys (`queryLocation`, `queryTarget`, `queryType`) because the backend `Query` Pydantic model uses `alias_generator=snake_to_camel` and `populate_by_name=True`. Inside `runQuery`, the destructured tuple is `[, data]` from `ctx.queryKey` (the second element of `LGQueryKey`). Adapt the existing body literal to also include `force`:
 
 ```ts
-const body = JSON.stringify({
-  query_location: query.queryLocation,
-  query_target: query.queryTarget,
-  query_type: query.queryType,
-  ...(query.force ? { force: true } : {}),
-});
+body: JSON.stringify({
+  queryLocation: data.queryLocation,
+  queryTarget: data.queryTarget,
+  queryType: data.queryType,
+  ...(data.force ? { force: true } : {}),
+}),
 ```
 
-(Adapt to the actual existing shape — the snake_case rewrite may or may not exist as shown; the point is to add `force: true` to the body when `query.force` is truthy.)
+Use `data.force` (not `query.force`) — `data` is the destructured queryKey element inside `runQuery`. **Read the existing `runQuery` and `body:` literal first** so the change is purely additive (don't accidentally rename existing fields).
 
-The `queryKey` at line ~72 already uses `query` as the second tuple element. Because `force` is a property of `query` (via `FormQuery`), React Query will naturally treat `{...same..., force: true}` as a different key from `{...same..., force: undefined}` — no explicit change needed beyond Step 1's type extension. **Verify** by reading the existing `queryKey` line and confirming it spreads `query` rather than picking specific fields.
+The `queryKey` at line ~72 already uses the query object as the second tuple element. Because `force` is now a field of `FormQuery`, React Query will naturally treat `{...same..., force: true}` as a different key from `{...same..., force: undefined}` — no explicit change to `LGQueryKey` is needed.
 
 - [ ] **Step 3: Add a unit test**
 
@@ -1750,7 +1720,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={qc}>
-      <HyperglassContext.Provider value={{ config }}>
+      <HyperglassContext.Provider value={config}>
         {children}
       </HyperglassContext.Provider>
     </QueryClientProvider>
@@ -1812,7 +1782,7 @@ git commit -m "feat(ui): pass-through force flag in useLGQuery"
 
 - [ ] **Step 1: Write failing test**
 
-Create `hyperglass/models/tests/test_web.py` (Tasks 1.3 and 1.5/1.6 placed cache/params tests under `hyperglass/models/config/tests/`; that directory will need a manual `__init__.py` and is fine to keep separate. Web tests can live alongside other model tests in `hyperglass/models/tests/`.):
+Create `hyperglass/models/tests/test_web.py` (this directory already exists with other model tests). Tasks 1.3, 1.5, and 1.6 create `hyperglass/models/config/tests/` for cache- and params-specific tests; we keep web tests under `hyperglass/models/tests/` since `web.py` is the model the test exercises and that's where existing model tests live:
 
 ```python
 """Tests for new Text fields supporting the share feature."""
@@ -1855,13 +1825,13 @@ Append to `Text` in `hyperglass/models/config/web.py`:
 
 - [ ] **Step 4: Run the test**
 
-Run: `pytest hyperglass/models/config/tests/test_web.py -v`
+Run: `pytest hyperglass/models/tests/test_web.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add hyperglass/models/config/web.py hyperglass/models/config/tests/test_web.py
+git add hyperglass/models/config/web.py hyperglass/models/tests/test_web.py
 git commit -m "feat(config): add share/refresh string fields to Text"
 ```
 
@@ -1894,7 +1864,7 @@ const buildWrapper = (config: Config) => ({ children }: { children: React.ReactN
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={qc}>
-      <HyperglassContext.Provider value={{ config }}>
+      <HyperglassContext.Provider value={config}>
         {children}
       </HyperglassContext.Provider>
     </QueryClientProvider>
@@ -2009,7 +1979,7 @@ const buildWrapper = (config: Config) => ({ children }: { children: React.ReactN
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={qc}>
-      <HyperglassContext.Provider value={{ config }}>
+      <HyperglassContext.Provider value={config}>
         {children}
       </HyperglassContext.Provider>
     </QueryClientProvider>
@@ -2185,7 +2155,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
   const qc = new QueryClient();
   return (
     <QueryClientProvider client={qc}>
-      <HyperglassContext.Provider value={{ config }}>
+      <HyperglassContext.Provider value={config}>
         {children}
       </HyperglassContext.Provider>
     </QueryClientProvider>
@@ -2305,7 +2275,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={qc}>
-      <HyperglassContext.Provider value={{ config }}>{children}</HyperglassContext.Provider>
+      <HyperglassContext.Provider value={config}>{children}</HyperglassContext.Provider>
     </QueryClientProvider>
   );
 };
@@ -2480,11 +2450,12 @@ git commit -m "feat(api): explicit /result/<id> route handler when html_mode is 
 
 **Files:**
 - Modify: `CHANGELOG.md`
-- Modify: `docs/pages/configuration/config.mdx` (the existing config docs page covers `params.cache.*` and is the natural home for the new knobs)
+- Modify: `docs/pages/configuration/config/caching.mdx` (the existing cache docs page; uses a markdown table format we extend)
+- Modify: `docs/pages/configuration/config.mdx` (the params index — gets the `public_url` row, since `public_url` is a top-level `params.*` field, not under `params.cache.*`)
 
 - [ ] **Step 1: Document the share feature in CHANGELOG**
 
-In `CHANGELOG.md`, under the `## [Unreleased]` section, the existing subsections include `Added`, `Updated`, `Fixed`, `Security`. Add the share feature under `Added` and the cache.timeout default change under `Updated` (or create a new `### Changed` subsection if the project's convention prefers that — match what's there):
+In `CHANGELOG.md`, under the `## [Unreleased]` section, the existing subsections are `Fixed`, `Security`, `Updated`, `Added`. Add the share feature under `Added` and the cache.timeout default change under `Updated`:
 
 ```markdown
 ### Added
@@ -2495,24 +2466,44 @@ In `CHANGELOG.md`, under the `## [Unreleased]` section, the existing subsections
 - `cache.timeout` default raised from 120s → 600s. End-user refresh behavior is preserved by `cache.refresh_min_interval` (UI cooldown, default 120s) and the new query `force` flag. Operators relying on 2-minute cache staleness should set `cache.timeout: 120` explicitly.
 ```
 
-- [ ] **Step 2: Document the share feature in operator docs**
+- [ ] **Step 2: Document cache fields in `caching.mdx`**
 
-In `docs/pages/configuration/config.mdx`, find the `cache:` example block (search for `cache:` to locate it). Below the existing `cache.timeout` and `cache.show_text` documentation, add:
+In `docs/pages/configuration/config/caching.mdx`, the existing parameter table looks like:
 
 ```markdown
-- `cache.share_enabled` (bool, default `true`): toggle the shareable-result feature. Disabling requires a UI rebuild.
-- `cache.share_timeout` (int seconds, default `604800` = 7 days): how long a shared snapshot is retained.
-- `cache.share_sliding` (bool, default `false`): when true, viewing a share resets its TTL.
-- `cache.refresh_min_interval` (int seconds, default `120`): minimum interval between manual refreshes from the UI.
-- `public_url` (HTTP URL, default unset): when set, share links use this base URL. Otherwise derived from the incoming request's `Host` and `X-Forwarded-Proto` headers.
+| Parameter         | Type    | Default Value | Description                                                                     |
+| :---------------- | :------ | :------------ | :------------------------------------------------------------------------------ |
+| `cache.timeout`   | Number  | 120           | Number of seconds for which to cache device responses.                          |
+| `cache.show_text` | Boolean | True          | If true, an indication that a user is viewing cached information will be shown. |
 ```
 
-Also note in a callout: "Disabling `share_enabled` (or changing any cache UI knob) requires a UI rebuild because the values are baked into the static `hyperglass.json` at build time."
+**Update `cache.timeout` default to 600** (it changed in this release), and append four new rows in the same format:
 
-- [ ] **Step 3: Commit**
+```markdown
+| `cache.timeout`              | Number  | 600   | Number of seconds for which to cache device responses.                                                          |
+| `cache.show_text`            | Boolean | True  | If true, an indication that a user is viewing cached information will be shown.                                 |
+| `cache.share_enabled`        | Boolean | True  | Enable the shareable-result feature. Disabling requires a UI rebuild.                                           |
+| `cache.share_timeout`        | Number  | 604800 | Seconds to retain a shared snapshot (default 7 days).                                                          |
+| `cache.share_sliding`        | Boolean | False | If true, viewing a share extends its TTL by another `share_timeout`.                                            |
+| `cache.refresh_min_interval` | Number  | 120   | Minimum seconds between manual refreshes from the UI.                                                           |
+```
+
+Also update the example-with-defaults YAML block to include the new fields with their defaults.
+
+Add a callout below the table: "Disabling `share_enabled` (or changing any cache UI knob) requires a UI rebuild — the values are baked into the static `hyperglass.json` at build time."
+
+- [ ] **Step 3: Document `public_url` on the params index page**
+
+`public_url` is a top-level `params` field, not a cache subfield. In `docs/pages/configuration/config.mdx`, add it to the appropriate `params.*` reference table (or example block) — match the existing format. Suggested row:
+
+```markdown
+| `public_url` | URL    | (unset) | Public-facing base URL for the looking glass. When set, share links use this base; otherwise derived from request `Host` / `X-Forwarded-Proto` headers. Set this when running behind a reverse proxy. |
+```
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add CHANGELOG.md docs/pages/configuration/config.mdx
+git add CHANGELOG.md docs/pages/configuration/config/caching.mdx docs/pages/configuration/config.mdx
 git commit -m "docs: document share-results feature and cache.timeout default change"
 ```
 
