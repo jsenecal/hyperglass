@@ -357,7 +357,7 @@ Expected: FAIL on `q.force is False` (attribute doesn't exist).
 
 - [ ] **Step 3: Add the field**
 
-In `hyperglass/models/api/query.py`, in the `Query` class (around line 53, after `query_type`), add:
+In `hyperglass/models/api/query.py`, in the `Query` class — **after `query_type` (line 53) and BEFORE `_kwargs: t.Dict[str, t.Any]` (line 54)** — add:
 
 ```python
     # Bypass cache and re-execute when True.
@@ -405,10 +405,11 @@ def test_public_url_default_none():
 
 def test_public_url_set_to_https_url():
     p = Params(public_url="https://lg.example.com")
-    assert str(p.public_url) == "https://lg.example.com/"
+    # Pydantic AnyHttpUrl normalization varies across 2.x patch versions
+    # (sometimes adds trailing slash, sometimes preserves). Use startswith
+    # so the test is robust to either form.
+    assert str(p.public_url).startswith("https://lg.example.com")
 ```
-
-(Pydantic's `AnyHttpUrl` normalizes by appending a trailing slash; the helper that builds share URLs will rstrip it.)
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -521,10 +522,20 @@ git commit -m "feat(config): project share UI knobs through Params.frontend()"
 
 - [ ] **Step 1: Read the existing response module to learn its conventions**
 
-Run: `head -80 hyperglass/models/api/response.py`
-(Identify the `QueryResponse` class and its imports; reuse the same field-aliasing convention.)
+Run: `cat hyperglass/models/api/response.py`
+
+Note the existing `QueryResponse`:
+- It is a Pydantic `BaseModel`-derived class with `model_config = ConfigDict(json_schema_extra=...)` — **no `alias_generator`** today.
+- `timestamp: str` (not `datetime`) — wire format is a string.
+- The route handler at `routes.py:148-158` already injects `id: str` into the response dict but the model does not declare it.
+
+The existing module does **not** import `datetime` or `snake_to_camel`. Add them in Step 4.
+
+For wire-format consistency with the spec ("camelCase on the wire"), the new share models will use `alias_generator=snake_to_camel`. `QueryResponse`'s existing fields are all single-word (`cached`, `runtime`, `timestamp`, `format`, `random`, `level`, `keywords`, plus the new `id`), so we also add the same `alias_generator` to it for consistency — single-word field aliases are no-ops, so behavior is unchanged. **Do not change `QueryResponse.timestamp`'s type from `str` to `datetime`** — that's a separate decision out of scope here.
 
 - [ ] **Step 2: Write failing tests**
+
+Create `hyperglass/models/api/tests/__init__.py` (empty) if needed, then `test_response_models.py`:
 
 ```python
 """Tests for share response models."""
@@ -539,12 +550,13 @@ from hyperglass.models.api.response import (
 
 
 def test_query_response_includes_id():
+    # `timestamp` is a string per the existing QueryResponse contract.
     r = QueryResponse(
         output="ok",
         id="hyperglass.query.deadbeef",
         cached=False,
         runtime=1,
-        timestamp=datetime.now(timezone.utc),
+        timestamp="2026-05-01 12:00:00",
         format="text/plain",
         random="r",
         level="success",
@@ -559,6 +571,9 @@ def test_share_create_response_shape():
                             expires_at=expires)
     assert r.id == "abc"
     assert r.url.endswith("/result/abc")
+    # camelCase alias on the wire
+    dumped = r.model_dump(by_alias=True)
+    assert "expiresAt" in dumped
 
 
 def test_share_response_shape():
@@ -581,16 +596,34 @@ def test_share_response_shape():
     )
     assert r.shared is True
     assert r.query_labels["location"] == "test1"
+    # Note: alias_generator only affects the model's own fields, not nested
+    # dict keys. `r.query["query_location"]` stays snake_case on the wire.
+    dumped = r.model_dump(by_alias=True)
+    assert dumped["query"]["query_location"] == "test1"
 ```
 
 - [ ] **Step 3: Run the test**
 
 Run: `pytest hyperglass/models/api/tests/test_response_models.py -v`
-Expected: FAIL.
+Expected: FAIL — `id`, `ShareCreateResponse`, `ShareResponse` don't exist yet.
 
-- [ ] **Step 4: Add the models**
+- [ ] **Step 4: Add imports and update `QueryResponse`**
 
-In `hyperglass/models/api/response.py`, add `id: str` to the existing `QueryResponse` model. Then add:
+In `hyperglass/models/api/response.py`, add to the imports:
+
+```python
+from datetime import datetime
+from pydantic import ConfigDict
+from hyperglass.util import snake_to_camel
+```
+
+(Some of these may already be imported — check first; do not duplicate.)
+
+Add `alias_generator=snake_to_camel, populate_by_name=True` to `QueryResponse.model_config`, and add `id: str` to its fields. The existing fields are unchanged; the alias generator is a no-op for single-word names.
+
+- [ ] **Step 5: Add the new models**
+
+Append to `hyperglass/models/api/response.py`:
 
 ```python
 class ShareCreateResponse(BaseModel):
@@ -624,14 +657,14 @@ class ShareResponse(BaseModel):
     expires_at: datetime
 ```
 
-(Use the existing imports from the file for `BaseModel`, `ConfigDict`, `datetime`, `t`, and `snake_to_camel`. Mirror the alias convention used by `QueryResponse`.)
+`query` and `query_labels` are typed `t.Dict[str, t.Any]` / `t.Dict[str, str]` — generic dicts. **The `alias_generator` does NOT camelCase keys inside these nested dicts.** On the wire, `response.query.query_location` stays as `query_location`, not `queryLocation`. Tests in Chunk 2 assert against this snake_case shape.
 
-- [ ] **Step 5: Run the test**
+- [ ] **Step 6: Run the test**
 
 Run: `pytest hyperglass/models/api/tests/test_response_models.py -v`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add hyperglass/models/api/response.py hyperglass/models/api/tests/test_response_models.py
@@ -704,7 +737,9 @@ Expected: FAIL — `query`, `query_labels`, `format`, `runtime`, `level` are not
 
 - [ ] **Step 3: Implement the cache-write expansion**
 
-In `hyperglass/api/routes.py`, in the cache-miss branch (around lines 96–134), replace:
+This change has three parts: (a) compute `response_format` and `query_labels` BEFORE the cache write, (b) write the expanded fields, (c) **remove the now-redundant post-write re-read** at lines 138-145.
+
+In `hyperglass/api/routes.py`, in the cache-miss branch (lines 96-134), replace:
 
 ```python
 cache.set_map_item(cache_key, "output", raw_output)
@@ -732,7 +767,21 @@ cache.set_map_item(cache_key, "keywords", [])
 cache.expire(cache_key, expire_in=_state.params.cache.timeout)
 ```
 
-`response_format` and `runtime` are computed before this block; the assignments above replace the equivalent post-write computation. The `response = {...}` literal that builds the route's return value can now read these from the cache (or just keep its existing in-memory references — both approaches work). Keep the existing return shape unchanged.
+Then **delete** the post-write re-read block (lines 138-145):
+
+```python
+# DELETE these lines — they're now redundant since response_format
+# is already set:
+cache_response = cache.get_map(cache_key, "output")
+json_output = is_type(cache_response, t.Dict)
+response_format = "text/plain"
+if json_output:
+    response_format = "application/json"
+```
+
+The cache-hit branch (lines 81-95) still needs `response_format` set; on a cache hit, read it from the map: `response_format = cache.get_map(cache_key, "format")`. Add this read inside the cache-hit branch.
+
+The `response = {...}` literal (lines 148-158) keeps its existing shape; `cache_response` (the output to return) is now `raw_output` on miss or `cache.get_map(cache_key, "output")` on hit — adjust the dict assembly to use whichever is in scope.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1042,7 +1091,8 @@ def test_share_create_returns_opaque_id(client):
 def test_share_create_410_when_cache_expired(client, state):
     cache_id = _seed_query(client)
     digest = cache_id.removeprefix("hyperglass.query.")
-    state.redis.delete(f"hyperglass.state.hyperglass.query.{digest}")
+    # state.redis.delete() automatically applies the namespace prefix.
+    state.redis.delete(f"hyperglass.query.{digest}")
 
     r = client.post(f"/api/query/share/{cache_id}")
     assert r.status_code == 410
@@ -1148,7 +1198,7 @@ Add `share_create` to the `__all__` tuple at the top of `routes.py`.
 
 - [ ] **Step 4: Register the route**
 
-In `hyperglass/api/__init__.py`, find the `HANDLERS` list around line 35 and add `share_create` to the imports from `hyperglass.api.routes` and to the list.
+In `hyperglass/api/__init__.py`, the `HANDLERS` list lives at lines 39-45 (initial) and 47-56 (with UI handlers). Add `share_create` to the imports from `hyperglass.api.routes` near line 38 and append it to the `HANDLERS` list before the `if not STATE.settings.disable_ui:` block.
 
 - [ ] **Step 5: Run the tests**
 
@@ -1182,7 +1232,10 @@ def test_share_get_returns_full_snapshot(client):
     assert r.status_code == 200
     body = r.json()
     assert body["shared"] is True
-    assert body["query"]["queryLocation"] == "test1"
+    # The model's own fields are aliased to camelCase. Keys inside the
+    # nested `query` dict are NOT aliased (they're a generic dict, see
+    # Task 1.7 Step 5 note). They stay snake_case.
+    assert body["query"]["query_location"] == "test1"
     assert body["queryLabels"]["type"] == "BGP Route"
     assert "createdAt" in body
     assert "expiresAt" in body
@@ -1209,15 +1262,18 @@ class TestShareSliding:
     def test_get_resets_ttl(self, client, state):
         cache_id = _seed_query(client)
         share_id = client.post(f"/api/query/share/{cache_id}").json()["id"]
-        share_key = f"hyperglass.state.hyperglass.share.{share_id}"
+        share_key = f"hyperglass.share.{share_id}"
+        full_key = state.redis.key(share_key)
 
         # Manually shorten the TTL to verify GET extends it back.
-        state.redis.expire(share_key.removeprefix("hyperglass.state."), 60)
+        # RedisManager.expire is keyword-only; use the underlying redis-py
+        # client (state.redis.instance) for raw operations not in the
+        # manager's API.
+        state.redis.instance.expire(full_key, 60)
         r = client.get(f"/api/query/share/{share_id}")
         assert r.status_code == 200
 
-        # Use the underlying Redis TTL command via state.cache to verify.
-        ttl = state.redis.ttl(share_key.removeprefix("hyperglass.state."))
+        ttl = state.redis.instance.ttl(full_key)
         assert ttl > 60  # extended back toward share_timeout
 
 
@@ -1232,15 +1288,15 @@ class TestShareFixed:
     def test_get_does_not_extend_ttl(self, client, state):
         cache_id = _seed_query(client)
         share_id = client.post(f"/api/query/share/{cache_id}").json()["id"]
-        key = f"hyperglass.share.{share_id}"
+        full_key = state.redis.key(f"hyperglass.share.{share_id}")
 
-        state.redis.expire(key, 60)
+        state.redis.instance.expire(full_key, 60)
         client.get(f"/api/query/share/{share_id}")
-        ttl = state.redis.ttl(key)
+        ttl = state.redis.instance.ttl(full_key)
         assert ttl <= 60  # not extended
 ```
 
-(`state.redis.ttl()` is the underlying Redis client; if `RedisManager` does not expose `.ttl` directly, use the lower-level client. Confirm during implementation by reading `hyperglass/state/redis.py`.)
+`RedisManager` (see `hyperglass/state/redis.py`) does not expose `.ttl()` directly and `.expire(...)` is keyword-only (`expire_in=` / `expire_at=`). For tests that need raw Redis operations, drop down to `state.redis.instance` (the underlying `redis.Redis` client) and use `state.redis.key(<logical_key>)` to get the namespaced full key.
 
 - [ ] **Step 2: Run the tests**
 
@@ -1331,10 +1387,12 @@ git commit -m "style: apply ruff/black/isort to share feature"  # only if needed
 **Files:**
 - Modify: `hyperglass/ui/types/config.ts`
 
+**Important:** the underscore-prefixed interfaces (`_Cache`, `_Text`, etc.) hold the **raw snake_case shape** that mirrors the backend JSON (`hyperglass.json`). The exported camelCase types (`Cache`, `Text`, …) are derived via `type-fest`'s `CamelCasedPropertiesDeep` at the export boundary (line ~175). Add new fields in **snake_case**, matching backend field names.
+
 - [ ] **Step 1: Read the existing `_Cache` and `_Text` interfaces**
 
 Run: `grep -n "_Cache\|_Text" hyperglass/ui/types/config.ts`
-Expected: `_Cache` near line 137; `_Text` near line 25.
+Expected: `_Cache` around line 137; `_Text` around line 25.
 
 - [ ] **Step 2: Update `_Cache`**
 
@@ -1342,7 +1400,7 @@ In `hyperglass/ui/types/config.ts`, replace:
 
 ```typescript
 interface _Cache {
-  showText: boolean;
+  show_text: boolean;
   timeout: number;
 }
 ```
@@ -1351,33 +1409,33 @@ With:
 
 ```typescript
 interface _Cache {
-  showText: boolean;
+  show_text: boolean;
   timeout: number;
-  shareEnabled: boolean;
-  shareTimeout: number;
-  refreshMinInterval: number;
+  share_enabled: boolean;
+  share_timeout: number;
+  refresh_min_interval: number;
 }
 ```
 
-- [ ] **Step 3: Add new fields to `_Text`** (will be populated by Task 4.1 backend, but the type goes here in lockstep with backend additions)
+- [ ] **Step 3: Add new fields to `_Text`** in snake_case (will be populated by Task 4.1 backend Text model fields)
 
-Add to `_Text`:
+Add to `_Text` (existing fields are all snake_case — match the convention):
 
 ```typescript
-  shareButton: string;
-  sharePopoverTitle: string;
-  shareCopyLink: string;
-  shareLinkCopied: string;
-  shareExpiresAt: string;
-  shareCreateError: string;
-  shareCreateExpired: string;
-  shareNotFound: string;
-  shareSnapshotBanner: string;
-  shareRunFreshQuery: string;
-  refreshCooldown: string;
+  share_button: string;
+  share_popover_title: string;
+  share_copy_link: string;
+  share_link_copied: string;
+  share_expires_at: string;
+  share_create_error: string;
+  share_create_expired: string;
+  share_not_found: string;
+  share_snapshot_banner: string;
+  share_run_fresh_query: string;
+  refresh_cooldown: string;
 ```
 
-(These keys map to the `Text` model fields added in Task 4.1.)
+When consumers do `useConfig().web.text.shareButton`, the `CamelCasedProperties` transform converts these to camelCase access automatically.
 
 - [ ] **Step 4: Typecheck**
 
@@ -1396,50 +1454,85 @@ git commit -m "feat(ui): extend Config types with share knobs and text strings"
 **Files:**
 - Modify: `hyperglass/ui/types/globals.d.ts`
 
+**Important context:** `globals.d.ts` is wrapped in a `declare global { ... }` block (line 1). All new global types must be added INSIDE that block, otherwise hooks in Task 3.3 cannot reference `ShareResponse` / `ShareCreateResponse` without explicit imports. The existing `QueryResponse` is a `type` alias (not `interface`) and currently has fields `random`, `cached`, `runtime`, `level`, `timestamp`, `keywords`, `output`, `format`. It does NOT have `id` today — the backend route returns `id` in the response dict (see `routes.py:148-150`) but the type is missing it.
+
 - [ ] **Step 1: Locate the existing types**
 
-Run: `grep -n "QueryResponse\|interface.*Query" hyperglass/ui/types/globals.d.ts`
+Run: `grep -n "type QueryResponse\|declare global" hyperglass/ui/types/globals.d.ts`
+Expected: `declare global` near line 1; `type QueryResponse` near line 44.
 
-- [ ] **Step 2: Add `id` to `QueryResponse`**
+- [ ] **Step 2: Add `id` to the existing `QueryResponse` type alias**
 
-```typescript
-interface QueryResponse {
-  id: string;            // <-- ADD
-  output: string | object;
-  cached: boolean;
-  // ...existing fields...
-}
-```
-
-- [ ] **Step 3: Add `ShareResponse`**
+In `hyperglass/ui/types/globals.d.ts`, find:
 
 ```typescript
-interface ShareResponse {
-  id: string;
-  output: string | object;
-  cached: boolean;
-  shared: boolean;
-  runtime: number;
-  timestamp: string;
-  format: string;
-  level: string;
-  keywords: string[];
-  query: { queryLocation: string; queryTarget: string | string[]; queryType: string };
-  queryLabels: { location: string; type: string };
-  createdAt: string;
-  expiresAt: string;
-}
-
-interface ShareCreateResponse {
-  id: string;
-  url: string;
-  expiresAt: string;
-}
+  type QueryResponse = {
+    random: string;
+    cached: boolean;
+    runtime: number;
+    level: ResponseLevel;
+    timestamp: string;
+    keywords: string[];
+    output: string | StructuredResponse;
+    format: 'text/plain' | 'application/json';
+  };
 ```
 
-- [ ] **Step 4: Add `force?: boolean` to the query body type**
+Add `id: string;` as the first field:
 
-Locate the request-body type used by `useLGQuery` (likely `FormQuery` or `QueryRequest` — `grep` to find it). Add an optional `force?: boolean` field.
+```typescript
+  type QueryResponse = {
+    id: string;
+    random: string;
+    cached: boolean;
+    runtime: number;
+    level: ResponseLevel;
+    timestamp: string;
+    keywords: string[];
+    output: string | StructuredResponse;
+    format: 'text/plain' | 'application/json';
+  };
+```
+
+- [ ] **Step 3: Add `ShareResponse` and `ShareCreateResponse` inside the `declare global { ... }` block**
+
+Add immediately after `type QueryResponse = { ... };`:
+
+```typescript
+  type ShareResponse = {
+    id: string;
+    output: string | StructuredResponse;
+    cached: boolean;
+    shared: boolean;
+    runtime: number;
+    timestamp: string;
+    format: string;
+    level: ResponseLevel;
+    keywords: string[];
+    // Nested dict keys are NOT camelCased by backend pydantic; keep snake_case.
+    query: { query_location: string; query_target: string | string[]; query_type: string };
+    queryLabels: { location: string; type: string };
+    createdAt: string;
+    expiresAt: string;
+  };
+
+  type ShareCreateResponse = {
+    id: string;
+    url: string;
+    expiresAt: string;
+  };
+```
+
+- [ ] **Step 4: Add `force?: boolean` to `FormQuery`**
+
+`FormQuery` is defined in `hyperglass/ui/types/data.ts:7` as `Swap<FormData, 'queryLocation', string>`. Adding `force` to `FormData` would propagate to the form schema (undesirable). Cleanest approach: extend `FormQuery` directly:
+
+```typescript
+// In hyperglass/ui/types/data.ts
+export type FormQuery = Swap<FormData, 'queryLocation', string> & { force?: boolean };
+```
+
+Verify the change compiles by running `task ui-typecheck` (Step 5 below).
 
 - [ ] **Step 5: Typecheck**
 
@@ -1449,8 +1542,8 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add hyperglass/ui/types/globals.d.ts
-git commit -m "feat(ui): add id to QueryResponse, add ShareResponse, add force? to query body"
+git add hyperglass/ui/types/globals.d.ts hyperglass/ui/types/data.ts
+git commit -m "feat(ui): add id to QueryResponse, add ShareResponse, add force? to FormQuery"
 ```
 
 ### Task 3.3: `useShareCreate` and `useShareGet` hooks
@@ -1459,18 +1552,33 @@ git commit -m "feat(ui): add id to QueryResponse, add ShareResponse, add force? 
 - Create: `hyperglass/ui/hooks/use-share.ts`
 - Create: `hyperglass/ui/hooks/use-share.test.tsx`
 
+**Note on test pattern:** there is no existing `fetch` mock pattern in this codebase (`use-dns-query.test.tsx` hits real network). This task introduces a new pattern: monkeypatch `global.fetch` per-test via `vi.fn()`. Document this choice in the test file's docstring so future contributors recognize the pattern.
+
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
+/**
+ * Tests for useShareCreate / useShareGet.
+ * Pattern: mock global.fetch per-test with vi.fn(). Resets between tests.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useShareCreate, useShareGet } from './use-share';
 
-const wrapper = ({ children }) => {
+const wrapper = ({ children }: { children: React.ReactNode }) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 };
+
+const mockResponse = (overrides: Partial<Response>) =>
+  ({
+    ok: true,
+    status: 200,
+    json: async () => ({}),
+    text: async () => '',
+    ...overrides,
+  } as unknown as Response);
 
 beforeEach(() => {
   global.fetch = vi.fn();
@@ -1478,11 +1586,9 @@ beforeEach(() => {
 
 describe('useShareCreate', () => {
   it('POSTs to /api/query/share/<cacheId> and returns the response', async () => {
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      status: 200,
+    (global.fetch as any).mockResolvedValue(mockResponse({
       json: async () => ({ id: 'aaaaaaaaaaa', url: 'https://x/result/aaaaaaaaaaa', expiresAt: '2026-05-08T00:00:00Z' }),
-    });
+    }));
     const { result } = renderHook(() => useShareCreate(), { wrapper });
     result.current.mutate('hyperglass.query.deadbeef');
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -1493,8 +1599,8 @@ describe('useShareCreate', () => {
     expect(result.current.data?.id).toBe('aaaaaaaaaaa');
   });
 
-  it('surfaces 410 as an error', async () => {
-    (global.fetch as any).mockResolvedValue({ ok: false, status: 410, json: async () => ({}) });
+  it('surfaces 410 as a ShareError with status', async () => {
+    (global.fetch as any).mockResolvedValue(mockResponse({ ok: false, status: 410 }));
     const { result } = renderHook(() => useShareCreate(), { wrapper });
     result.current.mutate('expired-id');
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -1504,18 +1610,25 @@ describe('useShareCreate', () => {
 
 describe('useShareGet', () => {
   it('GETs /api/query/share/<id> and returns the snapshot', async () => {
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      status: 200,
+    (global.fetch as any).mockResolvedValue(mockResponse({
       json: async () => ({ id: 'aaa', shared: true, output: 'x', cached: true, runtime: 1, timestamp: '', format: 'text/plain', level: 'success', keywords: [], query: {}, queryLabels: {}, createdAt: '', expiresAt: '' }),
-    });
+    }));
     const { result } = renderHook(() => useShareGet('aaa'), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(global.fetch).toHaveBeenCalledWith('/api/query/share/aaa', expect.anything());
     expect(result.current.data?.shared).toBe(true);
   });
+
+  it('does not fetch when shareId is undefined (enabled: false)', async () => {
+    renderHook(() => useShareGet(undefined), { wrapper });
+    // Yield a tick so React Query has a chance to fire (it should not).
+    await new Promise(r => setTimeout(r, 0));
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });
 ```
+
+The `mockResponse` helper provides both `.json()` and `.text()` so error paths that read the body don't trip on a missing method.
 
 - [ ] **Step 2: Run the test**
 
@@ -1528,13 +1641,21 @@ Expected: FAIL — module doesn't exist.
 // hyperglass/ui/hooks/use-share.ts
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-class ShareError extends Error {
+export class ShareError extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
     this.status = status;
   }
 }
+
+const parseError = async (res: Response): Promise<string> => {
+  try {
+    return (await res.text()) || res.statusText;
+  } catch {
+    return res.statusText;
+  }
+};
 
 export const useShareCreate = () =>
   useMutation<ShareCreateResponse, ShareError, string>({
@@ -1543,7 +1664,7 @@ export const useShareCreate = () =>
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!res.ok) throw new ShareError(res.status, await res.text());
+      if (!res.ok) throw new ShareError(res.status, await parseError(res));
       return res.json() as Promise<ShareCreateResponse>;
     },
   });
@@ -1554,11 +1675,15 @@ export const useShareGet = (shareId: string | undefined) =>
     enabled: Boolean(shareId),
     queryFn: async () => {
       const res = await fetch(`/api/query/share/${shareId}`);
-      if (!res.ok) throw new ShareError(res.status, await res.text());
+      if (!res.ok) throw new ShareError(res.status, await parseError(res));
       return res.json() as Promise<ShareResponse>;
     },
   });
 ```
+
+`ShareError` is exported so consumers (Task 4.3) can do `error instanceof ShareError` and branch on `error.status`.
+
+Note: this hook uses bare `fetch` rather than `useLGQuery`'s `fetchWithTimeout`. Share fetches are short-lived control-plane requests (Redis read, no device interaction) so the global `request_timeout` knob is over-kill here. If this becomes a problem in production, switch to `fetchWithTimeout` with a small fixed timeout (e.g. 10s) and add a follow-up.
 
 - [ ] **Step 4: Run the test**
 
@@ -1576,35 +1701,97 @@ git commit -m "feat(ui): add useShareCreate (POST) and useShareGet (GET) hooks"
 
 **Files:**
 - Modify: `hyperglass/ui/hooks/use-lg-query.ts`
+- Create: `hyperglass/ui/hooks/use-lg-query.test.tsx`
 
 - [ ] **Step 1: Read the current hook**
 
 Run: `cat hyperglass/ui/hooks/use-lg-query.ts`
 
-- [ ] **Step 2: Extend the request body**
+Note `LGQueryKey = [string, FormQuery]` (line 14) and the `useQuery` call at line 72. Because Task 3.2 Step 4 already extended `FormQuery` with optional `force?: boolean`, the existing tuple typing already accepts `force`; no `LGQueryKey` change is needed.
 
-Find the body construction (currently `{ queryLocation, queryTarget, queryType }`). Make the hook accept an optional `force` parameter (or read from a Zustand selector — pick whichever pattern matches the existing call sites).
+- [ ] **Step 2: Extend the body and queryKey**
 
-A minimal change: add an optional `force?: boolean` to the call args, default omitted, and include in the POST body when truthy. The cache key in React Query should also include `force` so a forced fetch isn't deduped with a regular fetch:
+In `useLGQuery`'s `runQuery` (around line 36), the POST body is constructed from the query object. The fields are already serialized with snake_case keys via the existing `queryLocation` → `query_location` rewrite (look for the existing `body` literal). Add `force` pass-through there:
 
 ```ts
-return useQuery({
-  queryKey: ['/api/query', { ...query, force }],
-  queryFn: async () => {
-    const body = { ...query, ...(force ? { force: true } : {}) };
-    // ... existing fetch ...
-  },
+const body = JSON.stringify({
+  query_location: query.queryLocation,
+  query_target: query.queryTarget,
+  query_type: query.queryType,
+  ...(query.force ? { force: true } : {}),
 });
 ```
 
-- [ ] **Step 3: Add a unit test for the force-passthrough**
+(Adapt to the actual existing shape — the snake_case rewrite may or may not exist as shown; the point is to add `force: true` to the body when `query.force` is truthy.)
 
-In `hyperglass/ui/hooks/use-lg-query.test.tsx` (or extend an existing test if present), assert that calling with `force: true` includes `"force": true` in the POST body and produces a distinct cache key.
+The `queryKey` at line ~72 already uses `query` as the second tuple element. Because `force` is a property of `query` (via `FormQuery`), React Query will naturally treat `{...same..., force: true}` as a different key from `{...same..., force: undefined}` — no explicit change needed beyond Step 1's type extension. **Verify** by reading the existing `queryKey` line and confirming it spreads `query` rather than picking specific fields.
+
+- [ ] **Step 3: Add a unit test**
+
+Create `hyperglass/ui/hooks/use-lg-query.test.tsx`:
+
+```tsx
+/**
+ * Tests for useLGQuery's force flag pass-through.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HyperglassContext } from '~/context';
+import { useLGQuery } from './use-lg-query';
+
+const config = {
+  cache: { timeout: 600 },
+  requestTimeout: 30,
+  // ...add other minimum config fields the hook reads...
+} as unknown as Config;
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={qc}>
+      <HyperglassContext.Provider value={{ config }}>
+        {children}
+      </HyperglassContext.Provider>
+    </QueryClientProvider>
+  );
+};
+
+beforeEach(() => {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ id: 'x', random: '', cached: false, runtime: 1, level: 'success', timestamp: '', keywords: [], output: 'ok', format: 'text/plain' }),
+    text: async () => '',
+  } as unknown as Response);
+});
+
+describe('useLGQuery force flag', () => {
+  it('omits force from body when not set', async () => {
+    const query = { queryLocation: 'test1', queryTarget: ['1.2.3.4'], queryType: 'bgp' };
+    renderHook(() => useLGQuery(query as any), { wrapper });
+    // Wait a tick for the fetch to fire
+    await new Promise(r => setTimeout(r, 10));
+    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(body.force).toBeUndefined();
+  });
+
+  it('includes force=true in body when set', async () => {
+    const query = { queryLocation: 'test1', queryTarget: ['1.2.3.4'], queryType: 'bgp', force: true };
+    renderHook(() => useLGQuery(query as any), { wrapper });
+    await new Promise(r => setTimeout(r, 10));
+    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(body.force).toBe(true);
+  });
+});
+```
+
+(Adapt the `config` mock fields to whatever `useLGQuery` actually reads — read the hook source to know.)
 
 - [ ] **Step 4: Run UI tests**
 
-Run: `task pnpm test`
-Expected: green.
+Run: `task pnpm test -- hooks/use-lg-query.test.tsx`
+Expected: pass.
 
 - [ ] **Step 5: Commit**
 
@@ -1621,9 +1808,11 @@ git commit -m "feat(ui): pass-through force flag in useLGQuery"
 
 **Files:**
 - Modify: `hyperglass/models/config/web.py:100-129` (the `Text` class)
-- Test: extend `hyperglass/models/config/tests/test_web.py` (create if absent)
+- Test: `hyperglass/models/tests/test_web.py` (note: `hyperglass/models/tests/` already exists with other model tests; `hyperglass/models/config/tests/` does NOT exist — use the existing dir)
 
 - [ ] **Step 1: Write failing test**
+
+Create `hyperglass/models/tests/test_web.py` (Tasks 1.3 and 1.5/1.6 placed cache/params tests under `hyperglass/models/config/tests/`; that directory will need a manual `__init__.py` and is fine to keep separate. Web tests can live alongside other model tests in `hyperglass/models/tests/`.):
 
 ```python
 """Tests for new Text fields supporting the share feature."""
@@ -1643,7 +1832,7 @@ def test_text_share_defaults():
 
 - [ ] **Step 2: Run the test**
 
-Run: `pytest hyperglass/models/config/tests/test_web.py -v`
+Run: `pytest hyperglass/models/tests/test_web.py -v`
 Expected: FAIL.
 
 - [ ] **Step 3: Add fields to `Text`**
@@ -1680,51 +1869,101 @@ git commit -m "feat(config): add share/refresh string fields to Text"
 
 **Files:**
 - Modify: `hyperglass/ui/components/results/requery-button.tsx`
-- Test: `hyperglass/ui/components/results/requery-button.test.tsx` (create or extend)
+- Modify: caller of `RequeryButton` in `hyperglass/ui/components/results/individual.tsx` (because the `force=true` retry must rotate the React Query key — see Step 3)
+- Test: `hyperglass/ui/components/results/requery-button.test.tsx` (create)
+
+**Design note:** React Query's `refetch()` does NOT accept arbitrary args that propagate to `queryFn`. Per Task 3.4, `force` is part of the `query` object passed to `useLGQuery`, which makes it part of the React Query key — flipping `query.force` from `undefined` to `true` and then calling `refetch()` (or letting React Query auto-fetch the new key) is the mechanism. So `RequeryButton` doesn't directly invoke `force`; instead it asks the parent (or a Zustand action) to **toggle the force state**. The cleanest API: `RequeryButton` accepts an `onRequery: () => void` callback that the parent wires to a state setter that flips `force` to `true` and triggers refetch.
 
 - [ ] **Step 1: Write the failing test**
 
+Wrapper pattern is from `hyperglass/ui/hooks/use-dns-query.test.tsx:15-26`. Reproduce here:
+
 ```tsx
-import { describe, it, expect } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, fireEvent, screen, act } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HyperglassContext } from '~/context';
 import { RequeryButton } from './requery-button';
-// (...wrap in providers as in use-dns-query.test.tsx)
 
-it('is disabled until refreshMinInterval elapses', async () => {
-  // render with config.cache.refreshMinInterval = 5
-  // mount; expect disabled
-  // advance timers by 5s; expect enabled
-});
+const baseConfig = {
+  cache: { timeout: 600, refreshMinInterval: 5 },
+  web: { text: { refreshCooldown: 'Wait {seconds}s' } },
+} as unknown as Config;
 
-it('invokes refetch with force=true on click', () => {
-  // mount; advance past cooldown; click
-  // expect refetch called with the force flag
+const buildWrapper = (config: Config) => ({ children }: { children: React.ReactNode }) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={qc}>
+      <HyperglassContext.Provider value={{ config }}>
+        {children}
+      </HyperglassContext.Provider>
+    </QueryClientProvider>
+  );
+};
+
+beforeEach(() => { vi.useFakeTimers(); });
+
+describe('RequeryButton', () => {
+  it('is disabled until refreshMinInterval elapses (since lastResponseAt)', async () => {
+    const onRequery = vi.fn();
+    const Wrapper = buildWrapper(baseConfig);
+    const lastResponseAt = Date.now();
+
+    render(
+      <RequeryButton onRequery={onRequery} lastResponseAt={lastResponseAt} isDisabled={false} />,
+      { wrapper: Wrapper },
+    );
+    const btn = screen.getByRole('button', { name: /Reload Query/i });
+    expect(btn).toBeDisabled();
+
+    act(() => { vi.advanceTimersByTime(5000); });
+    expect(btn).toBeEnabled();
+  });
+
+  it('calls onRequery on click after cooldown', () => {
+    const onRequery = vi.fn();
+    const Wrapper = buildWrapper(baseConfig);
+    const lastResponseAt = Date.now() - 10_000;  // already past cooldown
+
+    render(
+      <RequeryButton onRequery={onRequery} lastResponseAt={lastResponseAt} isDisabled={false} />,
+      { wrapper: Wrapper },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Reload Query/i }));
+    expect(onRequery).toHaveBeenCalledTimes(1);
+  });
 });
 ```
-
-(Use `vi.useFakeTimers()` to advance time deterministically.)
 
 - [ ] **Step 2: Run the test**
 
 Run: `task pnpm test -- requery-button.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Implement `RequeryButton`**
 
-Update `requery-button.tsx` to:
-1. Read `cache.refreshMinInterval` from `useConfig()`.
-2. Track elapsed-since-mount; disable until `>= refreshMinInterval * 1000`.
-3. On click, call `refetch({ force: true })` (the upstream React Query call site reads this from `queryKey`/`queryFn`; adapt to the existing signature in `use-lg-query.ts`).
+Replace the prop signature: instead of `requery: refetch`, accept `{ onRequery: () => void; lastResponseAt: number; isDisabled?: boolean }`. Read `cache.refreshMinInterval` from `useConfig()`. Compute remaining cooldown from `(lastResponseAt + refreshMinInterval * 1000) - Date.now()`. Use a `setInterval` ticking each second to trigger re-render until cooldown elapses. Disable button when cooldown > 0; enabled otherwise.
 
-- [ ] **Step 4: Run the test**
+On click, call `onRequery()` and update parent state to record the new `lastResponseAt` (the parent owns the state).
+
+- [ ] **Step 4: Wire the parent**
+
+In `hyperglass/ui/components/results/individual.tsx` (where `<RequeryButton requery={refetch} ...>` lives at line 221), refactor so the parent:
+1. Holds `force` state (e.g. `useState<boolean>(false)`).
+2. Passes `force` into the `useLGQuery({...query, force})` call.
+3. Tracks `lastResponseAt` (set when `data` updates via React Query).
+4. Defines `onRequery` that sets `force=true` and calls `refetch()` (React Query will see the key change and refetch with the new body).
+5. After the response settles, resets `force` back to `false` so the next refetch isn't sticky-forced. (Or leave it; the cache key stability is preserved either way.)
+
+- [ ] **Step 5: Run the test**
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add hyperglass/ui/components/results/requery-button.tsx hyperglass/ui/components/results/requery-button.test.tsx
-git commit -m "feat(ui): add cooldown gate to RequeryButton, send force=true on click"
+git add hyperglass/ui/components/results/
+git commit -m "feat(ui): RequeryButton cooldown gate; parent wires force=true through useLGQuery"
 ```
 
 ### Task 4.3: `ShareButton` component
@@ -1733,29 +1972,116 @@ git commit -m "feat(ui): add cooldown gate to RequeryButton, send force=true on 
 - Create: `hyperglass/ui/components/results/share-button.tsx`
 - Create: `hyperglass/ui/components/results/share-button.test.tsx`
 
+**Prop signature:**
+
+```ts
+interface ShareButtonProps {
+  cacheId: string;
+}
+```
+
+The parent (`individual.tsx`) passes `data?.id` from the React Query result. The button is gated on `cacheId` truthiness AND on `config.cache.shareEnabled`.
+
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HyperglassContext } from '~/context';
 import { ShareButton } from './share-button';
 
-it('hides itself when shareEnabled is false', () => {
-  // render with config.cache.shareEnabled = false
-  // expect button absent
+const buildConfig = (overrides: any = {}): Config => ({
+  cache: { timeout: 600, shareEnabled: true, shareTimeout: 604800, refreshMinInterval: 120 },
+  web: { text: {
+    shareButton: 'Share',
+    sharePopoverTitle: 'Share this result',
+    shareCopyLink: 'Copy link',
+    shareLinkCopied: 'Copied!',
+    shareExpiresAt: 'Expires {expires}',
+    shareCreateError: 'Could not create share link.',
+    shareCreateExpired: 'Result expired. Refresh and try again.',
+  } },
+  ...overrides,
+} as unknown as Config);
+
+const buildWrapper = (config: Config) => ({ children }: { children: React.ReactNode }) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={qc}>
+      <HyperglassContext.Provider value={{ config }}>
+        {children}
+      </HyperglassContext.Provider>
+    </QueryClientProvider>
+  );
+};
+
+beforeEach(() => {
+  global.fetch = vi.fn();
 });
 
-it('opens popover with copy-link UI on click', async () => {
-  // mock POST /api/query/share/<id> -> { id: 'aaa', url: '...', expiresAt: '...' }
-  // render; click button; expect popover and link visible
-});
+describe('ShareButton', () => {
+  it('hides itself when shareEnabled is false', () => {
+    const Wrapper = buildWrapper(buildConfig({
+      cache: { timeout: 600, shareEnabled: false, shareTimeout: 0, refreshMinInterval: 120 },
+    }));
+    render(<ShareButton cacheId="hyperglass.query.deadbeef" />, { wrapper: Wrapper });
+    expect(screen.queryByRole('button', { name: /Share/i })).not.toBeInTheDocument();
+  });
 
-it('copies URL to clipboard on copy click', async () => {
-  // mock writeText; click copy; expect mock called with the share URL
-});
+  it('renders with the configured share_button text', () => {
+    const Wrapper = buildWrapper(buildConfig());
+    render(<ShareButton cacheId="hyperglass.query.deadbeef" />, { wrapper: Wrapper });
+    expect(screen.getByText('Share')).toBeInTheDocument();
+  });
 
-it('shows expired-cache message on 410', async () => {
-  // mock POST -> 410; render; click; expect configured share_create_expired text
+  it('POSTs the cacheId on click and shows the popover', async () => {
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'aaaaaaaaaaa', url: 'https://lg.test/result/aaaaaaaaaaa', expiresAt: '2026-05-08T00:00:00Z' }),
+      text: async () => '',
+    } as unknown as Response);
+    const Wrapper = buildWrapper(buildConfig());
+    render(<ShareButton cacheId="hyperglass.query.deadbeef" />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByText('Share'));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/query/share/hyperglass.query.deadbeef',
+      expect.objectContaining({ method: 'POST' }),
+    ));
+    await waitFor(() => expect(screen.getByText('Copy link')).toBeInTheDocument());
+  });
+
+  it('copies URL to clipboard on copy click', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    (global.fetch as any).mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ id: 'aaaaaaaaaaa', url: 'https://lg.test/result/aaaaaaaaaaa', expiresAt: '2026-05-08' }),
+      text: async () => '',
+    } as unknown as Response);
+
+    const Wrapper = buildWrapper(buildConfig());
+    render(<ShareButton cacheId="hyperglass.query.deadbeef" />, { wrapper: Wrapper });
+    fireEvent.click(screen.getByText('Share'));
+    await waitFor(() => screen.getByText('Copy link'));
+    fireEvent.click(screen.getByText('Copy link'));
+    expect(writeText).toHaveBeenCalledWith('https://lg.test/result/aaaaaaaaaaa');
+  });
+
+  it('shows configured share_create_expired text on 410', async () => {
+    (global.fetch as any).mockResolvedValue({
+      ok: false, status: 410,
+      json: async () => ({}),
+      text: async () => 'expired',
+    } as unknown as Response);
+
+    const Wrapper = buildWrapper(buildConfig());
+    render(<ShareButton cacheId="hyperglass.query.deadbeef" />, { wrapper: Wrapper });
+    fireEvent.click(screen.getByText('Share'));
+    await waitFor(() => expect(screen.getByText('Result expired. Refresh and try again.')).toBeInTheDocument());
+  });
 });
 ```
 
@@ -1766,7 +2092,14 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-Use Chakra `Popover`/`Button`, the existing `useStrf()` + `useConfig()` patterns (see `header.tsx` as a model). Wire to `useShareCreate()`. Handle three states: idle, loading, error (410 vs other).
+```tsx
+// hyperglass/ui/components/results/share-button.tsx
+// Use Chakra Popover + Button. Read config via useConfig(); read text via useStrf().
+// Call useShareCreate() from ~/hooks/use-share. On 410, switch the popover content
+// to web.text.shareCreateExpired; otherwise show the URL with a Copy button.
+```
+
+Pattern reference: `hyperglass/ui/components/results/header.tsx:34-35` for `useStrf()`/`useConfig()` usage.
 
 - [ ] **Step 4: Run the test**
 
@@ -1782,25 +2115,30 @@ git commit -m "feat(ui): add ShareButton with copy-to-clipboard popover"
 ### Task 4.4: Wire `ShareButton` into result header
 
 **Files:**
-- Modify: `hyperglass/ui/components/results/individual.tsx` (or wherever `RequeryButton` is rendered)
+- Modify: `hyperglass/ui/components/results/individual.tsx`
 
 - [ ] **Step 1: Locate the existing button placement**
 
 Run: `grep -n "RequeryButton\|<Requery" hyperglass/ui/components/results/individual.tsx`
-Expected: a JSX usage of `<RequeryButton ...>` inside the header section.
+Expected: `<RequeryButton requery={refetch} isDisabled={isLoading} />` around line 221.
 
 - [ ] **Step 2: Add `<ShareButton>` next to it**
 
-Pass the response's `id` (the cache key) to the button.
+Render conditionally on `data?.id` truthiness. The React Query result variable is named `data` (and `refetch`, `isLoading`) per the existing destructuring in this file:
 
-- [ ] **Step 3: Manual verification later in Chunk 5.**
+```tsx
+{data?.id && <ShareButton cacheId={data.id} />}
+<RequeryButton onRequery={onRequery} lastResponseAt={lastResponseAt} isDisabled={isLoading} />
+```
 
-- [ ] **Step 4: Typecheck and lint**
+(`onRequery` and `lastResponseAt` come from the parent state added in Task 4.2 Step 4.)
+
+- [ ] **Step 3: Typecheck and lint**
 
 Run: `task ui-typecheck && task ui-lint`
 Expected: clean.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add hyperglass/ui/components/results/individual.tsx
@@ -1811,26 +2149,82 @@ git commit -m "feat(ui): place ShareButton next to RequeryButton in result heade
 
 **Files:**
 - Modify: `hyperglass/ui/components/looking-glass-form.tsx`
+- Create: `hyperglass/ui/components/looking-glass-form.test.tsx`
+
+**URL → form mapping:**
+
+| URL param | Form field | Type in form schema | Wrap |
+|-----------|------------|---------------------|------|
+| `?location=test1` | `queryLocation` | `string[]` | `[value]` |
+| `?target=192.0.2.0/24` | `queryTarget` | `string[]` | `[value]` (or split on comma if multi-target supported) |
+| `?type=juniper_bgp_route` | `queryType` | `string` | scalar |
+
+The form's `defaultValues.queryLocation` is `[]` (array), so a single-string URL param must be wrapped in an array via `setValue('queryLocation', [value])`. Calling `setValue('queryLocation', value)` with a string would fail Vest validation.
 
 - [ ] **Step 1: Write the failing test**
 
-In a new or extended `looking-glass-form.test.tsx`:
-
 ```tsx
-it('pre-fills location/target/type from query string on mount', () => {
-  // Mock next/router useRouter to return { query: { location: 'test1', target: '192.0.2.0/24', type: 'juniper_bgp_route' } }
-  // render the form
-  // assert the inputs have those values
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HyperglassContext } from '~/context';
+import { LookingGlassForm } from './looking-glass-form';
+
+vi.mock('next/router', () => ({
+  useRouter: () => ({
+    query: { location: 'test1', target: '192.0.2.0/24', type: 'juniper_bgp_route' },
+    isReady: true,
+    push: vi.fn(),
+    replace: vi.fn(),
+  }),
+}));
+
+const config = { /* ...sufficient mock config for form rendering... */ } as unknown as Config;
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const qc = new QueryClient();
+  return (
+    <QueryClientProvider client={qc}>
+      <HyperglassContext.Provider value={{ config }}>
+        {children}
+      </HyperglassContext.Provider>
+    </QueryClientProvider>
+  );
+};
+
+it('pre-fills location/target/type from query string on mount', async () => {
+  render(<LookingGlassForm />, { wrapper });
+  // Assert via the form's underlying state — easiest via querying the inputs.
+  // The exact selector depends on how the form labels its fields; consult
+  // looking-glass-form.tsx for the label keys (use web.text.queryLocation etc.).
+  expect(await screen.findByDisplayValue('test1')).toBeInTheDocument();
+  expect(await screen.findByDisplayValue('192.0.2.0/24')).toBeInTheDocument();
 });
 ```
 
+(The mock `config` needs to provide enough fields to let the form render. Read `looking-glass-form.tsx` and provide the minimum.)
+
 - [ ] **Step 2: Run the test**
 
+Run: `task pnpm test -- looking-glass-form.test.tsx`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-In `looking-glass-form.tsx`, on mount, read `router.query.location|target|type` (URL-decoded) and call the form's `setValue` for each.
+In `looking-glass-form.tsx`, after the `useForm` setup:
+
+```tsx
+import { useRouter } from 'next/router';
+
+const router = useRouter();
+useEffect(() => {
+  if (!router.isReady) return;
+  const { location, target, type } = router.query;
+  if (typeof location === 'string') setValue('queryLocation', [location]);
+  if (typeof target === 'string') setValue('queryTarget', [target]);
+  if (typeof type === 'string') setValue('queryType', type);
+}, [router.isReady, router.query, setValue]);
+```
 
 - [ ] **Step 4: Run the test**
 
@@ -1852,66 +2246,175 @@ git commit -m "feat(ui): pre-fill form from ?location=&target=&type= query strin
 **Files:**
 - Create: `hyperglass/ui/pages/result/[id].tsx`
 - Create: `hyperglass/ui/pages/result/[id].test.tsx`
+- Modify: `hyperglass/ui/components/results/individual.tsx` (add `readOnly` prop to suppress Share/Refresh buttons in share view)
+- Modify: `hyperglass/ui/components/results/share-button.tsx` (no-op when `readOnly`; or just don't render when called from the share view) — alternatively skip via the parent and don't change ShareButton
 
-- [ ] **Step 1: Write the failing test**
+**Refactor recommendation (resolves the open choice from the spec):**
+
+Keep `Results` (`components/results/group.tsx`) as the form-driven path. For the share view, render the lower-level `Result` (`components/results/individual.tsx`) directly with a snapshot prop and `readOnly: true`. This minimizes blast radius:
+
+- `Results` keeps reading from the Zustand store. No changes there.
+- `Result` (`individual.tsx`) gets a new optional prop signature: `{ snapshot?: ShareResponse; readOnly?: boolean }`. When `snapshot` is provided, it renders directly from `snapshot.output`, `snapshot.queryLabels`, `snapshot.timestamp`, `snapshot.format` — skipping the React Query fetch and the Zustand store read. When `readOnly`, it suppresses `<RequeryButton>` and `<ShareButton>`.
+- The share page constructs and passes the snapshot prop.
+
+This refactor is bounded to `individual.tsx` and the share page; `Results`, `LookingGlassForm`, `useFormState`, etc. stay untouched.
+
+- [ ] **Step 1: Add `snapshot` and `readOnly` props to `individual.tsx`**
+
+In `hyperglass/ui/components/results/individual.tsx`, change the props type:
+
+```ts
+interface ResultProps {
+  // existing props...
+  snapshot?: ShareResponse;
+  readOnly?: boolean;
+}
+```
+
+When `snapshot` is provided: skip the React Query fetch, render directly from `snapshot.output` and `snapshot.queryLabels.location` / `snapshot.queryLabels.type` for the header. When `readOnly`: omit `<ShareButton>` and `<RequeryButton>` from the header.
+
+- [ ] **Step 2: Write the failing page test**
 
 ```tsx
-import { describe, it, expect, vi } from 'vitest';
+// hyperglass/ui/pages/result/[id].test.tsx
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HyperglassContext } from '~/context';
 import ResultPage from './[id]';
 
+vi.mock('next/router', () => ({
+  useRouter: () => ({
+    query: { id: 'aaaaaaaaaaa' },
+    isReady: true,
+    push: vi.fn(),
+  }),
+}));
+
+const config = {
+  cache: { timeout: 600, shareEnabled: true, shareTimeout: 604800, refreshMinInterval: 120 },
+  web: { text: {
+    shareSnapshotBanner: 'Snapshot taken at {timestamp}',
+    shareNotFound: 'Share not found or expired.',
+    shareRunFreshQuery: 'Run a fresh query',
+    shareExpiresAt: 'Expires {expires}',
+  } },
+} as unknown as Config;
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={qc}>
+      <HyperglassContext.Provider value={{ config }}>{children}</HyperglassContext.Provider>
+    </QueryClientProvider>
+  );
+};
+
+beforeEach(() => { global.fetch = vi.fn(); });
+
+const fakeSnapshot = {
+  id: 'aaaaaaaaaaa',
+  shared: true,
+  cached: true,
+  output: 'BGP table output here',
+  runtime: 1,
+  timestamp: '2026-05-01 12:00:00',
+  format: 'text/plain',
+  level: 'success',
+  keywords: [],
+  query: { query_location: 'test1', query_target: '192.0.2.0/24', query_type: 'juniper_bgp_route' },
+  queryLabels: { location: 'test1', type: 'BGP Route' },
+  createdAt: '2026-05-01T12:00:00Z',
+  expiresAt: '2026-05-08T12:00:00Z',
+};
+
 it('renders the snapshot output for a valid id', async () => {
-  // Mock useRouter to return query.id = 'aaa'
-  // Mock fetch /api/query/share/aaa -> 200 with snapshot
-  // render; expect output text + snapshot banner with timestamp
+  (global.fetch as any).mockResolvedValue({
+    ok: true, status: 200,
+    json: async () => fakeSnapshot,
+    text: async () => '',
+  } as unknown as Response);
+  render(<ResultPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('BGP table output here')).toBeInTheDocument());
+  expect(screen.getByText(/Snapshot taken at/)).toBeInTheDocument();
 });
 
 it('shows configured "share not found" message on 404', async () => {
-  // Mock fetch -> 404
-  // render; expect the configured share_not_found text
+  (global.fetch as any).mockResolvedValue({
+    ok: false, status: 404,
+    json: async () => ({}),
+    text: async () => 'not found',
+  } as unknown as Response);
+  render(<ResultPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Share not found or expired.')).toBeInTheDocument());
 });
 
-it('exposes the "Run a fresh query" CTA with prefill query string', async () => {
-  // 200 path
-  // expect a link to /?location=test1&target=192.0.2.0%2F24&type=juniper_bgp_route
+it('exposes a "Run a fresh query" link with prefilled query string', async () => {
+  (global.fetch as any).mockResolvedValue({
+    ok: true, status: 200, json: async () => fakeSnapshot, text: async () => '',
+  } as unknown as Response);
+  render(<ResultPage />, { wrapper });
+  await waitFor(() => screen.getByText('Run a fresh query'));
+  const link = screen.getByText('Run a fresh query').closest('a');
+  expect(link?.getAttribute('href')).toMatch(/^\/\?location=test1/);
+  expect(link?.getAttribute('href')).toContain('target=192.0.2.0%2F24');
+  expect(link?.getAttribute('href')).toContain('type=juniper_bgp_route');
 });
 ```
 
-- [ ] **Step 2: Run the test**
+- [ ] **Step 3: Run the test**
 
 Run: `task pnpm test -- pages/result/`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement the page**
+- [ ] **Step 4: Implement the page**
 
 ```tsx
 // hyperglass/ui/pages/result/[id].tsx
 import { useRouter } from 'next/router';
 import { useShareGet } from '~/hooks/use-share';
-// ... use the existing Result component shape, in a read-only mode ...
+import { Result } from '~/components/results/individual';
+import { useConfig, useStrf } from '~/hooks';
+
+export default function ResultPage() {
+  const router = useRouter();
+  const config = useConfig();
+  const strf = useStrf();
+  const id = typeof router.query.id === 'string' ? router.query.id : undefined;
+  const { data: snapshot, isLoading, error } = useShareGet(id);
+
+  if (isLoading || !router.isReady) return null;
+  if (error || !snapshot) {
+    return <p>{config.web.text.shareNotFound}</p>;
+  }
+
+  const banner = strf(config.web.text.shareSnapshotBanner, { timestamp: snapshot.timestamp });
+  const expires = strf(config.web.text.shareExpiresAt, { expires: snapshot.expiresAt });
+  const freshUrl = `/?location=${encodeURIComponent(snapshot.query.query_location)}&target=${encodeURIComponent(typeof snapshot.query.query_target === 'string' ? snapshot.query.query_target : snapshot.query.query_target[0])}&type=${encodeURIComponent(snapshot.query.query_type)}`;
+
+  return (
+    <>
+      <div role="banner">{banner} · {expires}</div>
+      <Result snapshot={snapshot} readOnly />
+      <a href={freshUrl}>{config.web.text.shareRunFreshQuery}</a>
+    </>
+  );
+}
 ```
 
-The page reads `router.query.id`, calls `useShareGet`, renders a snapshot banner ("snapshot taken at {timestamp}, expires {expires}") above the existing read-only Result component, and includes a "Run a fresh query" link with pre-filled query params.
-
-The Result component currently pulls everything from the Zustand store (per the survey). The cleanest landing is one of:
-- Refactor `Results` (`components/results/group.tsx`) to optionally accept a snapshot prop, falling back to store reads when absent.
-- Or, directly use the lower-level `Result` (`components/results/individual.tsx`) for share rendering, in a read-only branch.
-
-Pick whichever minimizes diff in the existing form path. Document the choice in the commit message.
-
-- [ ] **Step 4: Run the test**
+- [ ] **Step 5: Run the test**
 
 Expected: PASS.
 
-- [ ] **Step 5: Typecheck, lint, format**
+- [ ] **Step 6: Typecheck, lint, format**
 
 Run: `task ui-typecheck && task ui-lint && task ui-format`
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add hyperglass/ui/pages/result hyperglass/ui/components/results/
-git commit -m "feat(ui): add /result/[id] share view page"
+git add hyperglass/ui/pages/result/ hyperglass/ui/components/results/individual.tsx
+git commit -m "feat(ui): add /result/[id] share view; Result component accepts snapshot+readOnly"
 ```
 
 ### Task 5.2: Verify static-export SPA fallback covers `/result/<id>`
@@ -1941,14 +2444,18 @@ Expected: 200 OK with `Content-Type: text/html` returning the SPA's `index.html`
 
 - [ ] **Step 4 (only if Step 3 returned 404):** Add explicit Litestar route handler
 
-In `hyperglass/api/__init__.py`, before the static-files router at line 53, add:
+In `hyperglass/api/__init__.py`, add the imports near the top (alongside existing Litestar imports):
 
 ```python
 import re
-from pathlib import Path
 from litestar import get
+from litestar.exceptions import NotFoundException
 from litestar.response import File
+```
 
+Define the handler (above the `HANDLERS` list):
+
+```python
 @get("/result/{share_id:str}", include_in_schema=False)
 async def share_view_html(share_id: str) -> File:
     if not re.fullmatch(r"[A-Za-z0-9_-]{11}", share_id):
@@ -1956,7 +2463,7 @@ async def share_view_html(share_id: str) -> File:
     return File(path=UI_DIR / "index.html", media_type="text/html")
 ```
 
-Add it to `HANDLERS` ahead of the static-files mount.
+Add `share_view_html` to the `HANDLERS` list at line 39, **before** the `if not STATE.settings.disable_ui:` block (so it's registered ahead of the static-files mount).
 
 Then re-run Step 3 and confirm 200.
 
@@ -1973,26 +2480,39 @@ git commit -m "feat(api): explicit /result/<id> route handler when html_mode is 
 
 **Files:**
 - Modify: `CHANGELOG.md`
-- Modify: `docs/pages/configuration/` (find the cache config page; if none, add a brief note in the existing config index)
+- Modify: `docs/pages/configuration/config.mdx` (the existing config docs page covers `params.cache.*` and is the natural home for the new knobs)
 
-- [ ] **Step 1: Document the `cache.timeout` default change**
+- [ ] **Step 1: Document the share feature in CHANGELOG**
 
-In `CHANGELOG.md`, under the Unreleased section, note:
+In `CHANGELOG.md`, under the `## [Unreleased]` section, the existing subsections include `Added`, `Updated`, `Fixed`, `Security`. Add the share feature under `Added` and the cache.timeout default change under `Updated` (or create a new `### Changed` subsection if the project's convention prefers that — match what's there):
 
-> **Behavior change:** `cache.timeout` default raised from 120s → 600s. End-user UX is preserved by `cache.refresh_min_interval` (UI cooldown, default 120s) and the new `force` flag, but operators relying on 2-minute staleness should set `cache.timeout: 120` explicitly to retain the old behavior.
+```markdown
+### Added
+- Sharable result snapshots: clicking the new Share button on a result mints a `/result/<id>` URL (default 7-day TTL, operator-tunable via `cache.share_timeout`).
+- `params.public_url` (optional): when set, share URLs use this base; otherwise derived from request headers.
 
-- [ ] **Step 2: Document the share feature**
+### Updated
+- `cache.timeout` default raised from 120s → 600s. End-user refresh behavior is preserved by `cache.refresh_min_interval` (UI cooldown, default 120s) and the new query `force` flag. Operators relying on 2-minute cache staleness should set `cache.timeout: 120` explicitly.
+```
 
-In the relevant docs page (likely under `docs/pages/configuration/`), add a section describing:
-- `cache.share_enabled`, `cache.share_timeout`, `cache.share_sliding`, `cache.refresh_min_interval`
-- `params.public_url` for stable share URLs behind a proxy
-- The `/result/<id>` URL shape
-- Note that disabling sharing requires a UI rebuild (build-time `hyperglass.json`)
+- [ ] **Step 2: Document the share feature in operator docs**
+
+In `docs/pages/configuration/config.mdx`, find the `cache:` example block (search for `cache:` to locate it). Below the existing `cache.timeout` and `cache.show_text` documentation, add:
+
+```markdown
+- `cache.share_enabled` (bool, default `true`): toggle the shareable-result feature. Disabling requires a UI rebuild.
+- `cache.share_timeout` (int seconds, default `604800` = 7 days): how long a shared snapshot is retained.
+- `cache.share_sliding` (bool, default `false`): when true, viewing a share resets its TTL.
+- `cache.refresh_min_interval` (int seconds, default `120`): minimum interval between manual refreshes from the UI.
+- `public_url` (HTTP URL, default unset): when set, share links use this base URL. Otherwise derived from the incoming request's `Host` and `X-Forwarded-Proto` headers.
+```
+
+Also note in a callout: "Disabling `share_enabled` (or changing any cache UI knob) requires a UI rebuild because the values are baked into the static `hyperglass.json` at build time."
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add CHANGELOG.md docs/
+git add CHANGELOG.md docs/pages/configuration/config.mdx
 git commit -m "docs: document share-results feature and cache.timeout default change"
 ```
 
@@ -2023,17 +2543,47 @@ Set `params.fake_output: true` in your dev config, then `task start`.
 - Click Refresh < 120s after submitting → confirm disabled with cooldown message
 - Wait > 120s → confirm enabled, click → confirm new query result and a new shareable id
 
-- [ ] **Step 6: Verify expired-cache 410**
+- [ ] **Step 6: Verify expired-cache 410 path**
 
-- Run a query
-- Manually set the cache TTL to 1s: `redis-cli EXPIRE hyperglass.state.hyperglass.query.<digest> 1`, wait
-- Click Share → confirm the configured `share_create_expired` message
+Find the redis-cli command appropriate to your environment:
+- **Local Redis (native):** `redis-cli` connects to localhost:6379 by default.
+- **Docker Compose (per `compose.yaml`):** `docker compose exec redis redis-cli`.
 
-- [ ] **Step 7: Verify share-not-found**
+Find the digest:
+```bash
+# After running the query in Step 2, find the cache key:
+redis-cli --scan --pattern 'hyperglass.state.hyperglass.query.*'
+```
+
+Pick the most-recent digest, then expire it:
+```bash
+redis-cli EXPIRE hyperglass.state.hyperglass.query.<digest> 1
+sleep 2
+```
+
+Click Share in the UI → confirm the configured `share_create_expired` message.
+
+- [ ] **Step 7: Verify share survives query-cache expiry (the headline guarantee)**
+
+- Run a fresh query (Step 2)
+- Click Share, copy the `/result/<id>` URL
+- Expire the underlying query cache as in Step 6 (`redis-cli EXPIRE hyperglass.state.hyperglass.query.<digest> 1; sleep 2`)
+- Confirm the query cache is gone: `redis-cli EXISTS hyperglass.state.hyperglass.query.<digest>` → returns `0`
+- Open the share URL in a fresh incognito window
+- **Expect:** snapshot still renders correctly. The share has its own TTL (`cache.share_timeout`, default 7 days) independent of the query cache.
+
+- [ ] **Step 8: Verify share-not-found**
 
 - Open `http://127.0.0.1:8001/result/notarealid` → confirm the configured `share_not_found` message
 
-- [ ] **Step 8: Sign-off commit (if any deltas surfaced)**
+- [ ] **Step 9: Verify `params.public_url` shaping (optional)**
+
+- Set `public_url: https://lg.example.test` in the dev config; restart
+- Run a query, click Share
+- Confirm the popover URL is `https://lg.example.test/result/<id>` (not the local `127.0.0.1` URL)
+- Unset and restart; confirm derived URL returns
+
+- [ ] **Step 10: Sign-off commit (if any deltas surfaced)**
 
 ```bash
 git add -A
