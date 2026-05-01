@@ -2,6 +2,7 @@
 hyperglass/hyperglass/static
 TODO*
 .env
+.worktrees/
 
 test.py
 .DS_Store
