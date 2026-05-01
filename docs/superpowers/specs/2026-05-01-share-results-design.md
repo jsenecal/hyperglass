@@ -95,7 +95,7 @@ class Cache(HyperglassModel):
     refresh_min_interval: int = 120   # NEW — UI refresh cooldown
 ```
 
-`refresh_min_interval` lives on `Cache` for proximity to the related TTL knobs even though it is a UI-only concept; it ends up in the `/api/info` payload.
+`refresh_min_interval` lives on `Cache` for proximity to the related TTL knobs even though it is a UI-only concept; it is projected into the build-time `hyperglass.json` (see "UI configuration" below).
 
 ### Query model — `hyperglass/models/api/query.py`
 
@@ -225,25 +225,19 @@ Used by `_build_share_url(...)` (above). When unset, the helper falls back to de
 
 There is **no existing public-URL source** in the codebase — `Settings.prod_url` returns `/api/`, and `web.*` has no public-URL field. This is a new field; do not assume one already exists.
 
-### UI configuration — build-time via `UIParameters`
+### UI configuration — build-time via `Params.frontend()`
 
 The hyperglass UI does **not** consume `/api/info` at runtime. UI config is built into `hyperglass/ui/hyperglass.json` at UI-build time by `hyperglass/frontend/__init__.py:280` (writing the result of `Params.frontend()` into the static SPA bundle). The SPA imports it via `_app.tsx`/`_document.tsx`.
 
-The new share knobs land in `UIParameters` (`hyperglass/models/ui.py`) and in whatever `Params.frontend()` produces:
+`UIParameters.cache` (`hyperglass/models/ui.py:57`) is typed as the full `Cache` model, but the *actual content* that reaches `hyperglass.json` is filtered by `Params.frontend()`'s `include` dict at `hyperglass/models/config/params.py:153-168`. The current cache projection is `{"show_text", "timeout"}`. Extend it to:
 
 ```python
-class UIParameters(...):
-    ...
-    cache: UICacheParameters
-
-class UICacheParameters(...):
-    show_text: bool
-    share_enabled: bool        # NEW
-    share_timeout: int         # NEW
-    refresh_min_interval: int  # NEW
+"cache": {"show_text", "timeout", "share_enabled", "share_timeout", "refresh_min_interval"},
 ```
 
-Non-UI fields (`timeout`, `share_sliding`) stay private to the backend. The UI uses `share_enabled` to conditionally render the Share button, `share_timeout` for "expires in N days" copy on the share popover, and `refresh_min_interval` to gate the existing refresh button.
+This is the single change to `Params.frontend()`. No new model is needed — `UIParameters.cache: Cache` continues to embed `Cache`, and the include set picks which fields actually serialize. The new `share_sliding` field is **not** added to the include set, so it stays private to the backend (it is a server-side TTL behavior knob, not a UI concern). `timeout` already reaches the UI today and continues to.
+
+The UI uses `share_enabled` to conditionally render the Share button, `share_timeout` for "expires in N days" copy on the share popover, and `refresh_min_interval` to gate the existing refresh button.
 
 **Operator-visible consequence:** flipping `share_enabled` (or any of the other UI-relevant share knobs) requires a UI rebuild — same as flipping any other UI-affecting config in hyperglass today. Document this in operator docs alongside the feature.
 
@@ -272,11 +266,11 @@ A dedicated read-only result view. Behavior:
 
 **Static-export routing.** Because hyperglass uses `next export`, `pages/result/[id].tsx` cannot pre-render unknown IDs. Concrete approach:
 
-1. **Frontend.** `pages/result/[id].tsx` is a normal client-rendered page. At build time, Next emits an HTML placeholder for the route. We do not rely on `getStaticPaths` returning specific IDs.
-2. **Backend.** Add a Litestar route handler in `hyperglass/api/__init__.py` that matches `/result/{share_id:str}` and returns the contents of `hyperglass/static/ui/index.html` with `Content-Type: text/html`. This handler is registered **before** the static-file mount so it takes precedence. The SPA boots, reads `share_id` from `window.location.pathname`, and fetches `/api/query/share/<share_id>`.
-3. **Reserved-path safety.** Share IDs are constrained to URL-safe-base64 chars (`[A-Za-z0-9_-]{11}`) by `secrets.token_urlsafe(8)`. The handler enforces this format with a regex; non-matching paths fall through to the existing 404 path. There is no risk of conflict with `/api/*` (different prefix) or static assets (mounted under `/_next/`, `/favicon.ico` etc., already disjoint).
+1. **Frontend.** `pages/result/[id].tsx` is a normal client-rendered page. The build emits a placeholder HTML for the route under `hyperglass/static/ui/result/[id].html`. We do not rely on `getStaticPaths` returning specific IDs.
+2. **Backend — likely no change required.** The static-files router at `hyperglass/api/__init__.py:54` is mounted at `/` with `html_mode=True`. Litestar's `html_mode` already provides SPA-style fallback: requests to unmatched paths under the mount fall back to serving `index.html`. So `/result/<id>` should already resolve to the SPA, which reads `share_id` from `window.location.pathname` and fetches `/api/query/share/<share_id>`. **Verify this during implementation** by hitting `/result/abc123` against a running dev server before relying on it.
+3. **Backend — fallback if `html_mode` is insufficient.** If `html_mode=True` does not in fact catch `/result/<id>`, add an explicit Litestar route handler at `/result/{share_id:str}` (registered before the static-files router) that reads `UI_DIR / "index.html"` and returns it with `Content-Type: text/html`. Constrain `share_id` with a regex matching `[A-Za-z0-9_-]{11}` (the shape of `secrets.token_urlsafe(8)` output) so genuinely-unknown paths still fall through to a 404.
 
-This is the simplest viable approach: no Next.js config changes, no `getStaticPaths` gymnastics, just one Litestar route handler.
+There is no risk of conflict with `/api/*` (different prefix) or other static assets (`/_next/`, `/images/`, `/favicon.ico` are already disjoint and resolve before any SPA fallback).
 
 ### Results component — small refactor
 
@@ -289,7 +283,7 @@ This is a targeted refactor in the spirit of "improving code I'm working in" —
 Added to the result view next to the existing refresh affordance. UX:
 
 1. Disabled until query response has an `id` (it always will, post-merge).
-2. Hidden when `/api/info` returns `cache.share_enabled === false`.
+2. Hidden when `cache.share_enabled === false` in the build-time `hyperglass.json`.
 3. Click → `POST /api/query/share/<cache_id>`.
 4. On success: open a popover with the URL and a copy-to-clipboard button. Show "Expires `<expires_at>`."
 5. On 410: display a configurable message ("This result has expired from cache — refresh and try again.") and surface a refresh action.
@@ -297,7 +291,7 @@ Added to the result view next to the existing refresh affordance. UX:
 
 ### Refresh button
 
-Add a `refresh_min_interval` cooldown gate (read from `/api/info`, default 120s). The existing refresh button:
+Add a `refresh_min_interval` cooldown gate (read from `cache.refresh_min_interval` in the build-time `hyperglass.json`, default 120s). The existing refresh button:
 
 1. Becomes disabled for `refresh_min_interval` seconds after each query submission.
 2. When clicked, sends `POST /api/query` with the same body but `force: true`.
@@ -325,7 +319,7 @@ All new user-visible strings — Share button label, copy-link tooltip, snapshot
 |------|----------|
 | Cache expired between query and Share click | `POST /api/query/share/<id>` returns `410`; UI prompts to refresh. |
 | Share recipient opens an expired link | `GET /api/query/share/<id>` returns `404` (Redis TTL has elapsed); page shows "Share not found or expired." |
-| `share_enabled = false` | UI hides Share button (read from `/api/info`); both endpoints return `404`. |
+| `share_enabled = false` | UI hides Share button (read from build-time `hyperglass.json`); both endpoints return `404`. |
 | Device renamed or removed after snapshot | Share page renders correctly because labels are frozen at write time. The "Run a fresh query" CTA may fail validation — that's fine. |
 | Directive deleted after snapshot | Same as above. |
 | Two simultaneous Shares of the same query | Two distinct opaque IDs, two share entries. By design. |
