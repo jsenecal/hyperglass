@@ -6,7 +6,7 @@ import urllib.parse
 from pathlib import Path
 
 # Third Party
-from pydantic import Field, HttpUrl, ConfigDict, ValidationInfo, field_validator
+from pydantic import AnyHttpUrl, ConfigDict, Field, HttpUrl, ValidationInfo, field_validator
 
 # Project
 from hyperglass.settings import Settings
@@ -69,6 +69,11 @@ class Params(ParamsPublic, HyperglassModel):
     model_config = ConfigDict(json_schema_extra={"level": 1})
 
     # Top Level Params
+    public_url: t.Optional[AnyHttpUrl] = Field(
+        None,
+        title="Public URL",
+        description="Public base URL for the hyperglass instance. Used to build shareable links for query results.",
+    )
 
     fake_output: bool = Field(
         False,
