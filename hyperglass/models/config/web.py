@@ -133,6 +133,7 @@ class Text(HyperglassModel):
     share_snapshot_banner: str = "Snapshot taken at {timestamp}"  # Formatted by Javascript
     share_run_fresh_query: str = "Run a fresh query"
     refresh_cooldown: str = "Refresh available in {seconds}s"  # Formatted by Javascript
+    requery_tooltip: str = "Reload Query"
 
     @field_validator("cache_prefix")
     def validate_cache_prefix(cls: "Text", value: str) -> str:

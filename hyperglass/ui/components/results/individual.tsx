@@ -11,6 +11,7 @@ import {
   useAccordionContext,
   useToast,
 } from '@chakra-ui/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import startCase from 'lodash/startCase';
 import { forwardRef, memo, useEffect, useMemo, useState } from 'react';
@@ -64,6 +65,8 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   const getDevice = useDevice();
   const device = getDevice(queryLocation);
 
+  const queryClient = useQueryClient();
+
   const isMobile = useMobile();
   const color = useColorValue('black', 'white');
   const scrollbar = useColorValue('blackAlpha.300', 'whiteAlpha.300');
@@ -73,6 +76,10 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   const addResponse = useFormState(s => s.addResponse);
   const form = useFormState(s => s.form);
   const [errorLevel, _setErrorLevel] = useState<ErrorLevels>('error');
+  const [force, setForce] = useState<true | undefined>(undefined);
+  // Track when data last arrived for the cooldown gate. Initialise to mount
+  // time so the button starts cooling-down from mount rather than from epoch 0.
+  const [lastResponseAt, setLastResponseAt] = useState<number>(() => Date.now());
 
   const setErrorLevel = (level: ResponseLevel): void => {
     let e: ErrorLevels = 'error';
@@ -87,8 +94,8 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     _setErrorLevel(e);
   };
 
-  const { data, error, isLoading, refetch, isFetchedAfterMount } = useLGQuery(
-    { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType },
+  const { data, error, isLoading, isFetching, isFetchedAfterMount, dataUpdatedAt } = useLGQuery(
+    { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType, force },
     {
       onSuccess(data) {
         if (device !== null) {
@@ -107,6 +114,34 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
       },
     },
   );
+
+  // When a forced fetch settles, copy the fresh result into the non-force cache
+  // key (K1) before resetting force back to undefined. Without this, reverting
+  // the key from K2={…,force:true} to K1={…} causes React Query to serve K1's
+  // stale data because refetchOnMount/refetchOnWindowFocus are both disabled.
+  useEffect(() => {
+    if (dataUpdatedAt > 0) {
+      setLastResponseAt(dataUpdatedAt);
+      if (force && data && !isFetching) {
+        // Populate K1 with the fresh forced result so the UI keeps showing the
+        // new data once force reverts to undefined and the key swaps back to K1.
+        // React Query v4 hashes keys structurally and drops undefined values, so
+        // omitting force entirely matches K1's stored entry.
+        queryClient.setQueryData(
+          [
+            '/api/query',
+            { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType },
+          ],
+          data,
+        );
+        setForce(undefined);
+      }
+    }
+    // force, data, queryLocation, form.queryTarget, form.queryType, and
+    // queryClient are intentionally omitted: they are all stable within a settled
+    // fetch cycle. Re-running on any of those would risk double-firing the
+    // setQueryData / setForce(undefined) calls.
+  }, [dataUpdatedAt, isFetching]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isError = useMemo(() => isLGOutputOrError(data), [data, error]);
 
@@ -218,7 +253,11 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
             <Path device={device.id} />
           )}
           <CopyButton copyValue={copyValue} isDisabled={isLoading} />
-          <RequeryButton requery={refetch} isDisabled={isLoading} />
+          <RequeryButton
+            onRequery={() => setForce(true)}
+            lastResponseAt={lastResponseAt}
+            isDisabled={isLoading}
+          />
         </HStack>
       </AccordionHeaderWrapper>
       <AccordionPanel

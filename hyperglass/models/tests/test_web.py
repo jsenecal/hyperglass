@@ -11,3 +11,4 @@ def test_text_share_defaults():
     assert "{timestamp}" in t.share_snapshot_banner
     assert t.share_not_found
     assert t.refresh_cooldown
+    assert t.requery_tooltip == "Reload Query"

@@ -56,6 +56,7 @@ interface _Text {
   share_snapshot_banner: string;
   share_run_fresh_query: string;
   refresh_cooldown: string;
+  requery_tooltip: string;
 }
 
 interface _Greeting {
