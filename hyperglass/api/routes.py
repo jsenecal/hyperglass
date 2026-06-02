@@ -78,7 +78,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
     _log.info("Starting query execution")
 
-    cache_response = cache.get_map(cache_key, "output")
+    cache_response = None if data.force else cache.get_map(cache_key, "output")
     json_output = False
     cached = False
     runtime = 65535

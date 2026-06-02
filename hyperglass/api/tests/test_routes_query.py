@@ -1,4 +1,4 @@
-"""Tests for /api/query cache-write expansion."""
+"""Tests for /api/query cache-write expansion and force flag."""
 
 # Third Party
 import pytest
@@ -59,3 +59,21 @@ def test_query_hit_path_returns_cached(client, state):
     assert body["cached"] is True
     # format field must be present and non-empty (no 500 on format handling).
     assert body.get("format") in ("application/json", "text/plain")
+
+
+def test_force_skips_cache_hit(client, state):
+    """Force flag must bypass cache and re-execute the query."""
+    body = {"queryLocation": "test1", "queryTarget": "192.0.2.0/24",
+            "queryType": "juniper_bgp_route"}
+    r1 = client.post("/api/query", json=body)
+    assert r1.status_code == 201
+    assert r1.json()["cached"] is False
+
+    # Second call without force: cache hit.
+    r2 = client.post("/api/query", json=body)
+    assert r2.json()["cached"] is True
+
+    # Third call with force: cache must be skipped (re-execution).
+    r3 = client.post("/api/query", json={**body, "force": True})
+    assert r3.status_code == 201
+    assert r3.json()["cached"] is False
