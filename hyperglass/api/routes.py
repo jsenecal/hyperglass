@@ -5,12 +5,13 @@ import json
 import secrets
 import time
 import typing as t
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 # Third Party
 from litestar import Request, Response, get, post
 from litestar.di import Provide
 from litestar.background_tasks import BackgroundTask
+from litestar.exceptions import HTTPException, NotFoundException
 
 # Project
 from hyperglass.log import log
@@ -20,7 +21,7 @@ from hyperglass.models.api import Query
 from hyperglass.models.data import OutputDataModel
 from hyperglass.util.typing import is_type
 from hyperglass.execution.main import execute
-from hyperglass.models.api.response import QueryResponse
+from hyperglass.models.api.response import QueryResponse, ShareCreateResponse
 from hyperglass.models.config.params import Params, APIParams
 from hyperglass.models.config.devices import Devices, APIDevice
 
@@ -35,6 +36,7 @@ __all__ = (
     "queries",
     "info",
     "query",
+    "share_create",
 )
 
 
@@ -212,4 +214,49 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
             request=request,
             timestamp=timestamp,
         ),
+    )
+
+
+@post("/api/query/share/{cache_id:str}", dependencies={"_state": Provide(get_state)})
+async def share_create(
+    _state: HyperglassState,
+    request: Request,
+    cache_id: str,
+) -> ShareCreateResponse:
+    """Promote a cached query result to a long-lived shareable snapshot."""
+    # TODO: make configurable via params.messages (no existing precedent for
+    # messages-driven HTTP 404/410 detail strings in this file).
+    if not _state.params.cache.share_enabled:
+        raise NotFoundException("Sharing is disabled.")
+
+    digest = cache_id.removeprefix("hyperglass.query.")
+    cache_key = f"hyperglass.query.{digest}"
+
+    cache = _state.redis
+    # Reads must happen on the live manager (not the pipeline) so values are
+    # returned immediately rather than queued.
+    output = cache.get_map(cache_key, "output")
+    if output is None:
+        raise HTTPException(
+            status_code=410,
+            detail="Result has expired. Refresh the query and try again.",
+        )
+
+    share_id = _generate_share_id(cache)
+    share_key = f"hyperglass.share.{share_id}"
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(seconds=_state.params.cache.share_timeout)
+
+    with cache.pipeline() as pipe:
+        for field in ("output", "timestamp", "query", "query_labels",
+                      "format", "runtime", "level", "keywords"):
+            pipe.set_map_item(share_key, field, cache.get_map(cache_key, field))
+        pipe.set_map_item(share_key, "created_at", now)
+        pipe.set_map_item(share_key, "expires_at", expires_at)
+        pipe.expire(share_key, expire_in=_state.params.cache.share_timeout)
+
+    return ShareCreateResponse(
+        id=share_id,
+        url=_build_share_url(_state.params, request, share_id),
+        expires_at=expires_at,
     )
