@@ -2,12 +2,14 @@
 
 # Standard Library
 import typing as t
+from datetime import datetime
 
 # Third Party
 from pydantic import Field, BaseModel, StrictInt, StrictStr, ConfigDict, StrictBool, field_validator
 
 # Project
 from hyperglass.state import use_state
+from hyperglass.util import snake_to_camel
 
 ErrorName = t.Literal["success", "warning", "error", "danger"]
 ResponseLevel = t.Literal["success"]
@@ -134,13 +136,16 @@ class QueryResponse(BaseModel):
     """Query response model."""
 
     model_config = ConfigDict(
+        alias_generator=snake_to_camel,
+        populate_by_name=True,
         json_schema_extra={
             "title": "Query Response",
             "description": "Looking glass response",
             "examples": schema_query_examples,
-        }
+        },
     )
 
+    id: str
     output: t.Union[t.Dict, StrictStr] = Field(json_schema_extra=schema_query_output)
     level: ResponseLevel = Field("success", json_schema_extra=schema_query_level)
     random: str = Field(json_schema_extra=schema_query_random)
@@ -215,3 +220,36 @@ class InfoResponse(BaseModel):
     organization: StrictStr
     primary_asn: StrictInt
     version: StrictStr
+
+
+class ShareCreateResponse(BaseModel):
+    """Response from POST /api/query/share/{cache_id}."""
+
+    model_config = ConfigDict(alias_generator=snake_to_camel, populate_by_name=True)
+
+    id: str
+    url: str
+    expires_at: datetime
+
+
+class ShareResponse(BaseModel):
+    """Response from GET /api/query/share/{share_id}.
+
+    Superset of QueryResponse with snapshot metadata.
+    """
+
+    model_config = ConfigDict(alias_generator=snake_to_camel, populate_by_name=True)
+
+    id: str
+    output: t.Union[str, t.Dict[str, t.Any]]
+    cached: bool = True
+    shared: bool = True
+    runtime: int
+    timestamp: datetime
+    format: str
+    level: str
+    keywords: t.List[str]
+    query: t.Dict[str, t.Any]
+    query_labels: t.Dict[str, str]
+    created_at: datetime
+    expires_at: datetime
