@@ -17,6 +17,43 @@ if t.TYPE_CHECKING:
     from hyperglass.state import HyperglassState
 
 
+def _seed_stub_state() -> None:
+    """Seed Redis with minimal stub state so api modules can be imported during collection.
+
+    hyperglass.api reads Redis at module import time. pytest loads this
+    top-level conftest before any nested conftest in both
+    path-targeted and directory runs, so module-level seeding here is
+    guaranteed to precede the first ``import hyperglass.api``. A
+    ``pytest_configure`` hook defined in this conftest would NOT be sufficient:
+    it fires after this module body, and on direct test-file invocations
+    (``pytest hyperglass/api/tests/test_x.py``) nested conftests are imported
+    during initial conftest loading — before any configure hook — triggering the
+    ``hyperglass.api`` import with unseeded Redis.
+
+    This overwrites the params/directives/devices/ui_params keys unconditionally —
+    never point the test suite at a Redis instance holding real configuration
+    (the ``state`` fixture teardown flushes the whole DB anyway, so a disposable
+    Redis is already a hard requirement).
+    """
+    _state = use_state()
+    _params = Params()
+    _directives = Directives.new()
+
+    with _state.cache.pipeline() as pipeline:
+        pipeline.set("params", _params)
+        pipeline.set("directives", _directives)
+
+    _devices = Devices()
+    _ui_params = init_ui_params(params=_params, devices=_devices)
+
+    with _state.cache.pipeline() as pipeline:
+        pipeline.set("devices", _devices)
+        pipeline.set("ui_params", _ui_params)
+
+
+_seed_stub_state()
+
+
 @pytest.fixture
 def params() -> t.Dict[str, t.Any]:
     """Provide default Params overrides for the state fixture."""
