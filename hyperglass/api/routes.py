@@ -2,16 +2,16 @@
 
 # Standard Library
 import json
-import secrets
 import time
 import typing as t
+import secrets
 from datetime import UTC, datetime, timedelta
 
 # Third Party
 from litestar import Request, Response, get, post
 from litestar.di import Provide
-from litestar.background_tasks import BackgroundTask
 from litestar.exceptions import HTTPException, NotFoundException
+from litestar.background_tasks import BackgroundTask
 
 # Project
 from hyperglass.log import log
@@ -21,7 +21,7 @@ from hyperglass.models.api import Query
 from hyperglass.models.data import OutputDataModel
 from hyperglass.util.typing import is_type
 from hyperglass.execution.main import execute
-from hyperglass.models.api.response import QueryResponse, ShareCreateResponse, ShareResponse
+from hyperglass.models.api.response import QueryResponse, ShareResponse, ShareCreateResponse
 from hyperglass.models.config.params import Params, APIParams
 from hyperglass.models.config.devices import Devices, APIDevice
 
@@ -249,8 +249,16 @@ async def share_create(
     expires_at = now + timedelta(seconds=_state.params.cache.share_timeout)
 
     with cache.pipeline() as pipe:
-        for field in ("output", "timestamp", "query", "query_labels",
-                      "format", "runtime", "level", "keywords"):
+        for field in (
+            "output",
+            "timestamp",
+            "query",
+            "query_labels",
+            "format",
+            "runtime",
+            "level",
+            "keywords",
+        ):
             pipe.set_map_item(share_key, field, cache.get_map(cache_key, field))
         pipe.set_map_item(share_key, "created_at", now)
         pipe.set_map_item(share_key, "expires_at", expires_at)

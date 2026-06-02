@@ -16,11 +16,14 @@ def params() -> dict:
 
 def _seed_query(client) -> str:
     """Run a query and return the cache_id."""
-    r = client.post("/api/query", json={
-        "queryLocation": "test1",
-        "queryTarget": "192.0.2.0/24",
-        "queryType": "juniper_bgp_route",
-    })
+    r = client.post(
+        "/api/query",
+        json={
+            "queryLocation": "test1",
+            "queryTarget": "192.0.2.0/24",
+            "queryType": "juniper_bgp_route",
+        },
+    )
     assert r.status_code == 201
     return r.json()["id"]
 

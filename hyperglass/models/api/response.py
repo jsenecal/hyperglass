@@ -8,8 +8,8 @@ from datetime import datetime
 from pydantic import Field, BaseModel, StrictInt, StrictStr, ConfigDict, StrictBool, field_validator
 
 # Project
-from hyperglass.state import use_state
 from hyperglass.util import snake_to_camel
+from hyperglass.state import use_state
 
 ErrorName = t.Literal["success", "warning", "error", "danger"]
 ResponseLevel = t.Literal["success"]

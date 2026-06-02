@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime
 
 # Third Party
-from pydantic import BaseModel, ConfigDict, field_validator, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 from typing_extensions import Annotated
 
 # Project
@@ -20,7 +20,6 @@ from hyperglass.exceptions.private import InputValidationError
 
 # Local
 from ..config.devices import Device
-
 
 QueryLocation = Annotated[str, StringConstraints(strict=True, min_length=1, strip_whitespace=True)]
 QueryTarget = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]

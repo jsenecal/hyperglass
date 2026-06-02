@@ -12,11 +12,14 @@ def params() -> dict:
 
 def test_query_caches_all_snapshot_fields(client, state):
     # First call seeds cache.
-    r1 = client.post("/api/query", json={
-        "queryLocation": "test1",
-        "queryTarget": "192.0.2.0/24",
-        "queryType": "juniper_bgp_route",
-    })
+    r1 = client.post(
+        "/api/query",
+        json={
+            "queryLocation": "test1",
+            "queryTarget": "192.0.2.0/24",
+            "queryType": "juniper_bgp_route",
+        },
+    )
     assert r1.status_code == 201
     cache_id = r1.json()["id"]
 
@@ -63,8 +66,11 @@ def test_query_hit_path_returns_cached(client, state):
 
 def test_force_skips_cache_hit(client, state):
     """Force flag must bypass cache and re-execute the query."""
-    body = {"queryLocation": "test1", "queryTarget": "192.0.2.0/24",
-            "queryType": "juniper_bgp_route"}
+    body = {
+        "queryLocation": "test1",
+        "queryTarget": "192.0.2.0/24",
+        "queryType": "juniper_bgp_route",
+    }
     r1 = client.post("/api/query", json=body)
     assert r1.status_code == 201
     assert r1.json()["cached"] is False

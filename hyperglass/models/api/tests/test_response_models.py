@@ -4,11 +4,7 @@
 from datetime import datetime, timezone
 
 # Project
-from hyperglass.models.api.response import (
-    QueryResponse,
-    ShareCreateResponse,
-    ShareResponse,
-)
+from hyperglass.models.api.response import QueryResponse, ShareResponse, ShareCreateResponse
 
 
 def test_query_response_includes_id():
@@ -29,8 +25,7 @@ def test_query_response_includes_id():
 
 def test_share_create_response_shape():
     expires = datetime.now(timezone.utc)
-    r = ShareCreateResponse(id="abc", url="https://lg.example.com/result/abc",
-                            expires_at=expires)
+    r = ShareCreateResponse(id="abc", url="https://lg.example.com/result/abc", expires_at=expires)
     assert r.id == "abc"
     assert r.url.endswith("/result/abc")
     # camelCase alias on the wire
@@ -50,8 +45,11 @@ def test_share_response_shape():
         format="text/plain",
         level="success",
         keywords=[],
-        query={"query_location": "test1", "query_target": "192.0.2.0/24",
-               "query_type": "juniper_bgp_route"},
+        query={
+            "query_location": "test1",
+            "query_target": "192.0.2.0/24",
+            "query_type": "juniper_bgp_route",
+        },
         query_labels={"location": "test1", "type": "BGP Route"},
         created_at=datetime.now(timezone.utc),
         expires_at=expires,

@@ -5,7 +5,9 @@ import re
 
 
 def test_generate_share_id_format(state):
+    # Project
     from hyperglass.api.routes import _generate_share_id
+
     cache = state.redis
     sid = _generate_share_id(cache)
     assert isinstance(sid, str)
@@ -14,7 +16,9 @@ def test_generate_share_id_format(state):
 
 
 def test_generate_share_id_unique(state):
+    # Project
     from hyperglass.api.routes import _generate_share_id
+
     cache = state.redis
     seen = {_generate_share_id(cache) for _ in range(100)}
     assert len(seen) == 100
@@ -22,30 +26,31 @@ def test_generate_share_id_unique(state):
 
 def test_generate_share_id_collision_retry(state, monkeypatch):
     """If the first ID exists, the helper retries."""
+    # Project
     from hyperglass.api import routes
+
     cache = state.redis
 
     cache.set_map_item("hyperglass.share.AAAAAAAAAAA", "output", "x")
 
     sequence = iter(["AAAAAAAAAAA", "BBBBBBBBBBB"])
-    monkeypatch.setattr(
-        routes.secrets, "token_urlsafe", lambda n: next(sequence)
-    )
+    monkeypatch.setattr(routes.secrets, "token_urlsafe", lambda n: next(sequence))
     sid = routes._generate_share_id(cache)
     assert sid == "BBBBBBBBBBB"
 
 
 def test_build_share_url_uses_params_public_url():
+    # Project
     from hyperglass.api.routes import _build_share_url
     from hyperglass.models.config.params import Params
 
     params = Params(public_url="https://lg.example.com")
     # Pass None for request — params.public_url wins.
-    assert _build_share_url(params, None, "abc123") == \
-        "https://lg.example.com/result/abc123"
+    assert _build_share_url(params, None, "abc123") == "https://lg.example.com/result/abc123"
 
 
 def test_build_share_url_falls_back_to_request():
+    # Project
     from hyperglass.api.routes import _build_share_url
     from hyperglass.models.config.params import Params
 
@@ -58,11 +63,13 @@ def test_build_share_url_falls_back_to_request():
         url = FakeURL()
 
     params = Params()  # public_url unset
-    assert _build_share_url(params, FakeRequest(), "abc123") == \
-        "https://lg.example.com/result/abc123"
+    assert (
+        _build_share_url(params, FakeRequest(), "abc123") == "https://lg.example.com/result/abc123"
+    )
 
 
 def test_build_share_url_request_no_proxy_headers():
+    # Project
     from hyperglass.api.routes import _build_share_url
     from hyperglass.models.config.params import Params
 
@@ -75,5 +82,4 @@ def test_build_share_url_request_no_proxy_headers():
         url = FakeURL()
 
     params = Params()
-    assert _build_share_url(params, FakeRequest(), "abc") == \
-        "http://127.0.0.1:8001/result/abc"
+    assert _build_share_url(params, FakeRequest(), "abc") == "http://127.0.0.1:8001/result/abc"

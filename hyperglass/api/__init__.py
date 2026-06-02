@@ -16,7 +16,7 @@ from hyperglass.exceptions import HyperglassError
 
 # Local
 from .events import check_redis
-from .routes import info, query, device, devices, queries, share_create, share_get
+from .routes import info, query, device, devices, queries, share_get, share_create
 from .middleware import COMPRESSION_CONFIG, create_cors_config
 from .error_handlers import app_handler, http_handler, default_handler, validation_handler
 

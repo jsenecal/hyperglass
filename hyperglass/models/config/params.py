@@ -6,7 +6,7 @@ import urllib.parse
 from pathlib import Path
 
 # Third Party
-from pydantic import AnyHttpUrl, ConfigDict, Field, HttpUrl, ValidationInfo, field_validator
+from pydantic import Field, HttpUrl, AnyHttpUrl, ConfigDict, ValidationInfo, field_validator
 
 # Project
 from hyperglass.settings import Settings

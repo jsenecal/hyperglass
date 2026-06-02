@@ -7,13 +7,14 @@ import typing as t
 import pytest
 
 # Project
+from hyperglass.state import use_state
 from hyperglass.configuration import init_ui_params
 from hyperglass.models.directive import Directives
 from hyperglass.models.config.params import Params
 from hyperglass.models.config.devices import Devices
-from hyperglass.state import use_state
 
 if t.TYPE_CHECKING:
+    # Project
     from hyperglass.state import HyperglassState
 
 

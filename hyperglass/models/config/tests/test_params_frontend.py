@@ -22,8 +22,9 @@ def test_frontend_excludes_private_share_sliding():
 
 def test_ui_params_cache_projection_excludes_private_fields():
     """UIParameters.export_dict must not expose server-private cache fields."""
-    from hyperglass.configuration.validate import init_ui_params
+    # Project
     from hyperglass.models.config.devices import Devices
+    from hyperglass.configuration.validate import init_ui_params
 
     ui = init_ui_params(params=Params(), devices=Devices())
     cache = ui.export_dict(by_alias=True)["cache"]
@@ -38,8 +39,9 @@ def test_ui_params_cache_projection_excludes_private_fields():
 
 def test_ui_params_export_excludes_public_url():
     """public_url must not be present in the UI bundle."""
-    from hyperglass.configuration.validate import init_ui_params
+    # Project
     from hyperglass.models.config.devices import Devices
+    from hyperglass.configuration.validate import init_ui_params
 
     ui = init_ui_params(params=Params(), devices=Devices())
     assert "publicUrl" not in ui.export_dict(by_alias=True)

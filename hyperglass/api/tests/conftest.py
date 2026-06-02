@@ -18,6 +18,7 @@ def client(state) -> t.Generator[TestClient, None, None]:
     # Import here so seeding precedes the FIRST IMPORT of hyperglass.api: the
     # module reads state at import time (STATE = use_state(), OpenAPI config),
     # not merely in startup hooks.
+    # Project
     from hyperglass.api import app
 
     with TestClient(app=app) as test_client:
