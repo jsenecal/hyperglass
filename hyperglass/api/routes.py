@@ -53,6 +53,23 @@ def _generate_share_id(cache, max_attempts: int = 3) -> str:
     raise RuntimeError("Failed to generate a unique share ID after retries.")
 
 
+def _build_share_url(params, request, share_id: str) -> str:
+    """Build the public share URL.
+
+    Prefers `params.public_url` when set; otherwise derives from request
+    headers. `X-Forwarded-Proto` and `Host` take precedence over the
+    direct connection URL so reverse-proxied deployments produce correct
+    public URLs without explicit configuration.
+    """
+    if params.public_url is not None:
+        base = str(params.public_url).rstrip("/")
+    else:
+        host = request.headers.get("host") or request.url.netloc
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        base = f"{scheme}://{host}"
+    return f"{base}/result/{share_id}"
+
+
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
 async def device(devices: Devices, id: str) -> APIDevice:
     """Retrieve a device by ID."""
