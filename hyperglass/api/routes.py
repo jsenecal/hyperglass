@@ -21,7 +21,7 @@ from hyperglass.models.api import Query
 from hyperglass.models.data import OutputDataModel
 from hyperglass.util.typing import is_type
 from hyperglass.execution.main import execute
-from hyperglass.models.api.response import QueryResponse, ShareCreateResponse
+from hyperglass.models.api.response import QueryResponse, ShareCreateResponse, ShareResponse
 from hyperglass.models.config.params import Params, APIParams
 from hyperglass.models.config.devices import Devices, APIDevice
 
@@ -37,6 +37,7 @@ __all__ = (
     "info",
     "query",
     "share_create",
+    "share_get",
 )
 
 
@@ -222,7 +223,7 @@ async def share_create(
     _state: HyperglassState,
     request: Request,
     cache_id: str,
-) -> ShareCreateResponse:
+) -> Response:
     """Promote a cached query result to a long-lived shareable snapshot."""
     # TODO: make configurable via params.messages (no existing precedent for
     # messages-driven HTTP 404/410 detail strings in this file).
@@ -255,8 +256,42 @@ async def share_create(
         pipe.set_map_item(share_key, "expires_at", expires_at)
         pipe.expire(share_key, expire_in=_state.params.cache.share_timeout)
 
-    return ShareCreateResponse(
+    resp = ShareCreateResponse(
         id=share_id,
         url=_build_share_url(_state.params, request, share_id),
         expires_at=expires_at,
     )
+    return Response(resp.model_dump(by_alias=True, mode="json"), status_code=201)
+
+
+@get("/api/query/share/{share_id:str}", dependencies={"_state": Provide(get_state)})
+async def share_get(_state: HyperglassState, share_id: str) -> Response:
+    """Read a shared snapshot."""
+    if not _state.params.cache.share_enabled:
+        raise NotFoundException()
+
+    cache = _state.redis
+    share_key = f"hyperglass.share.{share_id}"
+    output = cache.get_map(share_key, "output")
+    if output is None:
+        raise NotFoundException("Share not found or expired.")
+
+    if _state.params.cache.share_sliding:
+        cache.expire(share_key, expire_in=_state.params.cache.share_timeout)
+
+    resp = ShareResponse(
+        id=share_id,
+        output=output,
+        cached=True,
+        shared=True,
+        runtime=cache.get_map(share_key, "runtime"),
+        timestamp=cache.get_map(share_key, "timestamp"),
+        format=cache.get_map(share_key, "format"),
+        level=cache.get_map(share_key, "level"),
+        keywords=cache.get_map(share_key, "keywords") or [],
+        query=cache.get_map(share_key, "query"),
+        query_labels=cache.get_map(share_key, "query_labels"),
+        created_at=cache.get_map(share_key, "created_at"),
+        expires_at=cache.get_map(share_key, "expires_at"),
+    )
+    return Response(resp.model_dump(by_alias=True, mode="json"))

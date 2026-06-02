@@ -16,7 +16,7 @@ from hyperglass.exceptions import HyperglassError
 
 # Local
 from .events import check_redis
-from .routes import info, query, device, devices, queries, share_create
+from .routes import info, query, device, devices, queries, share_create, share_get
 from .middleware import COMPRESSION_CONFIG, create_cors_config
 from .error_handlers import app_handler, http_handler, default_handler, validation_handler
 
@@ -43,6 +43,7 @@ HANDLERS = [
     info,
     query,
     share_create,
+    share_get,
 ]
 
 if not STATE.settings.disable_ui:

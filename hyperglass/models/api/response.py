@@ -225,7 +225,10 @@ class InfoResponse(BaseModel):
 class ShareCreateResponse(BaseModel):
     """Response from POST /api/query/share/{cache_id}."""
 
-    model_config = ConfigDict(alias_generator=snake_to_camel, populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=snake_to_camel,
+        populate_by_name=True,
+    )
 
     id: str
     url: str
@@ -238,7 +241,10 @@ class ShareResponse(BaseModel):
     Superset of QueryResponse with snapshot metadata.
     """
 
-    model_config = ConfigDict(alias_generator=snake_to_camel, populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=snake_to_camel,
+        populate_by_name=True,
+    )
 
     id: str
     output: t.Union[str, t.Dict[str, t.Any]]
