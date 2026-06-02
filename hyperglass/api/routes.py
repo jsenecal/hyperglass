@@ -2,6 +2,7 @@
 
 # Standard Library
 import json
+import secrets
 import time
 import typing as t
 from datetime import UTC, datetime
@@ -35,6 +36,21 @@ __all__ = (
     "info",
     "query",
 )
+
+
+def _generate_share_id(cache, max_attempts: int = 3) -> str:
+    """Generate an opaque, unique share ID.
+
+    Returns an 11-char URL-safe-base64 token (64 bits of entropy from
+    `secrets.token_urlsafe(8)`). Verifies non-collision against existing
+    `hyperglass.share.*` keys; collision is astronomically unlikely but
+    the check is cheap.
+    """
+    for _ in range(max_attempts):
+        candidate = secrets.token_urlsafe(8)
+        if cache.get_map(f"hyperglass.share.{candidate}", "output") is None:
+            return candidate
+    raise RuntimeError("Failed to generate a unique share ID after retries.")
 
 
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
