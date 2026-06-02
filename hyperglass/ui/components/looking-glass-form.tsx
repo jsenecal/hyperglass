@@ -1,6 +1,7 @@
 import { Flex, ScaleFade, SlideFade, chakra } from '@chakra-ui/react';
 import { vestResolver } from '@hookform/resolvers/vest';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/router';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import isEqual from 'react-fast-compare';
 import { FormProvider, useForm } from 'react-hook-form';
 import vest, { test, enforce } from 'vest';
@@ -22,6 +23,7 @@ import type { FormData, OnChangeArgs } from '~/types';
 
 export const LookingGlassForm = (): JSX.Element => {
   const { web, messages } = useConfig();
+  const router = useRouter();
 
   const greetingReady = useGreeting(s => s.greetingReady);
 
@@ -30,6 +32,7 @@ export const LookingGlassForm = (): JSX.Element => {
   const setLoading = useFormState(s => s.setLoading);
   const setStatus = useFormState(s => s.setStatus);
   const locationChange = useFormState(s => s.locationChange);
+  const setSelection = useFormState(s => s.setSelection);
   const setTarget = useFormState(s => s.setTarget);
   const setFormValue = useFormState(s => s.setFormValue);
   const { form, filtered, selections } = useFormState(
@@ -131,6 +134,39 @@ export const LookingGlassForm = (): JSX.Element => {
 
   const handleLocChange = (locations: string[]) =>
     locationChange(locations, { setError, clearErrors, getDevice, text: web.text });
+
+  // Pre-fill form from URL query params (?location=&target=&type=).
+  // Applied once on mount when router.isReady — a ref guard prevents re-applying
+  // if the component re-renders after the user has edited the form.
+  const prefillApplied = useRef(false);
+  useEffect(() => {
+    if (!router.isReady || prefillApplied.current) return;
+    prefillApplied.current = true;
+
+    const { location, target, type } = router.query;
+
+    if (typeof location === 'string') {
+      setValue('queryLocation', [location]);
+      // Drive Zustand state through locationChange so filtered.types is populated.
+      locationChange([location], { setError, clearErrors, getDevice, text: web.text });
+      // Also populate selections.queryLocation so the dropdown <Select value=...> and
+      // the gallery <LocationCard defaultChecked=...> both reflect the pre-filled value.
+      // Guard for unknown location IDs: skip selection rather than inserting a null/bad option.
+      const device = getDevice(location);
+      if (device !== null) {
+        setSelection('queryLocation', [{ value: device.id, label: device.name }]);
+      }
+    }
+    if (typeof type === 'string') {
+      setValue('queryType', type);
+      setFormValue('queryType', type);
+    }
+    if (typeof target === 'string') {
+      setValue('queryTarget', [target]);
+      setFormValue('queryTarget', [target]);
+      setTarget({ display: target });
+    }
+  }, [router.isReady, router.query]);
 
   function handleChange(e: OnChangeArgs): void {
     // Signal the field & value to react-hook-form.
