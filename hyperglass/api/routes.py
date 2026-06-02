@@ -127,22 +127,35 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         else:
             raw_output = str(output)
 
-        cache.set_map_item(cache_key, "output", raw_output)
-        cache.set_map_item(cache_key, "timestamp", timestamp)
-        cache.expire(cache_key, expire_in=_state.params.cache.timeout)
+        runtime = int(round(elapsedtime, 0))
+
+        response_format = "application/json" if json_output else "text/plain"
+        query_labels = {
+            "location": data.device.display_name or data.device.name,
+            "type": data.directive.name,
+        }
+
+        with cache.pipeline() as pipe:
+            pipe.set_map_item(cache_key, "output", raw_output)
+            pipe.set_map_item(cache_key, "timestamp", timestamp)
+            pipe.set_map_item(cache_key, "query", data.dict())
+            pipe.set_map_item(cache_key, "query_labels", query_labels)
+            pipe.set_map_item(cache_key, "format", response_format)
+            pipe.set_map_item(cache_key, "runtime", runtime)
+            pipe.set_map_item(cache_key, "level", "success")
+            pipe.set_map_item(cache_key, "keywords", [])
+            pipe.expire(cache_key, expire_in=_state.params.cache.timeout)
 
         _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
-
-        runtime = int(round(elapsedtime, 0))
 
     # If it does, return the cached entry
     cache_response = cache.get_map(cache_key, "output")
 
-    json_output = is_type(cache_response, t.Dict)
-    response_format = "text/plain"
-
-    if json_output:
-        response_format = "application/json"
+    if cached:
+        # Read format from cache; fall back to detecting from output type for old entries.
+        response_format = cache.get_map(cache_key, "format") or (
+            "application/json" if is_type(cache_response, t.Dict) else "text/plain"
+        )
     _log.info("Execution completed")
 
     response = {
