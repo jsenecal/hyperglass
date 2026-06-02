@@ -35,6 +35,7 @@ import { FormattedError } from './formatted-error';
 import { isFetchError, isLGError, isLGOutputOrError, isStackError } from './guards';
 import { ResultHeader } from './header';
 import { RequeryButton } from './requery-button';
+import { ShareButton } from './share-button';
 
 import type { ErrorLevels } from '~/types';
 
@@ -252,6 +253,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
           {isStructuredOutput(data) && data.level === 'success' && tableComponent && (
             <Path device={device.id} />
           )}
+          {data?.id && <ShareButton cacheId={data.id} />}
           <CopyButton copyValue={copyValue} isDisabled={isLoading} />
           <RequeryButton
             onRequery={() => setForce(true)}
