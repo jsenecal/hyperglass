@@ -160,7 +160,13 @@ class Params(ParamsPublic, HyperglassModel):
 
         return self.export_dict(
             include={
-                "cache": {"show_text", "timeout"},
+                "cache": {
+                    "show_text",
+                    "timeout",
+                    "share_enabled",
+                    "share_timeout",
+                    "refresh_min_interval",
+                },
                 "developer_mode": ...,
                 "primary_asn": ...,
                 "request_timeout": ...,
