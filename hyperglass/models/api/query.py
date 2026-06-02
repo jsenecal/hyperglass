@@ -51,6 +51,10 @@ class Query(BaseModel):
 
     # Directive `id` field
     query_type: QueryType
+
+    # Bypass cache and re-execute when True.
+    force: bool = False
+
     _kwargs: t.Dict[str, t.Any]
 
     def __init__(self, **data) -> None:
