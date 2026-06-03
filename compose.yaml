@@ -2,6 +2,7 @@ services:
     redis:
         image: "redis:alpine"
     hyperglass:
+        image: "ghcr.io/jsenecal/hyperglass-ng:latest"
         depends_on:
             - redis
         environment:

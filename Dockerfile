@@ -18,6 +18,10 @@ RUN npm install -g pnpm
 RUN pnpm install -P
 
 FROM ui as hyperglass
+LABEL org.opencontainers.image.title="hyperglass-ng" \
+      org.opencontainers.image.description="hyperglass-ng — maintained fork of the hyperglass network looking glass" \
+      org.opencontainers.image.source="https://github.com/jsenecal/hyperglass" \
+      org.opencontainers.image.licenses="BSD-3-Clause-Clear"
 WORKDIR /opt/hyperglass
 RUN pip3 install -e .
 

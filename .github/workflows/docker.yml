@@ -6,7 +6,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Publish under the fork's own image name, independent of the GitHub repo
+  # name, so the maintained line is `ghcr.io/<owner>/hyperglass-ng`.
+  IMAGE_NAME: ${{ github.repository_owner }}/hyperglass-ng
 
 jobs:
   build-and-push-image:
@@ -29,14 +31,14 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # Mark every build as :latest (including pre-release semver
-          # tags like 2.0.4-jsenecal.1, which the default "latest=auto"
+          # tags like 2.1.0-rc.1, which the default "latest=auto"
           # would otherwise skip).
           flavor: |
             latest=true
           tags: |
             # Branch pushes -> :main (or whatever branch pushed)
             type=ref,event=branch
-            # Tag pushes -> :2.0.4-jsenecal.1 (strips leading "v")
+            # Tag pushes -> :2.1.0 (strips leading "v")
             type=semver,pattern={{version}}
             # Every build -> :sha-abc1234 (immutable, pin-friendly)
             type=sha
