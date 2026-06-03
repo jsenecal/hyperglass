@@ -264,11 +264,11 @@ async def build_frontend(  # noqa: C901
     # Standard Library
     import hashlib
 
-    # Third Party
-    from favicons import Favicons  # type:ignore
-
     # Project
     from hyperglass.constants import __version__
+
+    # Local
+    from .favicons import generate_favicons
 
     # Create temporary file. json file extension is added for easy
     # webpack JSON parsing.
@@ -310,14 +310,9 @@ async def build_frontend(  # noqa: C901
     if not favicon_dir.exists():
         favicon_dir.mkdir()
 
-    async with Favicons(
-        source=params.web.logo.favicon,
-        output_directory=favicon_dir,
-        base_url="/images/favicons/",
-    ) as favicons:
-        await favicons.generate()
-        log.bind(count=favicons.completed).debug("Generated favicons")
-        write_favicon_formats(favicons.formats())
+    generated = generate_favicons(source=params.web.logo.favicon, output_directory=favicon_dir)
+    log.bind(count=len(generated)).debug("Generated favicons")
+    write_favicon_formats(generated)
 
     build_data = {
         "params": params.export_dict(),

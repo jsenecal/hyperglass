@@ -12,7 +12,6 @@ dependencies = [
     "PyYAML>=6.0",
     "aiofiles>=23.2.1",
     "distro==1.8.0",
-    "favicons==0.2.2",
     "httpx>=0.27.0,<0.28",
     "h11>=0.16.0",
     "loguru>=0.7.2",
@@ -23,7 +22,11 @@ dependencies = [
     "pydantic>=2.6.3",
     "redis==4.5.4",
     "rich>=13.7.0",
-    "typer>=0.9.0",
+    # The CLI uses typer 0.9 APIs (e.g. Typer.callback(name=...)); the cap was
+    # previously implicit via the removed favicons package. click<8.2 pairs
+    # with typer 0.9 (click 8.2+ crashes it at startup). Modernizing the CLI
+    # to lift both caps is tracked as a follow-up.
+    "typer>=0.9.0,<0.10",
     "click>=8.1,<8.2",
     "uvicorn==0.21.1",
     "uvloop>=0.17.0",
@@ -32,6 +35,7 @@ dependencies = [
     "pydantic-settings>=2.2.1",
     "pydantic-extra-types>=2.6.0",
     "litestar[standard,brotli]>=2.7.1",
+    "resvg-py>=0.3.2",
 ]
 readme = "README.md"
 requires-python = ">= 3.11"
