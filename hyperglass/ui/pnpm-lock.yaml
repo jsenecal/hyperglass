@@ -64,7 +64,7 @@ importers:
         version: 18.2.0
       react-countdown:
         specifier: ^2.3.0
-        version: 2.3.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 2.3.6(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-device-detect:
         specifier: ^1.15.0
         version: 1.15.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -3337,8 +3337,8 @@ packages:
     peerDependencies:
       react: ^15.3.0 || ^16.0.0 || ^17.0.0 || ^18.0.0
 
-  react-countdown@2.3.0:
-    resolution: {integrity: sha512-uiwEIBPbGKyT/bOLv/RI1Q8FtmlefUREKeJMtJ91IKBWfTOinfPFZcxCXVHBazr3+i/DvOMk6A323Fv+ysZLKw==}
+  react-countdown@2.3.6:
+    resolution: {integrity: sha512-ZfX6S08Hb6x6W6eCn1hMDvxPICI/T30fd+gaeVTCR/2cGZ2WJ3f26e4ImNIMX1fHkopJrUdnRpWXP13/D39+gg==}
     peerDependencies:
       react: '>= 15'
       react-dom: '>= 15'
@@ -7835,9 +7835,9 @@ snapshots:
       '@babel/runtime': 7.23.9
       react: 18.2.0
 
-  react-countdown@2.3.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
+  react-countdown@2.3.6(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
     dependencies:
-      prop-types: 15.7.2
+      prop-types: 15.8.1
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
 
