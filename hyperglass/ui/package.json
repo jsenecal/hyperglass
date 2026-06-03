@@ -43,7 +43,7 @@
     "plur": "^4.0.0",
     "react": "^18.2.0",
     "react-countdown": "^2.3.0",
-    "react-device-detect": "^1.15.0",
+    "react-device-detect": "^2.0.0",
     "react-dom": "^18.2.0",
     "react-fast-compare": "^3.2.1",
     "react-hook-form": "^7.42.1",
