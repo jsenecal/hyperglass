@@ -49,7 +49,7 @@ importers:
         version: 4.17.21
       merge-anything:
         specifier: ^4.0.1
-        version: 4.0.1
+        version: 4.0.5
       next:
         specifier: 13.5.11
         version: 13.5.11(@babel/core@7.23.9)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -3031,8 +3031,8 @@ packages:
   memoize-one@6.0.0:
     resolution: {integrity: sha512-rkpe71W0N0c0Xz6QD0eJETuWAJGnJ9afsl1srmwPrI+yBCkge5EycXXbYRyvL29zZVUWQCY7InPRCv3GDXuZNw==}
 
-  merge-anything@4.0.1:
-    resolution: {integrity: sha512-KsFjBYc3juDoHz9Vzd5fte1nqp06H8SQ+yU344Dd0ZunwSgtltnC0kgKds8cbocJGyViLcBQuHkitbDXAqW+LQ==}
+  merge-anything@4.0.5:
+    resolution: {integrity: sha512-YsYvYYMYZZITlVqf8UiGWVU8jI8mFNuv64iNY0hKH6alkrZsE3XNVlUnRbUvWnKIzEeYawfY8wNrTuPwHcbleA==}
 
   merge-stream@2.0.0:
     resolution: {integrity: sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==}
@@ -7488,7 +7488,7 @@ snapshots:
 
   memoize-one@6.0.0: {}
 
-  merge-anything@4.0.1:
+  merge-anything@4.0.5:
     dependencies:
       is-what: 3.14.1
       ts-toolbelt: 9.6.0
