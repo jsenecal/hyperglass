@@ -39,6 +39,25 @@ def test_generate_share_id_collision_retry(state, monkeypatch):
     assert sid == "BBBBBBBBBBB"
 
 
+def test_generate_share_id_exhausts_attempts(state, monkeypatch):
+    """If every attempt collides, the helper raises after max_attempts."""
+    # Standard Library
+    import pytest
+
+    # Project
+    from hyperglass.api import routes
+
+    cache = state.redis
+
+    # Seed the single ID the patched generator always returns so every
+    # attempt collides.
+    cache.set_map_item("hyperglass.share.AAAAAAAAAAA", "output", "x")
+    monkeypatch.setattr(routes.secrets, "token_urlsafe", lambda n: "AAAAAAAAAAA")
+
+    with pytest.raises(RuntimeError, match="unique share ID"):
+        routes._generate_share_id(cache, max_attempts=3)
+
+
 def test_build_share_url_uses_params_public_url():
     # Project
     from hyperglass.api.routes import _build_share_url
