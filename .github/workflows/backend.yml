@@ -33,8 +33,10 @@ jobs:
               with:
                   python-version: ${{ matrix.python-version }}
 
-            - name: Setup Rye
-              uses: sksat/setup-rye@v0.23.1
+            - name: Setup uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
 
             - name: Install Node
               uses: actions/setup-node@v4
@@ -59,15 +61,15 @@ jobs:
                   echo "HYPERGLASS_PORT=8001" >> $GITHUB_ENV
 
             - name: Install
-              run: rye sync
+              run: uv sync --python ${{ matrix.python-version }}
 
             - name: Activate virtualenv
               run: |
                   . .venv/bin/activate
                   echo PATH=$PATH >> $GITHUB_ENV
 
-            - name: Lint (Rye)
-              run: rye lint
+            - name: Lint (Ruff)
+              run: ruff check .
 
             - name: Tests (PyTest)
               run: pytest hyperglass --ignore hyperglass/plugins/external

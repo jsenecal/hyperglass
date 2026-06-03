@@ -48,9 +48,8 @@ hyperglass = "hyperglass.console:run"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.rye]
-managed = true
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "bandit>=1.7.7",
     "black>=24.2.0",
     "isort>=5.13.2",
