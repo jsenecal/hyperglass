@@ -7,14 +7,15 @@ The `config.yaml` file is broken into multiple sections:
 
 ## Top Level Parameters
 
-| Parameter          | Type            | Default Value                    | Description                                                   |
-| :----------------- | :-------------- | :------------------------------- | :------------------------------------------------------------ |
-| `org_name`         | String          | Beloved Hyperglass User          | Your organization's name.                                     |
-| `plugins`          | List of Strings |                                  | List of hyperglass [plugins](/plugins) to load.               |
-| `primary_asn`      | String          | 65000                            | Your organization's primary ASN. Used to set default UI text. |
-| `request_timeout`  | Number          | 90                               | Global timeout in seconds for all requests.                   |
-| `site_description` | String          | `org_name` Network Looking Glass | `<meta>` description, also used in the API documentation.     |
-| `site_title`       | String          | `org_name`                       | Browser title, also used in the default terms & conditions.   |
+| Parameter          | Type            | Default Value                    | Description                                                                                                                                                            |
+| :----------------- | :-------------- | :------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `org_name`         | String          | Beloved Hyperglass User          | Your organization's name.                                                                                                                                              |
+| `plugins`          | List of Strings |                                  | List of hyperglass [plugins](/plugins) to load.                                                                                                                        |
+| `primary_asn`      | String          | 65000                            | Your organization's primary ASN. Used to set default UI text.                                                                                                          |
+| `public_url`       | URL             | (unset)                          | Public-facing base URL for the looking glass. When set, share links use this base; otherwise derived from request `Host` / `X-Forwarded-Proto` headers. Set this when running behind a reverse proxy. |
+| `request_timeout`  | Number          | 90                               | Global timeout in seconds for all requests.                                                                                                                            |
+| `site_description` | String          | `org_name` Network Looking Glass | `<meta>` description, also used in the API documentation.                                                                                                              |
+| `site_title`       | String          | `org_name`                       | Browser title, also used in the default terms & conditions.                                                                                                            |
 
 #### Example with Defaults
 

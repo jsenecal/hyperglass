@@ -9,6 +9,7 @@ export * from './use-greeting';
 export * from './use-hyperglass-config';
 export * from './use-lg-query';
 export * from './use-opposing-color';
+export * from './use-share';
 export * from './use-strf';
 export * from './use-table-to-string';
 export * from './use-wtf';

@@ -122,6 +122,18 @@ class Text(HyperglassModel):
     no_ip: str = "No {protocol} Address"
     ip_select: str = "Select an IP Address"
     ip_button: str = "My IP"
+    share_button: str = "Share"
+    share_popover_title: str = "Share this result"
+    share_copy_link: str = "Copy link"
+    share_link_copied: str = "Copied!"
+    share_expires_at: str = "Expires {expires}"  # Formatted by Javascript
+    share_create_error: str = "Could not create share link."
+    share_create_expired: str = "This result has expired from cache. Refresh and try again."
+    share_not_found: str = "Share not found or expired."
+    share_snapshot_banner: str = "Snapshot taken at {timestamp}"  # Formatted by Javascript
+    share_run_fresh_query: str = "Run a fresh query"
+    refresh_cooldown: str = "Refresh available in {seconds}s"  # Formatted by Javascript
+    requery_tooltip: str = "Reload Query"
 
     @field_validator("cache_prefix")
     def validate_cache_prefix(cls: "Text", value: str) -> str:

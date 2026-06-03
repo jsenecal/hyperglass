@@ -1,5 +1,5 @@
+import type { CamelCasedProperties, CamelCasedPropertiesDeep } from 'type-fest';
 import type { Theme } from './theme';
-import type { CamelCasedPropertiesDeep, CamelCasedProperties } from 'type-fest';
 
 type Side = 'left' | 'right' | string;
 
@@ -45,6 +45,18 @@ interface _Text {
   no_ip: string;
   ip_select: string;
   ip_button: string;
+  share_button: string;
+  share_popover_title: string;
+  share_copy_link: string;
+  share_link_copied: string;
+  share_expires_at: string;
+  share_create_error: string;
+  share_create_expired: string;
+  share_not_found: string;
+  share_snapshot_banner: string;
+  share_run_fresh_query: string;
+  refresh_cooldown: string;
+  requery_tooltip: string;
 }
 
 interface _Greeting {
@@ -137,6 +149,9 @@ interface _Content {
 interface _Cache {
   show_text: boolean;
   timeout: number;
+  share_enabled: boolean;
+  share_timeout: number;
+  refresh_min_interval: number;
 }
 
 type _Config = _ConfigDeep & _ConfigShallow;

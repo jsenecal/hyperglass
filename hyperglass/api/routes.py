@@ -4,11 +4,13 @@
 import json
 import time
 import typing as t
-from datetime import UTC, datetime
+import secrets
+from datetime import UTC, datetime, timedelta
 
 # Third Party
 from litestar import Request, Response, get, post
 from litestar.di import Provide
+from litestar.exceptions import HTTPException, NotFoundException
 from litestar.background_tasks import BackgroundTask
 
 # Project
@@ -19,7 +21,7 @@ from hyperglass.models.api import Query
 from hyperglass.models.data import OutputDataModel
 from hyperglass.util.typing import is_type
 from hyperglass.execution.main import execute
-from hyperglass.models.api.response import QueryResponse
+from hyperglass.models.api.response import QueryResponse, ShareResponse, ShareCreateResponse
 from hyperglass.models.config.params import Params, APIParams
 from hyperglass.models.config.devices import Devices, APIDevice
 
@@ -34,7 +36,41 @@ __all__ = (
     "queries",
     "info",
     "query",
+    "share_create",
+    "share_get",
 )
+
+
+def _generate_share_id(cache, max_attempts: int = 3) -> str:
+    """Generate an opaque, unique share ID.
+
+    Returns an 11-char URL-safe-base64 token (64 bits of entropy from
+    `secrets.token_urlsafe(8)`). Verifies non-collision against existing
+    `hyperglass.share.*` keys; collision is astronomically unlikely but
+    the check is cheap.
+    """
+    for _ in range(max_attempts):
+        candidate = secrets.token_urlsafe(8)
+        if cache.get_map(f"hyperglass.share.{candidate}", "output") is None:
+            return candidate
+    raise RuntimeError("Failed to generate a unique share ID after retries.")
+
+
+def _build_share_url(params, request, share_id: str) -> str:
+    """Build the public share URL.
+
+    Prefers `params.public_url` when set; otherwise derives from request
+    headers. `X-Forwarded-Proto` and `Host` take precedence over the
+    direct connection URL so reverse-proxied deployments produce correct
+    public URLs without explicit configuration.
+    """
+    if params.public_url is not None:
+        base = str(params.public_url).rstrip("/")
+    else:
+        host = request.headers.get("host") or request.url.netloc
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        base = f"{scheme}://{host}"
+    return f"{base}/result/{share_id}"
 
 
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
@@ -78,7 +114,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
     _log.info("Starting query execution")
 
-    cache_response = cache.get_map(cache_key, "output")
+    cache_response = None if data.force else cache.get_map(cache_key, "output")
     json_output = False
     cached = False
     runtime = 65535
@@ -127,22 +163,35 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         else:
             raw_output = str(output)
 
-        cache.set_map_item(cache_key, "output", raw_output)
-        cache.set_map_item(cache_key, "timestamp", timestamp)
-        cache.expire(cache_key, expire_in=_state.params.cache.timeout)
+        runtime = int(round(elapsedtime, 0))
+
+        response_format = "application/json" if json_output else "text/plain"
+        query_labels = {
+            "location": data.device.display_name or data.device.name,
+            "type": data.directive.name,
+        }
+
+        with cache.pipeline() as pipe:
+            pipe.set_map_item(cache_key, "output", raw_output)
+            pipe.set_map_item(cache_key, "timestamp", timestamp)
+            pipe.set_map_item(cache_key, "query", data.dict())
+            pipe.set_map_item(cache_key, "query_labels", query_labels)
+            pipe.set_map_item(cache_key, "format", response_format)
+            pipe.set_map_item(cache_key, "runtime", runtime)
+            pipe.set_map_item(cache_key, "level", "success")
+            pipe.set_map_item(cache_key, "keywords", [])
+            pipe.expire(cache_key, expire_in=_state.params.cache.timeout)
 
         _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
-
-        runtime = int(round(elapsedtime, 0))
 
     # If it does, return the cached entry
     cache_response = cache.get_map(cache_key, "output")
 
-    json_output = is_type(cache_response, t.Dict)
-    response_format = "text/plain"
-
-    if json_output:
-        response_format = "application/json"
+    if cached:
+        # Read format from cache; fall back to detecting from output type for old entries.
+        response_format = cache.get_map(cache_key, "format") or (
+            "application/json" if is_type(cache_response, t.Dict) else "text/plain"
+        )
     _log.info("Execution completed")
 
     response = {
@@ -167,3 +216,90 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
             timestamp=timestamp,
         ),
     )
+
+
+@post("/api/query/share/{cache_id:str}", dependencies={"_state": Provide(get_state)})
+async def share_create(
+    _state: HyperglassState,
+    request: Request,
+    cache_id: str,
+) -> Response:
+    """Promote a cached query result to a long-lived shareable snapshot."""
+    # TODO: make configurable via params.messages (no existing precedent for
+    # messages-driven HTTP 404/410 detail strings in this file).
+    if not _state.params.cache.share_enabled:
+        raise NotFoundException("Sharing is disabled.")
+
+    digest = cache_id.removeprefix("hyperglass.query.")
+    cache_key = f"hyperglass.query.{digest}"
+
+    cache = _state.redis
+    # Reads must happen on the live manager (not the pipeline) so values are
+    # returned immediately rather than queued.
+    output = cache.get_map(cache_key, "output")
+    if output is None:
+        raise HTTPException(
+            status_code=410,
+            detail="Result has expired. Refresh the query and try again.",
+        )
+
+    share_id = _generate_share_id(cache)
+    share_key = f"hyperglass.share.{share_id}"
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(seconds=_state.params.cache.share_timeout)
+
+    with cache.pipeline() as pipe:
+        for field in (
+            "output",
+            "timestamp",
+            "query",
+            "query_labels",
+            "format",
+            "runtime",
+            "level",
+            "keywords",
+        ):
+            pipe.set_map_item(share_key, field, cache.get_map(cache_key, field))
+        pipe.set_map_item(share_key, "created_at", now)
+        pipe.set_map_item(share_key, "expires_at", expires_at)
+        pipe.expire(share_key, expire_in=_state.params.cache.share_timeout)
+
+    resp = ShareCreateResponse(
+        id=share_id,
+        url=_build_share_url(_state.params, request, share_id),
+        expires_at=expires_at,
+    )
+    return Response(resp.model_dump(by_alias=True, mode="json"), status_code=201)
+
+
+@get("/api/query/share/{share_id:str}", dependencies={"_state": Provide(get_state)})
+async def share_get(_state: HyperglassState, share_id: str) -> Response:
+    """Read a shared snapshot."""
+    if not _state.params.cache.share_enabled:
+        raise NotFoundException()
+
+    cache = _state.redis
+    share_key = f"hyperglass.share.{share_id}"
+    output = cache.get_map(share_key, "output")
+    if output is None:
+        raise NotFoundException("Share not found or expired.")
+
+    if _state.params.cache.share_sliding:
+        cache.expire(share_key, expire_in=_state.params.cache.share_timeout)
+
+    resp = ShareResponse(
+        id=share_id,
+        output=output,
+        cached=True,
+        shared=True,
+        runtime=cache.get_map(share_key, "runtime"),
+        timestamp=cache.get_map(share_key, "timestamp"),
+        format=cache.get_map(share_key, "format"),
+        level=cache.get_map(share_key, "level"),
+        keywords=cache.get_map(share_key, "keywords") or [],
+        query=cache.get_map(share_key, "query"),
+        query_labels=cache.get_map(share_key, "query_labels"),
+        created_at=cache.get_map(share_key, "created_at"),
+        expires_at=cache.get_map(share_key, "expires_at"),
+    )
+    return Response(resp.model_dump(by_alias=True, mode="json"))

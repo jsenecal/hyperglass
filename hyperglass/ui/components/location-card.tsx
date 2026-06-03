@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Flex, Avatar, chakra } from '@chakra-ui/react';
+import { Avatar, Flex, chakra } from '@chakra-ui/react';
+import { useEffect, useMemo, useState } from 'react';
 import { motionChakra } from '~/elements';
 import { useColorValue, useOpposingColor } from '~/hooks';
 
@@ -32,6 +32,16 @@ export const LocationCard = (props: LocationCardProps): JSX.Element => {
   const { option, onChange, defaultChecked, hasError } = props;
   const { label } = option;
   const [isChecked, setChecked] = useState(defaultChecked);
+
+  // Sync checked state when the defaultChecked prop changes after initial mount.
+  // This handles the pre-fill case where URL query params are applied in a useEffect
+  // that runs after the first render, so the initial useState(defaultChecked) value
+  // would otherwise be stale (false) when pre-fill later sets it to true.
+  // The user-click path is unaffected: handleChange toggles isChecked independently,
+  // and this effect only fires when the prop actually changes (i.e. external pre-fill).
+  useEffect(() => {
+    setChecked(defaultChecked);
+  }, [defaultChecked]);
 
   function handleChange(value: LocationOption) {
     if (isChecked) {
@@ -68,6 +78,7 @@ export const LocationCard = (props: LocationCardProps): JSX.Element => {
       key={label}
       whileHover={{ scale: 1.05 }}
       borderColor={borderColor}
+      data-checked={isChecked ? 'true' : undefined}
       onClick={(e: React.MouseEvent) => {
         e.preventDefault();
         handleChange(option);

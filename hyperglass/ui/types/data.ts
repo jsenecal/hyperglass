@@ -4,7 +4,7 @@ export interface FormData {
   queryTarget: string[];
 }
 
-export type FormQuery = Swap<FormData, 'queryLocation', string>;
+export type FormQuery = Swap<FormData, 'queryLocation', string> & { force?: boolean };
 
 export type StringTableData = Swap<QueryResponse, 'output', StructuredResponse>;
 

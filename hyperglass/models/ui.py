@@ -6,12 +6,21 @@ import typing as t
 # Local
 from .main import HyperglassModel
 from .config.web import WebPublic
-from .config.cache import Cache
 from .config.params import ParamsPublic
 from .config.messages import Messages
 
 Alignment = t.Union[t.Literal["left"], t.Literal["center"], t.Literal["right"], None]
 StructuredDataField = t.Tuple[str, str, Alignment]
+
+
+class UICache(HyperglassModel):
+    """UI projection of cache parameters (server-private fields omitted)."""
+
+    timeout: int
+    show_text: bool
+    share_enabled: bool
+    share_timeout: int
+    refresh_min_interval: int
 
 
 class UIDirective(HyperglassModel):
@@ -54,7 +63,7 @@ class UIContent(HyperglassModel):
 class UIParameters(ParamsPublic, HyperglassModel):
     """UI Configuration Parameters."""
 
-    cache: Cache
+    cache: UICache
     web: WebPublic
     messages: Messages
     version: str

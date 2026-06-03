@@ -15,7 +15,7 @@ aiofiles==23.2.1
 annotated-types==0.6.0
     # via pydantic
 anyio==4.3.0
-    # via httpcore
+    # via httpx
     # via litestar
     # via watchfiles
 async-timeout==4.0.3
@@ -38,6 +38,7 @@ chardet==5.2.0
     # via reportlab
 click==8.1.7
     # via black
+    # via hyperglass
     # via litestar
     # via rich-click
     # via typer
@@ -68,14 +69,15 @@ freetype-py==2.4.0
     # via rlpycairo
 future==0.18.3
     # via textfsm
-h11==0.14.0
+h11==0.16.0
     # via httpcore
+    # via hyperglass
     # via uvicorn
-httpcore==0.17.3
+httpcore==1.0.9
     # via httpx
 httptools==0.6.1
     # via uvicorn
-httpx==0.24.0
+httpx==0.27.2
     # via hyperglass
     # via litestar
 identify==2.5.35
@@ -128,7 +130,7 @@ pathspec==0.12.1
 pbr==6.0.0
     # via stevedore
 pep8-naming==0.13.3
-pillow==10.2.0
+pillow==10.4.0
     # via favicons
     # via hyperglass
     # via reportlab
@@ -216,7 +218,6 @@ six==1.16.0
     # via textfsm
 sniffio==1.3.0
     # via anyio
-    # via httpcore
     # via httpx
 stackprinter==0.2.11
 stevedore==5.1.0

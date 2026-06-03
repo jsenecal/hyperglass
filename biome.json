@@ -9,6 +9,7 @@
             "dist",
             ".next/",
             "out/",
+            "coverage/",
             "favicon-formats.ts",
             "custom.*[js, html]",
             "hyperglass.json"

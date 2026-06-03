@@ -42,6 +42,7 @@ export declare global {
   };
 
   type QueryResponse = {
+    id: string;
     random: string;
     cached: boolean;
     runtime: number;
@@ -50,6 +51,31 @@ export declare global {
     keywords: string[];
     output: string | StructuredResponse;
     format: 'text/plain' | 'application/json';
+  };
+
+  type ShareResponse = {
+    id: string;
+    output: string | StructuredResponse;
+    cached: boolean;
+    shared: boolean;
+    runtime: number;
+    timestamp: string;
+    format: string;
+    // Backend declares level as a plain string and always stores 'success' today;
+    // typed as ResponseLevel to allow future warning/error shares.
+    level: ResponseLevel;
+    keywords: string[];
+    // Nested dict keys are NOT camelCased by backend pydantic; keep snake_case.
+    query: { query_location: string; query_target: string | string[]; query_type: string };
+    queryLabels: { location: string; type: string };
+    createdAt: string;
+    expiresAt: string;
+  };
+
+  type ShareCreateResponse = {
+    id: string;
+    url: string;
+    expiresAt: string;
   };
 
   type RequiredProps<T> = { [P in keyof T]-?: Exclude<T[P], undefined> };

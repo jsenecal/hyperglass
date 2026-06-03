@@ -7,5 +7,9 @@ from ..main import HyperglassModel
 class Cache(HyperglassModel):
     """Public cache parameters."""
 
-    timeout: int = 120
+    timeout: int = 600
     show_text: bool = True
+    share_enabled: bool = True
+    share_timeout: int = 604800
+    share_sliding: bool = False
+    refresh_min_interval: int = 120

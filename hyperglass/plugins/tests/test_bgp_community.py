@@ -40,11 +40,6 @@ CHECKS = (
 
 
 @pytest.fixture
-def params():
-    return {}
-
-
-@pytest.fixture
 def state(*, params: t.Dict[str, t.Any]) -> t.Generator["HyperglassState", None, None]:
     """Test fixture to initialize Redis store."""
     _state = use_state()

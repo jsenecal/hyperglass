@@ -1,16 +1,30 @@
+import { Callout } from "nextra/components";
+
 ## Cache
 
 hyperglass automatically caches responses to reduce the number of times devices are queried for the same information.
 
-| Parameter         | Type    | Default Value | Description                                                                     |
-| :---------------- | :------ | :------------ | :------------------------------------------------------------------------------ |
-| `cache.timeout`   | Number  | 120           | Number of seconds for which to cache device responses.                          |
-| `cache.show_text` | Boolean | True          | If true, an indication that a user is viewing cached information will be shown. |
+| Parameter                    | Type    | Default Value | Description                                                                                         |
+| :--------------------------- | :------ | :------------ | :-------------------------------------------------------------------------------------------------- |
+| `cache.timeout`              | Number  | 600           | Number of seconds for which to cache device responses.                                              |
+| `cache.show_text`            | Boolean | True          | If true, an indication that a user is viewing cached information will be shown.                     |
+| `cache.share_enabled`        | Boolean | True          | Enable the shareable-result feature. Disabling requires a UI rebuild.                               |
+| `cache.share_timeout`        | Number  | 604800        | Seconds to retain a shared snapshot (default 7 days).                                               |
+| `cache.share_sliding`        | Boolean | False         | If true, viewing a share extends its TTL by another `share_timeout`.                                |
+| `cache.refresh_min_interval` | Number  | 120           | Minimum seconds between manual refreshes from the UI.                                               |
+
+<Callout type="warning">
+    Disabling `share_enabled` (or changing any cache UI knob) requires a UI rebuild — the values are baked into the static `hyperglass.json` at build time.
+</Callout>
 
 ### Example with Defaults
 
 ```yaml filename="config.yaml"
 cache:
-    timeout: 120
+    timeout: 600
     show_text: true
+    share_enabled: true
+    share_timeout: 604800
+    share_sliding: false
+    refresh_min_interval: 120
 ```

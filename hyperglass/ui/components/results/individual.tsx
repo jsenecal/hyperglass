@@ -11,6 +11,7 @@ import {
   useAccordionContext,
   useToast,
 } from '@chakra-ui/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import startCase from 'lodash/startCase';
 import { forwardRef, memo, useEffect, useMemo, useState } from 'react';
@@ -34,12 +35,17 @@ import { FormattedError } from './formatted-error';
 import { isFetchError, isLGError, isLGOutputOrError, isStackError } from './guards';
 import { ResultHeader } from './header';
 import { RequeryButton } from './requery-button';
+import { ShareButton } from './share-button';
 
 import type { ErrorLevels } from '~/types';
 
 interface ResultProps {
   index: number;
   queryLocation: string;
+  /** Snapshot from a share link — skips the live LG query and renders directly. */
+  snapshot?: ShareResponse;
+  /** When true, hides the ShareButton and RequeryButton (used on the share view page). */
+  readOnly?: boolean;
 }
 
 const AnimatedAccordionItem = motion(AccordionItem);
@@ -57,12 +63,14 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   props: ResultProps,
   ref,
 ) => {
-  const { index, queryLocation } = props;
+  const { index, queryLocation, snapshot, readOnly = false } = props;
   const toast = useToast();
   const { web, cache, messages } = useConfig();
   const { index: indices, setIndex } = useAccordionContext();
   const getDevice = useDevice();
   const device = getDevice(queryLocation);
+
+  const queryClient = useQueryClient();
 
   const isMobile = useMobile();
   const color = useColorValue('black', 'white');
@@ -73,6 +81,10 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   const addResponse = useFormState(s => s.addResponse);
   const form = useFormState(s => s.form);
   const [errorLevel, _setErrorLevel] = useState<ErrorLevels>('error');
+  const [force, setForce] = useState<true | undefined>(undefined);
+  // Track when data last arrived for the cooldown gate. Initialise to mount
+  // time so the button starts cooling-down from mount rather than from epoch 0.
+  const [lastResponseAt, setLastResponseAt] = useState<number>(() => Date.now());
 
   const setErrorLevel = (level: ResponseLevel): void => {
     let e: ErrorLevels = 'error';
@@ -87,9 +99,35 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     _setErrorLevel(e);
   };
 
-  const { data, error, isLoading, refetch, isFetchedAfterMount } = useLGQuery(
-    { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType },
+  // When snapshot is provided, coerce it to a QueryResponse shape so all
+  // downstream rendering logic can remain unchanged.
+  const snapshotAsQueryResponse: QueryResponse | undefined = useMemo(() => {
+    if (!snapshot) return undefined;
+    return {
+      id: snapshot.id,
+      random: '',
+      cached: snapshot.cached,
+      runtime: snapshot.runtime,
+      level: snapshot.level,
+      timestamp: snapshot.timestamp,
+      keywords: snapshot.keywords,
+      output: snapshot.output,
+      format: snapshot.format as QueryResponse['format'],
+    };
+  }, [snapshot]);
+
+  const {
+    data: liveData,
+    error,
+    isLoading,
+    isFetching,
+    isFetchedAfterMount,
+    dataUpdatedAt,
+  } = useLGQuery(
+    { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType, force },
     {
+      // Disable the live fetch when rendering from a snapshot.
+      enabled: !snapshot,
       onSuccess(data) {
         if (device !== null) {
           addResponse(device.id, data);
@@ -107,6 +145,37 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
       },
     },
   );
+
+  // In snapshot mode, use the coerced snapshot; otherwise use the live query result.
+  const data = snapshot ? snapshotAsQueryResponse : liveData;
+
+  // When a forced fetch settles, copy the fresh result into the non-force cache
+  // key (K1) before resetting force back to undefined. Without this, reverting
+  // the key from K2={…,force:true} to K1={…} causes React Query to serve K1's
+  // stale data because refetchOnMount/refetchOnWindowFocus are both disabled.
+  useEffect(() => {
+    if (dataUpdatedAt > 0) {
+      setLastResponseAt(dataUpdatedAt);
+      if (force && data && !isFetching) {
+        // Populate K1 with the fresh forced result so the UI keeps showing the
+        // new data once force reverts to undefined and the key swaps back to K1.
+        // React Query v4 hashes keys structurally and drops undefined values, so
+        // omitting force entirely matches K1's stored entry.
+        queryClient.setQueryData(
+          [
+            '/api/query',
+            { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType },
+          ],
+          data,
+        );
+        setForce(undefined);
+      }
+    }
+    // force, data, queryLocation, form.queryTarget, form.queryType, and
+    // queryClient are intentionally omitted: they are all stable within a settled
+    // fetch cycle. Re-running on any of those would risk double-firing the
+    // setQueryData / setForce(undefined) calls.
+  }, [dataUpdatedAt, isFetching]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isError = useMemo(() => isLGOutputOrError(data), [data, error]);
 
@@ -174,7 +243,12 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     }
   }, [data, index, indices, isLoading, isError, setIndex]);
 
-  if (device === null) {
+  // In snapshot mode, the device may not be in the config (share viewer may not
+  // have the same device list). Fall back to snapshot labels for title/id.
+  const deviceId = device?.id ?? queryLocation;
+  const deviceName = device?.name ?? snapshot?.queryLabels.location ?? queryLocation;
+
+  if (device === null && !snapshot) {
     const id = `toast-queryLocation-${index}-${queryLocation}`;
     if (!toast.isActive(id)) {
       toast({
@@ -191,8 +265,8 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   return (
     <AnimatedAccordionItem
       ref={ref}
-      id={device.id}
-      isDisabled={isLoading}
+      id={deviceId}
+      isDisabled={!snapshot && isLoading}
       exit={{ opacity: 0, y: 300 }}
       animate={{ opacity: 1, y: 0 }}
       initial={{ opacity: 0, y: 300 }}
@@ -206,19 +280,26 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
         <AccordionButton py={2} w="unset" _hover={{}} _focus={{}} flex="1 0 auto">
           <ResultHeader
             isError={isError}
-            loading={isLoading}
+            loading={!snapshot && isLoading}
             errorMsg={errorMsg}
             errorLevel={errorLevel}
             runtime={data?.runtime ?? 0}
-            title={device.name}
+            title={deviceName}
           />
         </AccordionButton>
         <HStack py={2} spacing={1}>
-          {isStructuredOutput(data) && data.level === 'success' && tableComponent && (
-            <Path device={device.id} />
+          {!snapshot && isStructuredOutput(data) && data.level === 'success' && tableComponent && (
+            <Path device={deviceId} />
           )}
-          <CopyButton copyValue={copyValue} isDisabled={isLoading} />
-          <RequeryButton requery={refetch} isDisabled={isLoading} />
+          {!readOnly && data?.id && <ShareButton cacheId={data.id} />}
+          <CopyButton copyValue={copyValue} isDisabled={!snapshot && isLoading} />
+          {!readOnly && (
+            <RequeryButton
+              onRequery={() => setForce(true)}
+              lastResponseAt={lastResponseAt}
+              isDisabled={isLoading}
+            />
+          )}
         </HStack>
       </AccordionHeaderWrapper>
       <AccordionPanel
@@ -275,7 +356,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
             flex="1 0 auto"
             justifyContent={{ base: 'flex-start', lg: 'flex-end' }}
           >
-            <If condition={cache.showText && !isError && isCached}>
+            <If condition={cache.showText && !snapshot && !isError && isCached}>
               <Then>
                 <If condition={isMobile}>
                   <Then>
