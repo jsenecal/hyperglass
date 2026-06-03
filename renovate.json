@@ -3,6 +3,7 @@
   "extends": [
     "config:recommended"
   ],
+  "minimumReleaseAge": "3 days",
   "packageRules": [
     {
       "description": "Automerge patch and minor updates once CI passes. Majors are not matched here, so they still open PRs for manual review.",
@@ -11,6 +12,14 @@
         "patch"
       ],
       "automerge": true
+    },
+    {
+      "description": "0.x minor bumps can be breaking under SemVer, so require manual review instead of automerging them. 0.x patch updates still automerge.",
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "matchCurrentVersion": "/^0\\./",
+      "automerge": false
     }
   ]
 }
