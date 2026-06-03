@@ -31,7 +31,7 @@ importers:
         version: 4.3.0(@types/react@18.2.60)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@hookform/resolvers':
         specifier: ^2.9.10
-        version: 2.9.11(react-hook-form@7.42.1(react@18.2.0))
+        version: 2.9.11(react-hook-form@7.77.0(react@18.2.0))
       '@tanstack/react-query':
         specifier: ^4.22.0
         version: 4.22.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -76,7 +76,7 @@ importers:
         version: 3.2.2
       react-hook-form:
         specifier: ^7.42.1
-        version: 7.42.1(react@18.2.0)
+        version: 7.77.0(react@18.2.0)
       react-icons:
         specifier: ^4.3.1
         version: 4.3.1(react@18.2.0)
@@ -3383,11 +3383,11 @@ packages:
       '@types/react':
         optional: true
 
-  react-hook-form@7.42.1:
-    resolution: {integrity: sha512-2UIGqwMZksd5HS55crTT1ATLTr0rAI4jS7yVuqTaoRVDhY2Qc4IyjskCmpnmdYqUNOYFy04vW253tb2JRVh+IQ==}
-    engines: {node: '>=12.22.0'}
+  react-hook-form@7.77.0:
+    resolution: {integrity: sha512-Sslh9YDYc0GDlWT/lxasnIduNo4v3yyvqRGvmGKUre5AFjDs/HV9/OafHGD8d+sB2yoL4UIL9L8X9i0WlZZebg==}
+    engines: {node: '>=18.0.0'}
     peerDependencies:
-      react: ^16.8.0 || ^17 || ^18
+      react: ^16.8.0 || ^17 || ^18 || ^19
 
   react-icons@4.3.1:
     resolution: {integrity: sha512-cB10MXLTs3gVuXimblAdI71jrJx8njrJZmNMEMC+sQu5B/BIOmlsAjskdqpn81y8UBVEGuHODd7/ci5DvoSzTQ==}
@@ -5299,9 +5299,9 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
-  '@hookform/resolvers@2.9.11(react-hook-form@7.42.1(react@18.2.0))':
+  '@hookform/resolvers@2.9.11(react-hook-form@7.77.0(react@18.2.0))':
     dependencies:
-      react-hook-form: 7.42.1(react@18.2.0)
+      react-hook-form: 7.77.0(react@18.2.0)
 
   '@humanwhocodes/config-array@0.11.14':
     dependencies:
@@ -7886,7 +7886,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.2.60
 
-  react-hook-form@7.42.1(react@18.2.0):
+  react-hook-form@7.77.0(react@18.2.0):
     dependencies:
       react: 18.2.0
 
