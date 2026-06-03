@@ -19,7 +19,7 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-import ResultPage from './[id]';
+import ResultPage from '../../../pages/result/[id]';
 
 vi.mock('next/router', () => ({
   useRouter: () => ({

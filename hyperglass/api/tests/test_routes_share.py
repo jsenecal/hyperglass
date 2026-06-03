@@ -2,6 +2,7 @@
 
 # Standard Library
 import re
+from pathlib import Path
 from datetime import datetime
 
 # Third Party
@@ -146,3 +147,33 @@ class TestShareFixed:
         client.get(f"/api/query/share/{share_id}")
         ttl = state.redis.instance.ttl(full_key)
         assert ttl <= 60  # not extended
+
+
+class TestShareViewHtml:
+    """GET /result/<share_id> serves the SPA shell when index.html is present.
+
+    Also verifies that invalid-format IDs are rejected with 404.
+    """
+
+    # Locate the exported index.html relative to this file.
+    _INDEX = Path(__file__).parent.parent.parent / "static" / "ui" / "index.html"
+
+    @pytest.mark.skipif(
+        not (_INDEX.exists()),
+        reason="static/ui/index.html not present; run `task ui-build` first",
+    )
+    def test_valid_id_serves_index_html(self, client):
+        """A well-formed 11-char share ID must return 200 text/html (the SPA shell)."""
+        r = client.get("/result/AAAAAAAAAAA")
+        assert r.status_code == 200
+        assert "text/html" in r.headers.get("content-type", "")
+
+    def test_invalid_id_returns_404(self, client):
+        """An ID that doesn't match [A-Za-z0-9_-]{11} must be rejected with 404."""
+        r = client.get("/result/toolong12345")
+        assert r.status_code == 404
+
+    def test_short_id_returns_404(self, client):
+        """An ID shorter than 11 characters must be rejected with 404."""
+        r = client.get("/result/short")
+        assert r.status_code == 404

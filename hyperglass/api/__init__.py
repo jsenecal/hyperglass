@@ -1,12 +1,14 @@
 """hyperglass API."""
 
 # Standard Library
+import re
 import logging
 
 # Third Party
-from litestar import Litestar
+from litestar import Litestar, get
+from litestar.response import File
 from litestar.openapi import OpenAPIConfig
-from litestar.exceptions import HTTPException, ValidationException
+from litestar.exceptions import HTTPException, ValidationException, NotFoundException
 from litestar.static_files import create_static_files_router
 
 # Project
@@ -22,6 +24,8 @@ from .error_handlers import app_handler, http_handler, default_handler, validati
 
 __all__ = ("app",)
 
+_SHARE_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{11}$")
+
 STATE = use_state()
 
 UI_DIR = STATE.settings.static_path / "ui"
@@ -36,6 +40,24 @@ OPEN_API = OpenAPIConfig(
     root_schema_site="elements",
 )
 
+
+@get("/result/{share_id:str}", include_in_schema=False)
+async def share_view_html(share_id: str) -> File:
+    """Serve the SPA shell (index.html) for share result URLs.
+
+    Litestar's static-files html_mode serves 404.html (the Next.js error
+    page) for unknown paths rather than index.html, which breaks client-side
+    routing to /result/<id>. This explicit handler ensures the SPA shell is
+    returned so the Next.js client router can hydrate the correct page.
+    """
+    if not _SHARE_ID_RE.match(share_id):
+        raise NotFoundException(detail="Invalid share ID format.")
+    index = UI_DIR / "index.html"
+    if not index.exists():
+        raise NotFoundException(detail="UI not built.")
+    return File(path=index, media_type="text/html")
+
+
 HANDLERS = [
     device,
     devices,
@@ -44,6 +66,7 @@ HANDLERS = [
     query,
     share_create,
     share_get,
+    share_view_html,
 ]
 
 if not STATE.settings.disable_ui:

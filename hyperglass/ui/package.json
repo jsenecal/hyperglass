@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "build": "export NODE_OPTIONS=--openssl-legacy-provider; next build && next export --no-lint -o ../hyperglass/static/ui",
+    "build": "export NODE_OPTIONS=--openssl-legacy-provider; next build && rm -rf ../static/ui && mkdir -p ../static && cp -r out ../static/ui",
     "test": "vitest --run"
   },
   "browserslist": "> 0.25%, not dead",

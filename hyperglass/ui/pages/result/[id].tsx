@@ -101,3 +101,17 @@ const ResultPage: NextPage = () => {
 };
 
 export default ResultPage;
+
+// `next export` requires getStaticPaths + getStaticProps for dynamic routes.
+// We return no pre-rendered paths because share IDs are generated at runtime;
+// the Litestar backend serves the SPA shell (index.html) as a fallback for
+// /result/<id> and the Next.js client router hydrates the correct page on load.
+export function getStaticPaths() {
+  return { paths: [], fallback: false };
+}
+
+// Required by Next.js alongside getStaticPaths. Returns empty props because
+// the page fetches its own data client-side via useShareGet.
+export function getStaticProps() {
+  return { props: {} };
+}
