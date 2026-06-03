@@ -1,10 +1,17 @@
 name: Frontend Testing
 on:
     push:
+        branches: [main]
         paths:
             - hyperglass/ui/**
             - .github/**
     pull_request:
+
+# One run per branch; pushing again (e.g. a Renovate rebase) cancels the
+# superseded run instead of letting it occupy the queue.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
 
 jobs:
     frontend:
