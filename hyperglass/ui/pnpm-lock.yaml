@@ -131,7 +131,7 @@ importers:
         version: 14.5.2(@testing-library/dom@9.3.4)
       '@types/dagre':
         specifier: ^0.7.44
-        version: 0.7.44
+        version: 0.7.54
       '@types/lodash':
         specifier: ^4.14.177
         version: 4.14.177
@@ -1569,8 +1569,8 @@ packages:
   '@types/d3@7.4.0':
     resolution: {integrity: sha512-jIfNVK0ZlxcuRDKtRS/SypEyOQ6UHaFQBKv032X45VvxSJ6Yi5G9behy9h6tNTHTDGh5Vq+KbmBjUWLgY4meCA==}
 
-  '@types/dagre@0.7.44':
-    resolution: {integrity: sha512-N6HD+79w77ZVAaVO7JJDW5yJ9LAxM62FpgNGO9xEde+KVYjDRyhIMzfiErXpr1g0JPon9kwlBzoBK6s4fOww9Q==}
+  '@types/dagre@0.7.54':
+    resolution: {integrity: sha512-QjcRY+adGbYvBFS7cwv5txhVIwX1XXIUswWl+kSQTbI6NjgZydrZkEKX/etzVd7i+bCsCb40Z/xlBY5eoFuvWQ==}
 
   '@types/estree@1.0.5':
     resolution: {integrity: sha512-/kYRxGDLWzHOB7q+wtSUQlFrtcdUccpfy+X+9iMBpHK8QLLhx2wIPYuS5DYtR9Wa/YlZAbIovy7qVdB1Aq6Lyw==}
@@ -5721,7 +5721,7 @@ snapshots:
       '@types/d3-transition': 2.0.0
       '@types/d3-zoom': 2.0.0
 
-  '@types/dagre@0.7.44': {}
+  '@types/dagre@0.7.54': {}
 
   '@types/estree@1.0.5': {}
 
