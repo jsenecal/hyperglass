@@ -11,7 +11,7 @@
 
 -e file:.
 aiofiles==23.2.1
-    # via hyperglass
+    # via hyperglass-ng
 annotated-types==0.6.0
     # via pydantic
 anyio==4.3.0
@@ -38,7 +38,7 @@ chardet==5.2.0
     # via reportlab
 click==8.1.7
     # via black
-    # via hyperglass
+    # via hyperglass-ng
     # via litestar
     # via rich-click
     # via typer
@@ -52,7 +52,7 @@ cssselect2==0.7.0
 distlib==0.3.8
     # via virtualenv
 distro==1.8.0
-    # via hyperglass
+    # via hyperglass-ng
 editorconfig==0.12.4
     # via jsbeautifier
 faker==24.4.0
@@ -60,7 +60,7 @@ faker==24.4.0
 fast-query-parsers==1.0.3
     # via litestar
 favicons==0.2.2
-    # via hyperglass
+    # via hyperglass-ng
 filelock==3.13.1
     # via virtualenv
 flake8==7.0.0
@@ -71,14 +71,14 @@ future==0.18.3
     # via textfsm
 h11==0.16.0
     # via httpcore
-    # via hyperglass
+    # via hyperglass-ng
     # via uvicorn
 httpcore==1.0.9
     # via httpx
 httptools==0.6.1
     # via uvicorn
 httpx==0.27.2
-    # via hyperglass
+    # via hyperglass-ng
     # via litestar
 identify==2.5.35
     # via pre-commit
@@ -93,9 +93,9 @@ jinja2==3.1.3
 jsbeautifier==1.15.1
     # via litestar
 litestar==2.7.1
-    # via hyperglass
+    # via hyperglass-ng
 loguru==0.7.2
-    # via hyperglass
+    # via hyperglass-ng
 lxml==5.1.0
     # via svglib
 markdown-it-py==3.0.0
@@ -113,7 +113,7 @@ multidict==6.0.5
 mypy-extensions==1.0.0
     # via black
 netmiko==4.1.2
-    # via hyperglass
+    # via hyperglass-ng
 nodeenv==1.8.0
     # via pre-commit
 ntc-templates==4.3.0
@@ -122,7 +122,7 @@ packaging==23.2
     # via black
     # via pytest
 paramiko==3.4.0
-    # via hyperglass
+    # via hyperglass-ng
     # via netmiko
     # via scp
 pathspec==0.12.1
@@ -132,7 +132,7 @@ pbr==6.0.0
 pep8-naming==0.13.3
 pillow==10.4.0
     # via favicons
-    # via hyperglass
+    # via hyperglass-ng
     # via reportlab
 platformdirs==4.2.0
     # via black
@@ -143,10 +143,10 @@ polyfactory==2.15.0
     # via litestar
 pre-commit==3.6.2
 psutil==5.9.4
-    # via hyperglass
+    # via hyperglass-ng
     # via taskipy
 py-cpuinfo==9.0.0
-    # via hyperglass
+    # via hyperglass-ng
 pycairo==1.26.0
     # via rlpycairo
 pycodestyle==2.11.1
@@ -154,21 +154,21 @@ pycodestyle==2.11.1
 pycparser==2.21
     # via cffi
 pydantic==2.6.3
-    # via hyperglass
+    # via hyperglass-ng
     # via pydantic-extra-types
     # via pydantic-settings
 pydantic-core==2.16.3
     # via pydantic
 pydantic-extra-types==2.6.0
-    # via hyperglass
+    # via hyperglass-ng
 pydantic-settings==2.2.1
-    # via hyperglass
+    # via hyperglass-ng
 pyflakes==3.2.0
     # via flake8
 pygments==2.17.2
     # via rich
 pyjwt==2.6.0
-    # via hyperglass
+    # via hyperglass-ng
 pynacl==1.5.0
     # via paramiko
 pyserial==3.5
@@ -185,20 +185,20 @@ python-dotenv==1.0.1
     # via uvicorn
 pyyaml==6.0.1
     # via bandit
-    # via hyperglass
+    # via hyperglass-ng
     # via litestar
     # via netmiko
     # via pre-commit
     # via uvicorn
 redis==4.5.4
-    # via hyperglass
+    # via hyperglass-ng
 reportlab==4.1.0
     # via favicons
     # via svglib
 rich==13.7.0
     # via bandit
     # via favicons
-    # via hyperglass
+    # via hyperglass-ng
     # via litestar
     # via rich-click
 rich-click==1.7.4
@@ -234,12 +234,12 @@ tinycss2==1.2.1
     # via cssselect2
     # via svglib
 toml==0.10.2
-    # via hyperglass
+    # via hyperglass-ng
 tomli==2.0.1
     # via taskipy
 typer==0.9.0
     # via favicons
-    # via hyperglass
+    # via hyperglass-ng
 typing-extensions==4.9.0
     # via litestar
     # via polyfactory
@@ -248,10 +248,10 @@ typing-extensions==4.9.0
     # via rich-click
     # via typer
 uvicorn==0.21.1
-    # via hyperglass
+    # via hyperglass-ng
     # via litestar
 uvloop==0.18.0
-    # via hyperglass
+    # via hyperglass-ng
     # via litestar
     # via uvicorn
 virtualenv==20.25.0
@@ -264,4 +264,4 @@ webencodings==0.5.1
 websockets==12.0
     # via uvicorn
 xmltodict==0.13.0
-    # via hyperglass
+    # via hyperglass-ng
