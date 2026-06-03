@@ -2,9 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- [#304](https://github.com/thatmattlove/hyperglass/pull/304): Add FRR structured output for BGP Routes - @chriswiggins
+- Sharable result snapshots: clicking the new Share button on a result mints a `/result/<id>` URL (default 7-day TTL, operator-tunable via `cache.share_timeout`).
+- `params.public_url` (optional): when set, share URLs use this base; otherwise derived from request headers.
+
+### Changed
+
+- [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
+- [#292](https://github.com/thatmattlove/hyperglass/pull/292): Updates Mikrotik BGP route command so supernets are selected as well as exact matches. - @GrandArcher
+- `cache.timeout` default raised from 120s → 600s. End-user refresh behavior is preserved by `cache.refresh_min_interval` (UI cooldown, default 120s) and the new query `force` flag. Operators relying on 2-minute cache staleness should set `cache.timeout: 120` explicitly.
 
 ### Fixed
 - [#280](https://github.com/thatmattlove/hyperglass/issues/280): Fix: `condition: None` caused error in directive @Jimmy01240397
@@ -21,18 +33,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Security
 - [#334](https://github.com/thatmattlove/hyperglass/issues/334): Address runtime-relevant CVEs surfaced by container scanners — bump Next.js to `13.5.11` (covers CVE-2025-29927 middleware bypass, CVE-2024-34351 SSRF, CVE-2024-46982 cache poisoning, CVE-2024-51479 auth bypass), bump Pillow to `>=10.4.0` (CVE-2024-28219), pin `h11>=0.16.0` (CVE-2025-43859 request smuggling), use the rolling `python:3.12-alpine` base with `apk upgrade` (CVE-2024-6119 / CVE-2024-12797 OpenSSL, CVE-2025-31115 xz), and bump `setuptools>=78.1.1` (CVE-2025-47273) inside the image.
-
-### Updated
-
-- [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
-- [#292](https://github.com/thatmattlove/hyperglass/pull/292): Updates Mikrotik BGP route command so supernets are selected as well as exact matches. - @GrandArcher
-- `cache.timeout` default raised from 120s → 600s. End-user refresh behavior is preserved by `cache.refresh_min_interval` (UI cooldown, default 120s) and the new query `force` flag. Operators relying on 2-minute cache staleness should set `cache.timeout: 120` explicitly.
-
-### Added
-
-- [#304](https://github.com/thatmattlove/hyperglass/pull/304): Add FRR structured output for BGP Routes - @chriswiggins
-- Sharable result snapshots: clicking the new Share button on a result mints a `/result/<id>` URL (default 7-day TTL, operator-tunable via `cache.share_timeout`).
-- `params.public_url` (optional): when set, share URLs use this base; otherwise derived from request headers.
 
 ## 2.0.4 - 2024-06-30
 
@@ -611,3 +611,10 @@ $ hyperglass-agent send-certificate
 ### Changed
 
 - **BREAKING CHANGE**: The `logo` section now requires the full path for logo files. See [the docs](https://hyperglass.dev/docs/ui/logo) for details.
+
+<!--
+Version comparison links. Only the fork-era tags exist in this repository
+(v2.0.4-jsenecal.*); historical upstream versions below were never tagged
+here, so they are intentionally left unlinked.
+-->
+[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.0.4-jsenecal.2...HEAD
