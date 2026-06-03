@@ -31,7 +31,7 @@ importers:
         version: 4.3.0(@types/react@18.2.60)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@hookform/resolvers':
         specifier: ^2.9.10
-        version: 2.9.10(react-hook-form@7.42.1(react@18.2.0))
+        version: 2.9.11(react-hook-form@7.42.1(react@18.2.0))
       '@tanstack/react-query':
         specifier: ^4.22.0
         version: 4.22.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -1138,8 +1138,8 @@ packages:
       react: ^16.8.0 || ^17 || ^18
       react-dom: ^16.8.0 || ^17 || ^18
 
-  '@hookform/resolvers@2.9.10':
-    resolution: {integrity: sha512-JIL1DgJIlH9yuxcNGtyhsWX/PgNltz+5Gr6+8SX9fhXc/hPbEIk6wPI82nhgvp3uUb6ZfAM5mqg/x7KR7NAb+A==}
+  '@hookform/resolvers@2.9.11':
+    resolution: {integrity: sha512-bA3aZ79UgcHj7tFV7RlgThzwSSHZgvfbt2wprldRkYBcMopdMvHyO17Wwp/twcJasNFischFfS7oz8Katz8DdQ==}
     peerDependencies:
       react-hook-form: ^7.0.0
 
@@ -5299,7 +5299,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
-  '@hookform/resolvers@2.9.10(react-hook-form@7.42.1(react@18.2.0))':
+  '@hookform/resolvers@2.9.11(react-hook-form@7.42.1(react@18.2.0))':
     dependencies:
       react-hook-form: 7.42.1(react@18.2.0)
 
