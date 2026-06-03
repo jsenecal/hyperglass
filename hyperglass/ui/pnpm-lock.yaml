@@ -105,8 +105,8 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0
       vest:
-        specifier: ^3.2.8
-        version: 3.2.8
+        specifier: ^6.0.0
+        version: 6.3.2
       zustand:
         specifier: ^3.7.2
         version: 3.7.2(react@18.2.0)
@@ -2009,6 +2009,9 @@ packages:
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
+  context@4.0.17:
+    resolution: {integrity: sha512-SM/Rmr9egp0N3+t0kfIFz1Dayfcl+8bussTdW0lw9gU+KUe3v+QPVyxvr+KzVx13U5Ac0dCdjGacWION6NuRUQ==}
+
   convert-source-map@1.8.0:
     resolution: {integrity: sha512-+OQdjP49zViI/6i7nIJpA8rAl4sV/JdPfU9nZs3VqOwGIgizICvuN2ru6fMd+4llL0tar18UYJXfZ/TWtmhUjA==}
 
@@ -3108,6 +3111,9 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
+  n4s@6.2.1:
+    resolution: {integrity: sha512-j1kYy6fD0wfIsvUiaSnKGQxKJ9ZWJDwwbX8muh2/Y1j+qDADFc+e/Ggy/Hvj3dYU3zQsvuSpViOsNY/nkNCDZQ==}
+
   nanoid@3.3.7:
     resolution: {integrity: sha512-eSRppjcPIatRIMC1U6UngP8XFcz8MQWGQdt1MTBQ7NaAmvXDfvNxbvWV3x2y6CdEUciCSsDHDQZbhYaB8QEo2g==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -3949,8 +3955,14 @@ packages:
     resolution: {integrity: sha512-kiGUalWN+rgBJ/1OHZsBtU4rXZOfj/7rKQxULKlIzwzQSvMJUUNgPwJEEh7gU6xEVxC0ahoOBvN2YI8GH6FNgA==}
     engines: {node: '>=10.12.0'}
 
-  vest@3.2.8:
-    resolution: {integrity: sha512-O+GLawwfIO7ESODaJMevsI+LL959dZzjwK6oUYzMTxog+6fZ8U/NPR/ITX6tmECb8EEUVuLkNJ1lGOkoor35SA==}
+  vest-utils@2.0.17:
+    resolution: {integrity: sha512-12gNz4I3oXKO12sp4B0UBgY1b/m4Zmd7e7x1EDQkIDf/N+DHCOk1h16YGM6g/zZS1ZoJMvL35SADcEsZ+YMN3g==}
+
+  vest@6.3.2:
+    resolution: {integrity: sha512-gpXsKohvbntw2Z4VKNw04tax3EG4Av7z/8JyAe5qmpRUn2mxzPUh2OhmEf485i8v+oiCH49R+R6owVHYYlreGw==}
+
+  vestjs-runtime@2.0.17:
+    resolution: {integrity: sha512-6U2jLwvqtVSOE/kS0YFDZFLBT6a5TJEod787MVE4w691M32bW0y8uWZWquIJ7a96929/p/afH5lcVt4XGef1YQ==}
 
   vfile-message@2.0.4:
     resolution: {integrity: sha512-DjssxRGkMvifUOJre00juHoP9DPWuzjxKuMDrhNbk2TdaYYBNMStsNhEOt3idrtI12VQYM/1+iM0KOzXi4pxwQ==}
@@ -6255,6 +6267,10 @@ snapshots:
 
   concat-map@0.0.1: {}
 
+  context@4.0.17:
+    dependencies:
+      vest-utils: 2.0.17
+
   convert-source-map@1.8.0:
     dependencies:
       safe-buffer: 5.1.2
@@ -7583,6 +7599,11 @@ snapshots:
 
   ms@2.1.3: {}
 
+  n4s@6.2.1:
+    dependencies:
+      context: 4.0.17
+      vest-utils: 2.0.17
+
   nanoid@3.3.7: {}
 
   natural-compare@1.4.0: {}
@@ -8486,7 +8507,19 @@ snapshots:
       '@types/istanbul-lib-coverage': 2.0.6
       convert-source-map: 2.0.0
 
-  vest@3.2.8: {}
+  vest-utils@2.0.17: {}
+
+  vest@6.3.2:
+    dependencies:
+      context: 4.0.17
+      n4s: 6.2.1
+      vest-utils: 2.0.17
+      vestjs-runtime: 2.0.17
+
+  vestjs-runtime@2.0.17:
+    dependencies:
+      context: 4.0.17
+      vest-utils: 2.0.17
 
   vfile-message@2.0.4:
     dependencies:
