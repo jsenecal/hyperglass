@@ -3,6 +3,7 @@ hyperglass/hyperglass/static
 TODO*
 .env
 .worktrees/
+.superpowers/
 
 test.py
 .DS_Store
