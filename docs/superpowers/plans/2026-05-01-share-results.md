@@ -72,7 +72,7 @@ This chunk introduces the test infrastructure (no API tests exist today) and upd
 
 The canonical state-fixture pattern lives in `hyperglass/state/tests/test_hooks.py:32-89`. Move it up to a top-level `conftest.py` so the API tests can reuse it.
 
-- [ ] **Step 1: Create the conftest with shared fixtures**
+- [x] **Step 1: Create the conftest with shared fixtures**
 
 ```python
 """Top-level pytest fixtures shared across hyperglass test modules."""
@@ -152,12 +152,12 @@ def state(
     _state.clear()
 ```
 
-- [ ] **Step 2: Verify existing tests still pass**
+- [x] **Step 2: Verify existing tests still pass**
 
 Run: `task test -- hyperglass/state/tests/`
 Expected: all green. (We didn't break the duplicated fixtures in `state/tests/test_hooks.py` — pytest resolves the closer one.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add hyperglass/conftest.py
@@ -171,14 +171,14 @@ git commit -m "test: add top-level conftest with shared state fixtures"
 - Create: `hyperglass/api/tests/conftest.py`
 - Create: `hyperglass/api/tests/test_smoke.py`
 
-- [ ] **Step 1: Create the `__init__.py` package marker**
+- [x] **Step 1: Create the `__init__.py` package marker**
 
 Empty file:
 
 ```python
 ```
 
-- [ ] **Step 2: Create the API conftest**
+- [x] **Step 2: Create the API conftest**
 
 ```python
 """API-specific test fixtures."""
@@ -206,7 +206,7 @@ def client(state) -> t.Generator[TestClient, None, None]:
         yield test_client
 ```
 
-- [ ] **Step 3: Write a smoke test**
+- [x] **Step 3: Write a smoke test**
 
 ```python
 """Smoke test that the API test scaffolding works."""
@@ -219,12 +219,12 @@ def test_devices_endpoint_returns_seeded_device(client):
     assert any(d.get("name") == "test1" for d in payload)
 ```
 
-- [ ] **Step 4: Run the smoke test**
+- [x] **Step 4: Run the smoke test**
 
 Run: `task test -- hyperglass/api/tests/test_smoke.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/api/tests/
@@ -237,7 +237,7 @@ git commit -m "test(api): add TestClient fixture and smoke test"
 - Modify: `hyperglass/models/config/cache.py`
 - Test: `hyperglass/models/config/tests/test_cache.py` (create if absent)
 
-- [ ] **Step 1: Write failing tests for the new fields**
+- [x] **Step 1: Write failing tests for the new fields**
 
 Create `hyperglass/models/config/tests/__init__.py` (empty) if needed, then `hyperglass/models/config/tests/test_cache.py`:
 
@@ -268,12 +268,12 @@ def test_cache_share_disabled():
     assert cache.share_enabled is False
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pytest hyperglass/models/config/tests/test_cache.py -v`
 Expected: FAIL — fields don't exist yet.
 
-- [ ] **Step 3: Add the fields**
+- [x] **Step 3: Add the fields**
 
 Replace `hyperglass/models/config/cache.py`:
 
@@ -295,17 +295,17 @@ class Cache(HyperglassModel):
     refresh_min_interval: int = 120
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pytest hyperglass/models/config/tests/test_cache.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Run lint**
+- [x] **Step 5: Run lint**
 
 Run: `task lint`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hyperglass/models/config/cache.py hyperglass/models/config/tests/
@@ -318,7 +318,7 @@ git commit -m "feat(config): add share_timeout/share_enabled/share_sliding/refre
 - Modify: `hyperglass/models/api/query.py`
 - Test: `hyperglass/models/api/tests/test_query_force.py` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `hyperglass/models/api/tests/__init__.py` (empty) if needed, then `hyperglass/models/api/tests/test_query_force.py`:
 
@@ -350,12 +350,12 @@ def test_query_force_does_not_affect_digest(state):
     assert q1.digest() == q2.digest()
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pytest hyperglass/models/api/tests/test_query_force.py -v`
 Expected: FAIL on `q.force is False` (attribute doesn't exist).
 
-- [ ] **Step 3: Add the field**
+- [x] **Step 3: Add the field**
 
 In `hyperglass/models/api/query.py`, in the `Query` class — **after `query_type` (line 53) and BEFORE `_kwargs: t.Dict[str, t.Any]` (line 54)** — add:
 
@@ -366,17 +366,17 @@ In `hyperglass/models/api/query.py`, in the `Query` class — **after `query_typ
 
 `Query.__repr__` currently returns `repr_from_attrs(self, ("query_location", "query_type", "query_target"))` (line 91). Do **not** add `force` to that tuple — it must not affect the digest.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pytest hyperglass/models/api/tests/test_query_force.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Run full test suite to confirm no regressions**
+- [x] **Step 5: Run full test suite to confirm no regressions**
 
 Run: `task test`
 Expected: all green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hyperglass/models/api/query.py hyperglass/models/api/tests/
@@ -389,7 +389,7 @@ git commit -m "feat(api): add Query.force flag to bypass cache; excluded from di
 - Modify: `hyperglass/models/config/params.py`
 - Test: `hyperglass/models/config/tests/test_params_public_url.py` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for Params.public_url."""
@@ -411,12 +411,12 @@ def test_public_url_set_to_https_url():
     assert str(p.public_url).startswith("https://lg.example.com")
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pytest hyperglass/models/config/tests/test_params_public_url.py -v`
 Expected: FAIL.
 
-- [ ] **Step 3: Add the field**
+- [x] **Step 3: Add the field**
 
 In `hyperglass/models/config/params.py`, near the top of the `Params` class (after existing fields), add:
 
@@ -426,12 +426,12 @@ In `hyperglass/models/config/params.py`, near the top of the `Params` class (aft
 
 Add `from pydantic import AnyHttpUrl` to the imports if not already present.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `pytest hyperglass/models/config/tests/test_params_public_url.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/models/config/params.py hyperglass/models/config/tests/test_params_public_url.py
@@ -444,7 +444,7 @@ git commit -m "feat(config): add optional Params.public_url for share URL buildi
 - Modify: `hyperglass/models/config/params.py:153-168`
 - Test: `hyperglass/models/config/tests/test_params_frontend.py` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for Params.frontend() projection."""
@@ -469,12 +469,12 @@ def test_frontend_excludes_private_share_sliding():
     assert "share_sliding" not in cache
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `pytest hyperglass/models/config/tests/test_params_frontend.py -v`
 Expected: FAIL (fields not yet projected).
 
-- [ ] **Step 3: Modify the include set**
+- [x] **Step 3: Modify the include set**
 
 In `hyperglass/models/config/params.py`, update `frontend()`:
 
@@ -502,12 +502,12 @@ def frontend(self) -> t.Dict[str, t.Any]:
     )
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `pytest hyperglass/models/config/tests/test_params_frontend.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/models/config/params.py hyperglass/models/config/tests/test_params_frontend.py
@@ -520,7 +520,7 @@ git commit -m "feat(config): project share UI knobs through Params.frontend()"
 - Modify: `hyperglass/models/api/response.py`
 - Test: `hyperglass/models/api/tests/test_response_models.py` (create)
 
-- [ ] **Step 1: Read the existing response module to learn its conventions**
+- [x] **Step 1: Read the existing response module to learn its conventions**
 
 Run: `cat hyperglass/models/api/response.py`
 
@@ -533,7 +533,7 @@ The existing module does **not** import `datetime` or `snake_to_camel`. Add them
 
 For wire-format consistency with the spec ("camelCase on the wire"), the new share models will use `alias_generator=snake_to_camel`. `QueryResponse`'s existing fields are all single-word (`cached`, `runtime`, `timestamp`, `format`, `random`, `level`, `keywords`, plus the new `id`), so we also add the same `alias_generator` to it for consistency — single-word field aliases are no-ops, so behavior is unchanged. **Do not change `QueryResponse.timestamp`'s type from `str` to `datetime`** — that's a separate decision out of scope here.
 
-- [ ] **Step 2: Write failing tests**
+- [x] **Step 2: Write failing tests**
 
 Create `hyperglass/models/api/tests/__init__.py` (empty) if needed, then `test_response_models.py`:
 
@@ -602,12 +602,12 @@ def test_share_response_shape():
     assert dumped["query"]["query_location"] == "test1"
 ```
 
-- [ ] **Step 3: Run the test**
+- [x] **Step 3: Run the test**
 
 Run: `pytest hyperglass/models/api/tests/test_response_models.py -v`
 Expected: FAIL — `id`, `ShareCreateResponse`, `ShareResponse` don't exist yet.
 
-- [ ] **Step 4: Add imports and update `QueryResponse`**
+- [x] **Step 4: Add imports and update `QueryResponse`**
 
 In `hyperglass/models/api/response.py`, add to the imports:
 
@@ -621,7 +621,7 @@ from hyperglass.util import snake_to_camel
 
 Add `alias_generator=snake_to_camel, populate_by_name=True` to `QueryResponse.model_config`, and add `id: str` to its fields. The existing fields are unchanged; the alias generator is a no-op for single-word names.
 
-- [ ] **Step 5: Add the new models**
+- [x] **Step 5: Add the new models**
 
 Append to `hyperglass/models/api/response.py`:
 
@@ -659,12 +659,12 @@ class ShareResponse(BaseModel):
 
 `query` and `query_labels` are typed `t.Dict[str, t.Any]` / `t.Dict[str, str]` — generic dicts. **The `alias_generator` does NOT camelCase keys inside these nested dicts.** On the wire, `response.query.query_location` stays as `query_location`, not `queryLocation`. Tests in Chunk 2 assert against this snake_case shape.
 
-- [ ] **Step 6: Run the test**
+- [x] **Step 6: Run the test**
 
 Run: `pytest hyperglass/models/api/tests/test_response_models.py -v`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add hyperglass/models/api/response.py hyperglass/models/api/tests/test_response_models.py
@@ -683,7 +683,7 @@ git commit -m "feat(api): add id to QueryResponse, add ShareCreateResponse and S
 
 The current cache write only stores `output` and `timestamp` (lines 130-131). Expand it so the entry carries everything the share endpoint will need.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for /api/query cache-write expansion and force flag."""
@@ -730,12 +730,12 @@ def params() -> dict:
 
 Add this fixture override **at the top of the test module** (`hyperglass/api/tests/test_routes_query.py`).
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `task test -- hyperglass/api/tests/test_routes_query.py -v`
 Expected: FAIL — `query`, `query_labels`, `format`, `runtime`, `level` are not in the cache map.
 
-- [ ] **Step 3: Implement the cache-write expansion**
+- [x] **Step 3: Implement the cache-write expansion**
 
 This change has three parts: (a) compute `response_format` and `query_labels` BEFORE the cache write, (b) write the expanded fields, (c) **remove the now-redundant post-write re-read** at lines 138-145.
 
@@ -783,17 +783,17 @@ The cache-hit branch (lines 81-95) still needs `response_format` set; on a cache
 
 The `response = {...}` literal (lines 148-158) keeps its existing shape; `cache_response` (the output to return) is now `raw_output` on miss or `cache.get_map(cache_key, "output")` on hit — adjust the dict assembly to use whichever is in scope.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `task test -- hyperglass/api/tests/test_routes_query.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Run full backend test suite**
+- [x] **Step 5: Run full backend test suite**
 
 Run: `task test`
 Expected: green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hyperglass/api/routes.py hyperglass/api/tests/test_routes_query.py
@@ -806,7 +806,7 @@ git commit -m "feat(api): expand /api/query cache write with full snapshot field
 - Modify: `hyperglass/api/routes.py:81-95` (the cache-hit branch)
 - Test: `hyperglass/api/tests/test_routes_query.py` (extend)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test_routes_query.py`:
 
@@ -828,12 +828,12 @@ def test_force_skips_cache_hit(client, state):
     assert r3.json()["cached"] is False
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `task test -- hyperglass/api/tests/test_routes_query.py::test_force_skips_cache_hit -v`
 Expected: FAIL — third call is reported as cached.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `hyperglass/api/routes.py`, replace the start of the cache-hit branch:
 
@@ -849,12 +849,12 @@ cache_response = None if data.force else cache.get_map(cache_key, "output")
 
 Do not pre-delete the cache key; on execution failure, the existing entry stays intact.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `task test -- hyperglass/api/tests/test_routes_query.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/api/routes.py hyperglass/api/tests/test_routes_query.py
@@ -867,7 +867,7 @@ git commit -m "feat(api): /api/query honors force flag to bypass cache"
 - Modify: `hyperglass/api/routes.py` (add helper near top)
 - Test: `hyperglass/api/tests/test_share_helpers.py` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 """Tests for share helper functions."""
@@ -910,12 +910,12 @@ def test_generate_share_id_collision_retry(state, monkeypatch):
     assert sid == "BBBBBBBBBBB"
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `task test -- hyperglass/api/tests/test_share_helpers.py -v`
 Expected: FAIL — helper doesn't exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `hyperglass/api/routes.py`, near the top after imports, add:
 
@@ -937,12 +937,12 @@ def _generate_share_id(cache, max_attempts: int = 3) -> str:
     raise RuntimeError("Failed to generate a unique share ID after retries.")
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `task test -- hyperglass/api/tests/test_share_helpers.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/api/routes.py hyperglass/api/tests/test_share_helpers.py
@@ -955,7 +955,7 @@ git commit -m "feat(api): add _generate_share_id helper with collision retry"
 - Modify: `hyperglass/api/routes.py`
 - Test: `hyperglass/api/tests/test_share_helpers.py` (extend)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test_share_helpers.py`:
 
@@ -1004,12 +1004,12 @@ def test_build_share_url_request_no_proxy_headers():
         "http://127.0.0.1:8001/result/abc"
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `task test -- hyperglass/api/tests/test_share_helpers.py -v`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `hyperglass/api/routes.py`, add:
 
@@ -1031,12 +1031,12 @@ def _build_share_url(params, request, share_id: str) -> str:
     return f"{base}/result/{share_id}"
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `task test -- hyperglass/api/tests/test_share_helpers.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/api/routes.py hyperglass/api/tests/test_share_helpers.py
@@ -1050,7 +1050,7 @@ git commit -m "feat(api): add _build_share_url helper with public_url and proxy 
 - Modify: `hyperglass/api/__init__.py` (register the new handler)
 - Test: `hyperglass/api/tests/test_routes_share.py` (create)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 """Tests for share-related routes."""
@@ -1112,12 +1112,12 @@ class TestShareDisabled:
         assert r.status_code == 404
 ```
 
-- [ ] **Step 2: Run the tests**
+- [x] **Step 2: Run the tests**
 
 Run: `task test -- hyperglass/api/tests/test_routes_share.py -v`
 Expected: FAIL — endpoint doesn't exist (returns 404 for routing reasons, but the body assertions fail).
 
-- [ ] **Step 3: Implement the endpoint**
+- [x] **Step 3: Implement the endpoint**
 
 In `hyperglass/api/routes.py`, add the imports:
 
@@ -1171,16 +1171,16 @@ async def share_create(
 
 Add `share_create` to the `__all__` tuple at the top of `routes.py`.
 
-- [ ] **Step 4: Register the route**
+- [x] **Step 4: Register the route**
 
 In `hyperglass/api/__init__.py`, the `HANDLERS` list lives at lines 39-45 (initial) and 47-56 (with UI handlers). Add `share_create` to the imports from `hyperglass.api.routes` near line 38 and append it to the `HANDLERS` list before the `if not STATE.settings.disable_ui:` block.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `task test -- hyperglass/api/tests/test_routes_share.py -v`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hyperglass/api/routes.py hyperglass/api/__init__.py hyperglass/api/tests/test_routes_share.py
@@ -1194,7 +1194,7 @@ git commit -m "feat(api): add POST /api/query/share/{cache_id} for share creatio
 - Modify: `hyperglass/api/__init__.py`
 - Test: `hyperglass/api/tests/test_routes_share.py` (extend)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `test_routes_share.py`:
 
@@ -1268,12 +1268,12 @@ class TestShareFixed:
 
 `RedisManager` (see `hyperglass/state/redis.py`) does not expose `.ttl()` directly and `.expire(...)` is keyword-only (`expire_in=` / `expire_at=`). For tests that need raw Redis operations, drop down to `state.redis.instance` (the underlying `redis.Redis` client) and use `state.redis.key(<logical_key>)` to get the namespaced full key.
 
-- [ ] **Step 2: Run the tests**
+- [x] **Step 2: Run the tests**
 
 Run: `task test -- hyperglass/api/tests/test_routes_share.py -v`
 Expected: FAIL — endpoint not yet defined.
 
-- [ ] **Step 3: Implement the endpoint**
+- [x] **Step 3: Implement the endpoint**
 
 In `hyperglass/api/routes.py`:
 
@@ -1312,12 +1312,12 @@ async def share_get(_state: HyperglassState, share_id: str) -> ShareResponse:
 
 Add `share_get` to `__all__` and register it in `hyperglass/api/__init__.py`.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `task test -- hyperglass/api/tests/test_routes_share.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/api/routes.py hyperglass/api/__init__.py hyperglass/api/tests/test_routes_share.py
@@ -1326,22 +1326,22 @@ git commit -m "feat(api): add GET /api/query/share/{share_id} with optional slid
 
 ### Task 2.7: Lint and full backend regression
 
-- [ ] **Step 1: Run Ruff**
+- [x] **Step 1: Run Ruff**
 
 Run: `task lint`
 Expected: clean (zero errors per CONTRIBUTING.md).
 
-- [ ] **Step 2: Run Black + isort**
+- [x] **Step 2: Run Black + isort**
 
 Run: `task format && task sort`
 Expected: no changes (or stage and commit any formatting deltas).
 
-- [ ] **Step 3: Run full test suite**
+- [x] **Step 3: Run full test suite**
 
 Run: `task test`
 Expected: all green.
 
-- [ ] **Step 4: Commit any formatting deltas**
+- [x] **Step 4: Commit any formatting deltas**
 
 ```bash
 git add -A
@@ -1359,12 +1359,12 @@ git commit -m "style: apply ruff/black/isort to share feature"  # only if needed
 
 **Important:** the underscore-prefixed interfaces (`_Cache`, `_Text`, etc.) hold the **raw snake_case shape** that mirrors the backend JSON (`hyperglass.json`). The exported camelCase types (`Cache`, `Text`, …) are derived via `type-fest`'s `CamelCasedPropertiesDeep` at the export boundary (line ~175). Add new fields in **snake_case**, matching backend field names.
 
-- [ ] **Step 1: Read the existing `_Cache` and `_Text` interfaces**
+- [x] **Step 1: Read the existing `_Cache` and `_Text` interfaces**
 
 Run: `grep -n "_Cache\|_Text" hyperglass/ui/types/config.ts`
 Expected: `_Cache` around line 137; `_Text` around line 25.
 
-- [ ] **Step 2: Update `_Cache`**
+- [x] **Step 2: Update `_Cache`**
 
 In `hyperglass/ui/types/config.ts`, replace:
 
@@ -1387,7 +1387,7 @@ interface _Cache {
 }
 ```
 
-- [ ] **Step 3: Add new fields to `_Text`** in snake_case (will be populated by Task 4.1 backend Text model fields)
+- [x] **Step 3: Add new fields to `_Text`** in snake_case (will be populated by Task 4.1 backend Text model fields)
 
 Add to `_Text` (existing fields are all snake_case — match the convention):
 
@@ -1407,12 +1407,12 @@ Add to `_Text` (existing fields are all snake_case — match the convention):
 
 When consumers do `useConfig().web.text.shareButton`, the `CamelCasedProperties` transform converts these to camelCase access automatically.
 
-- [ ] **Step 4: Typecheck**
+- [x] **Step 4: Typecheck**
 
 Run: `task ui-typecheck`
 Expected: PASS — but note this won't catch missing backend fields until the JSON config is rebuilt; that's fine.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/ui/types/config.ts
@@ -1426,12 +1426,12 @@ git commit -m "feat(ui): extend Config types with share knobs and text strings"
 
 **Important context:** `globals.d.ts` is wrapped in a `declare global { ... }` block (line 1). All new global types must be added INSIDE that block, otherwise hooks in Task 3.3 cannot reference `ShareResponse` / `ShareCreateResponse` without explicit imports. The existing `QueryResponse` is a `type` alias (not `interface`) and currently has fields `random`, `cached`, `runtime`, `level`, `timestamp`, `keywords`, `output`, `format`. It does NOT have `id` today — the backend route returns `id` in the response dict (see `routes.py:148-150`) but the type is missing it.
 
-- [ ] **Step 1: Locate the existing types**
+- [x] **Step 1: Locate the existing types**
 
 Run: `grep -n "type QueryResponse\|declare global" hyperglass/ui/types/globals.d.ts`
 Expected: `declare global` near line 1; `type QueryResponse` near line 44.
 
-- [ ] **Step 2: Add `id` to the existing `QueryResponse` type alias**
+- [x] **Step 2: Add `id` to the existing `QueryResponse` type alias**
 
 In `hyperglass/ui/types/globals.d.ts`, find:
 
@@ -1464,7 +1464,7 @@ Add `id: string;` as the first field:
   };
 ```
 
-- [ ] **Step 3: Add `ShareResponse` and `ShareCreateResponse` inside the `declare global { ... }` block**
+- [x] **Step 3: Add `ShareResponse` and `ShareCreateResponse` inside the `declare global { ... }` block**
 
 Add immediately after `type QueryResponse = { ... };`:
 
@@ -1493,7 +1493,7 @@ Add immediately after `type QueryResponse = { ... };`:
   };
 ```
 
-- [ ] **Step 4: Add `force?: boolean` to `FormQuery`**
+- [x] **Step 4: Add `force?: boolean` to `FormQuery`**
 
 `FormQuery` is defined in `hyperglass/ui/types/data.ts:7` as `Swap<FormData, 'queryLocation', string>`. Adding `force` to `FormData` would propagate to the form schema (undesirable). Cleanest approach: extend `FormQuery` directly:
 
@@ -1504,12 +1504,12 @@ export type FormQuery = Swap<FormData, 'queryLocation', string> & { force?: bool
 
 Verify the change compiles by running `task ui-typecheck` (Step 5 below).
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `task ui-typecheck`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hyperglass/ui/types/globals.d.ts hyperglass/ui/types/data.ts
@@ -1524,7 +1524,7 @@ git commit -m "feat(ui): add id to QueryResponse, add ShareResponse, add force? 
 
 **Note on test pattern:** there is no existing `fetch` mock pattern in this codebase (`use-dns-query.test.tsx` hits real network). This task introduces a new pattern: monkeypatch `global.fetch` per-test via `vi.fn()`. Document this choice in the test file's docstring so future contributors recognize the pattern.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 /**
@@ -1600,12 +1600,12 @@ describe('useShareGet', () => {
 
 The `mockResponse` helper provides both `.json()` and `.text()` so error paths that read the body don't trip on a missing method.
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `task pnpm test -- hooks/use-share.test.tsx`
 Expected: FAIL — module doesn't exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // hyperglass/ui/hooks/use-share.ts
@@ -1655,12 +1655,12 @@ export const useShareGet = (shareId: string | undefined) =>
 
 Note: this hook uses bare `fetch` rather than `useLGQuery`'s `fetchWithTimeout`. Share fetches are short-lived control-plane requests (Redis read, no device interaction) so the global `request_timeout` knob is over-kill here. If this becomes a problem in production, switch to `fetchWithTimeout` with a small fixed timeout (e.g. 10s) and add a follow-up.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `task pnpm test -- hooks/use-share.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/ui/hooks/use-share.ts hyperglass/ui/hooks/use-share.test.tsx
@@ -1673,13 +1673,13 @@ git commit -m "feat(ui): add useShareCreate (POST) and useShareGet (GET) hooks"
 - Modify: `hyperglass/ui/hooks/use-lg-query.ts`
 - Create: `hyperglass/ui/hooks/use-lg-query.test.tsx`
 
-- [ ] **Step 1: Read the current hook**
+- [x] **Step 1: Read the current hook**
 
 Run: `cat hyperglass/ui/hooks/use-lg-query.ts`
 
 Note `LGQueryKey = [string, FormQuery]` (line 14) and the `useQuery` call at line 72. Because Task 3.2 Step 4 already extended `FormQuery` with optional `force?: boolean`, the existing tuple typing already accepts `force`; no `LGQueryKey` change is needed.
 
-- [ ] **Step 2: Extend the body and queryKey**
+- [x] **Step 2: Extend the body and queryKey**
 
 In `useLGQuery`'s `runQuery` (around line 36), the POST body is constructed from the query object. The hook currently sends **camelCase** keys (`queryLocation`, `queryTarget`, `queryType`) because the backend `Query` Pydantic model uses `alias_generator=snake_to_camel` and `populate_by_name=True`. Inside `runQuery`, the destructured tuple is `[, data]` from `ctx.queryKey` (the second element of `LGQueryKey`). Adapt the existing body literal to also include `force`:
 
@@ -1696,7 +1696,7 @@ Use `data.force` (not `query.force`) — `data` is the destructured queryKey ele
 
 The `queryKey` at line ~72 already uses the query object as the second tuple element. Because `force` is now a field of `FormQuery`, React Query will naturally treat `{...same..., force: true}` as a different key from `{...same..., force: undefined}` — no explicit change to `LGQueryKey` is needed.
 
-- [ ] **Step 3: Add a unit test**
+- [x] **Step 3: Add a unit test**
 
 Create `hyperglass/ui/hooks/use-lg-query.test.tsx`:
 
@@ -1758,12 +1758,12 @@ describe('useLGQuery force flag', () => {
 
 (Adapt the `config` mock fields to whatever `useLGQuery` actually reads — read the hook source to know.)
 
-- [ ] **Step 4: Run UI tests**
+- [x] **Step 4: Run UI tests**
 
 Run: `task pnpm test -- hooks/use-lg-query.test.tsx`
 Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/ui/hooks/
@@ -1780,7 +1780,7 @@ git commit -m "feat(ui): pass-through force flag in useLGQuery"
 - Modify: `hyperglass/models/config/web.py:100-129` (the `Text` class)
 - Test: `hyperglass/models/tests/test_web.py` (note: `hyperglass/models/tests/` already exists with other model tests; `hyperglass/models/config/tests/` does NOT exist — use the existing dir)
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Create `hyperglass/models/tests/test_web.py` (this directory already exists with other model tests). Tasks 1.3, 1.5, and 1.6 create `hyperglass/models/config/tests/` for cache- and params-specific tests; we keep web tests under `hyperglass/models/tests/` since `web.py` is the model the test exercises and that's where existing model tests live:
 
@@ -1800,12 +1800,12 @@ def test_text_share_defaults():
     assert t.refresh_cooldown
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `pytest hyperglass/models/tests/test_web.py -v`
 Expected: FAIL.
 
-- [ ] **Step 3: Add fields to `Text`**
+- [x] **Step 3: Add fields to `Text`**
 
 Append to `Text` in `hyperglass/models/config/web.py`:
 
@@ -1823,12 +1823,12 @@ Append to `Text` in `hyperglass/models/config/web.py`:
     refresh_cooldown: str = "Refresh available in {seconds}s"  # JS-formatted
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `pytest hyperglass/models/tests/test_web.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/models/config/web.py hyperglass/models/tests/test_web.py
@@ -1844,7 +1844,7 @@ git commit -m "feat(config): add share/refresh string fields to Text"
 
 **Design note:** React Query's `refetch()` does NOT accept arbitrary args that propagate to `queryFn`. Per Task 3.4, `force` is part of the `query` object passed to `useLGQuery`, which makes it part of the React Query key — flipping `query.force` from `undefined` to `true` and then calling `refetch()` (or letting React Query auto-fetch the new key) is the mechanism. So `RequeryButton` doesn't directly invoke `force`; instead it asks the parent (or a Zustand action) to **toggle the force state**. The cleanest API: `RequeryButton` accepts an `onRequery: () => void` callback that the parent wires to a state setter that flips `force` to `true` and triggers refetch.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Wrapper pattern is from `hyperglass/ui/hooks/use-dns-query.test.tsx:15-26`. Reproduce here:
 
@@ -1905,18 +1905,18 @@ describe('RequeryButton', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `task pnpm test -- requery-button.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `RequeryButton`**
+- [x] **Step 3: Implement `RequeryButton`**
 
 Replace the prop signature: instead of `requery: refetch`, accept `{ onRequery: () => void; lastResponseAt: number; isDisabled?: boolean }`. Read `cache.refreshMinInterval` from `useConfig()`. Compute remaining cooldown from `(lastResponseAt + refreshMinInterval * 1000) - Date.now()`. Use a `setInterval` ticking each second to trigger re-render until cooldown elapses. Disable button when cooldown > 0; enabled otherwise.
 
 On click, call `onRequery()` and update parent state to record the new `lastResponseAt` (the parent owns the state).
 
-- [ ] **Step 4: Wire the parent**
+- [x] **Step 4: Wire the parent**
 
 In `hyperglass/ui/components/results/individual.tsx` (where `<RequeryButton requery={refetch} ...>` lives at line 221), refactor so the parent:
 1. Holds `force` state (e.g. `useState<boolean>(false)`).
@@ -1925,11 +1925,11 @@ In `hyperglass/ui/components/results/individual.tsx` (where `<RequeryButton requ
 4. Defines `onRequery` that sets `force=true` and calls `refetch()` (React Query will see the key change and refetch with the new body).
 5. After the response settles, resets `force` back to `false` so the next refetch isn't sticky-forced. (Or leave it; the cache key stability is preserved either way.)
 
-- [ ] **Step 5: Run the test**
+- [x] **Step 5: Run the test**
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hyperglass/ui/components/results/
@@ -1952,7 +1952,7 @@ interface ShareButtonProps {
 
 The parent (`individual.tsx`) passes `data?.id` from the React Query result. The button is gated on `cacheId` truthiness AND on `config.cache.shareEnabled`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -2055,12 +2055,12 @@ describe('ShareButton', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `task pnpm test -- share-button.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```tsx
 // hyperglass/ui/components/results/share-button.tsx
@@ -2071,11 +2071,11 @@ Expected: FAIL.
 
 Pattern reference: `hyperglass/ui/components/results/header.tsx:34-35` for `useStrf()`/`useConfig()` usage.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/ui/components/results/share-button.tsx hyperglass/ui/components/results/share-button.test.tsx
@@ -2087,12 +2087,12 @@ git commit -m "feat(ui): add ShareButton with copy-to-clipboard popover"
 **Files:**
 - Modify: `hyperglass/ui/components/results/individual.tsx`
 
-- [ ] **Step 1: Locate the existing button placement**
+- [x] **Step 1: Locate the existing button placement**
 
 Run: `grep -n "RequeryButton\|<Requery" hyperglass/ui/components/results/individual.tsx`
 Expected: `<RequeryButton requery={refetch} isDisabled={isLoading} />` around line 221.
 
-- [ ] **Step 2: Add `<ShareButton>` next to it**
+- [x] **Step 2: Add `<ShareButton>` next to it**
 
 Render conditionally on `data?.id` truthiness. The React Query result variable is named `data` (and `refetch`, `isLoading`) per the existing destructuring in this file:
 
@@ -2103,12 +2103,12 @@ Render conditionally on `data?.id` truthiness. The React Query result variable i
 
 (`onRequery` and `lastResponseAt` come from the parent state added in Task 4.2 Step 4.)
 
-- [ ] **Step 3: Typecheck and lint**
+- [x] **Step 3: Typecheck and lint**
 
 Run: `task ui-typecheck && task ui-lint`
 Expected: clean.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add hyperglass/ui/components/results/individual.tsx
@@ -2131,7 +2131,7 @@ git commit -m "feat(ui): place ShareButton next to RequeryButton in result heade
 
 The form's `defaultValues.queryLocation` is `[]` (array), so a single-string URL param must be wrapped in an array via `setValue('queryLocation', [value])`. Calling `setValue('queryLocation', value)` with a string would fail Vest validation.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -2174,12 +2174,12 @@ it('pre-fills location/target/type from query string on mount', async () => {
 
 (The mock `config` needs to provide enough fields to let the form render. Read `looking-glass-form.tsx` and provide the minimum.)
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `task pnpm test -- looking-glass-form.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `looking-glass-form.tsx`, after the `useForm` setup:
 
@@ -2196,11 +2196,11 @@ useEffect(() => {
 }, [router.isReady, router.query, setValue]);
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hyperglass/ui/components/looking-glass-form.tsx hyperglass/ui/components/looking-glass-form.test.tsx
@@ -2229,7 +2229,7 @@ Keep `Results` (`components/results/group.tsx`) as the form-driven path. For the
 
 This refactor is bounded to `individual.tsx` and the share page; `Results`, `LookingGlassForm`, `useFormState`, etc. stay untouched.
 
-- [ ] **Step 1: Add `snapshot` and `readOnly` props to `individual.tsx`**
+- [x] **Step 1: Add `snapshot` and `readOnly` props to `individual.tsx`**
 
 In `hyperglass/ui/components/results/individual.tsx`, change the props type:
 
@@ -2243,7 +2243,7 @@ interface ResultProps {
 
 When `snapshot` is provided: skip the React Query fetch, render directly from `snapshot.output` and `snapshot.queryLabels.location` / `snapshot.queryLabels.type` for the header. When `readOnly`: omit `<ShareButton>` and `<RequeryButton>` from the header.
 
-- [ ] **Step 2: Write the failing page test**
+- [x] **Step 2: Write the failing page test**
 
 ```tsx
 // hyperglass/ui/pages/result/[id].test.tsx
@@ -2332,12 +2332,12 @@ it('exposes a "Run a fresh query" link with prefilled query string', async () =>
 });
 ```
 
-- [ ] **Step 3: Run the test**
+- [x] **Step 3: Run the test**
 
 Run: `task pnpm test -- pages/result/`
 Expected: FAIL.
 
-- [ ] **Step 4: Implement the page**
+- [x] **Step 4: Implement the page**
 
 ```tsx
 // hyperglass/ui/pages/result/[id].tsx
@@ -2372,15 +2372,15 @@ export default function ResultPage() {
 }
 ```
 
-- [ ] **Step 5: Run the test**
+- [x] **Step 5: Run the test**
 
 Expected: PASS.
 
-- [ ] **Step 6: Typecheck, lint, format**
+- [x] **Step 6: Typecheck, lint, format**
 
 Run: `task ui-typecheck && task ui-lint && task ui-format`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add hyperglass/ui/pages/result/ hyperglass/ui/components/results/individual.tsx
@@ -2392,17 +2392,17 @@ git commit -m "feat(ui): add /result/[id] share view; Result component accepts s
 **Files:**
 - (Possibly) Modify: `hyperglass/api/__init__.py` if `html_mode=True` does not cover the case.
 
-- [ ] **Step 1: Build the UI**
+- [x] **Step 1: Build the UI**
 
 Run: `task ui-build`
 Expected: build succeeds, output under `hyperglass/static/ui/`.
 
-- [ ] **Step 2: Start the backend**
+- [x] **Step 2: Start the backend**
 
 Run: `task start`
 Expected: server up on port 8001 (or configured port).
 
-- [ ] **Step 3: Test the SPA fallback**
+- [x] **Step 3: Test the SPA fallback**
 
 In another shell:
 
@@ -2412,7 +2412,7 @@ curl -i http://127.0.0.1:8001/result/aB3kF9pQ2x_
 
 Expected: 200 OK with `Content-Type: text/html` returning the SPA's `index.html`.
 
-- [ ] **Step 4 (only if Step 3 returned 404):** Add explicit Litestar route handler
+- [x] **Step 4 (only if Step 3 returned 404):** Add explicit Litestar route handler
 
 In `hyperglass/api/__init__.py`, add the imports near the top (alongside existing Litestar imports):
 
@@ -2437,7 +2437,7 @@ Add `share_view_html` to the `HANDLERS` list at line 39, **before** the `if not 
 
 Then re-run Step 3 and confirm 200.
 
-- [ ] **Step 5: Commit (if changes made)**
+- [x] **Step 5: Commit (if changes made)**
 
 ```bash
 git add hyperglass/api/__init__.py
@@ -2453,7 +2453,7 @@ git commit -m "feat(api): explicit /result/<id> route handler when html_mode is 
 - Modify: `docs/pages/configuration/config/caching.mdx` (the existing cache docs page; uses a markdown table format we extend)
 - Modify: `docs/pages/configuration/config.mdx` (the params index — gets the `public_url` row, since `public_url` is a top-level `params.*` field, not under `params.cache.*`)
 
-- [ ] **Step 1: Document the share feature in CHANGELOG**
+- [x] **Step 1: Document the share feature in CHANGELOG**
 
 In `CHANGELOG.md`, under the `## [Unreleased]` section, the existing subsections are `Fixed`, `Security`, `Updated`, `Added`. Add the share feature under `Added` and the cache.timeout default change under `Updated`:
 
@@ -2466,7 +2466,7 @@ In `CHANGELOG.md`, under the `## [Unreleased]` section, the existing subsections
 - `cache.timeout` default raised from 120s → 600s. End-user refresh behavior is preserved by `cache.refresh_min_interval` (UI cooldown, default 120s) and the new query `force` flag. Operators relying on 2-minute cache staleness should set `cache.timeout: 120` explicitly.
 ```
 
-- [ ] **Step 2: Document cache fields in `caching.mdx`**
+- [x] **Step 2: Document cache fields in `caching.mdx`**
 
 In `docs/pages/configuration/config/caching.mdx`, the existing parameter table looks like:
 
@@ -2492,7 +2492,7 @@ Also update the example-with-defaults YAML block to include the new fields with 
 
 Add a callout below the table: "Disabling `share_enabled` (or changing any cache UI knob) requires a UI rebuild — the values are baked into the static `hyperglass.json` at build time."
 
-- [ ] **Step 3: Document `public_url` on the params index page**
+- [x] **Step 3: Document `public_url` on the params index page**
 
 `public_url` is a top-level `params` field, not a cache subfield. In `docs/pages/configuration/config.mdx`, add it to the appropriate `params.*` reference table (or example block) — match the existing format. Suggested row:
 
@@ -2500,7 +2500,7 @@ Add a callout below the table: "Disabling `share_enabled` (or changing any cache
 | `public_url` | URL    | (unset) | Public-facing base URL for the looking glass. When set, share links use this base; otherwise derived from request `Host` / `X-Forwarded-Proto` headers. Set this when running behind a reverse proxy. |
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add CHANGELOG.md docs/pages/configuration/config/caching.mdx docs/pages/configuration/config.mdx
@@ -2509,32 +2509,32 @@ git commit -m "docs: document share-results feature and cache.timeout default ch
 
 ### Task 5.4: End-to-end smoke test
 
-- [ ] **Step 1: Boot stack against fake_output**
+- [x] **Step 1: Boot stack against fake_output**
 
 Set `params.fake_output: true` in your dev config, then `task start`.
 
-- [ ] **Step 2: Run a query in the browser**
+- [x] **Step 2: Run a query in the browser**
 
 - Open `http://127.0.0.1:8001/`
 - Submit a real-shaped query (any device + target + type your seed config has)
 
-- [ ] **Step 3: Verify Share button**
+- [x] **Step 3: Verify Share button**
 
 - Confirm Share button is visible in the result header
 - Click Share → confirm popover opens with a `/result/<id>` URL
 - Click Copy → confirm clipboard contains the URL
 
-- [ ] **Step 4: Open the share URL incognito**
+- [x] **Step 4: Open the share URL incognito**
 
 - Confirm the snapshot renders with the banner
 - Confirm output matches what you saw in the original result
 
-- [ ] **Step 5: Verify refresh cooldown**
+- [x] **Step 5: Verify refresh cooldown**
 
 - Click Refresh < 120s after submitting → confirm disabled with cooldown message
 - Wait > 120s → confirm enabled, click → confirm new query result and a new shareable id
 
-- [ ] **Step 6: Verify expired-cache 410 path**
+- [x] **Step 6: Verify expired-cache 410 path**
 
 Find the redis-cli command appropriate to your environment:
 - **Local Redis (native):** `redis-cli` connects to localhost:6379 by default.
@@ -2554,7 +2554,7 @@ sleep 2
 
 Click Share in the UI → confirm the configured `share_create_expired` message.
 
-- [ ] **Step 7: Verify share survives query-cache expiry (the headline guarantee)**
+- [x] **Step 7: Verify share survives query-cache expiry (the headline guarantee)**
 
 - Run a fresh query (Step 2)
 - Click Share, copy the `/result/<id>` URL
@@ -2563,18 +2563,18 @@ Click Share in the UI → confirm the configured `share_create_expired` message.
 - Open the share URL in a fresh incognito window
 - **Expect:** snapshot still renders correctly. The share has its own TTL (`cache.share_timeout`, default 7 days) independent of the query cache.
 
-- [ ] **Step 8: Verify share-not-found**
+- [x] **Step 8: Verify share-not-found**
 
 - Open `http://127.0.0.1:8001/result/notarealid` → confirm the configured `share_not_found` message
 
-- [ ] **Step 9: Verify `params.public_url` shaping (optional)**
+- [x] **Step 9: Verify `params.public_url` shaping (optional)**
 
 - Set `public_url: https://lg.example.test` in the dev config; restart
 - Run a query, click Share
 - Confirm the popover URL is `https://lg.example.test/result/<id>` (not the local `127.0.0.1` URL)
 - Unset and restart; confirm derived URL returns
 
-- [ ] **Step 10: Sign-off commit (if any deltas surfaced)**
+- [x] **Step 10: Sign-off commit (if any deltas surfaced)**
 
 ```bash
 git add -A
@@ -2583,22 +2583,22 @@ git commit -m "test: smoke test fixes for share-results"  # if needed
 
 ### Task 5.5: Final lint / format / typecheck
 
-- [ ] **Step 1: Backend**
+- [x] **Step 1: Backend**
 
 Run: `task lint && task format && task sort && task test`
 Expected: all clean and green.
 
-- [ ] **Step 2: Frontend**
+- [x] **Step 2: Frontend**
 
 Run: `task ui-typecheck && task ui-lint && task ui-format && task pnpm test`
 Expected: all clean and green.
 
-- [ ] **Step 3: Combined check**
+- [x] **Step 3: Combined check**
 
 Run: `task check`
 Expected: clean.
 
-- [ ] **Step 4: Final commit (if needed)**
+- [x] **Step 4: Final commit (if needed)**
 
 ```bash
 git add -A
