@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 # Project
 from hyperglass.log import log
-from hyperglass.util import get_fmt_keys, repr_from_attrs
+from hyperglass.util import repr_from_attrs
 from hyperglass.constants import STATUS_CODE_MAP
 
 ErrorLevel = Literal["danger", "warning"]
@@ -56,16 +56,20 @@ class HyperglassError(Exception):
         return _json.dumps(self.__dict__())
 
     @staticmethod
-    def _safe_format(template: str, **kwargs: Dict[str, str]) -> str:
-        """Safely format a string template from keyword arguments."""
+    def _safe_format(template: str, **kwargs: Any) -> str:
+        """Substitute known ``{placeholders}`` in a template from kwargs.
 
-        keys = get_fmt_keys(template)
-        for key in keys:
-            if key not in kwargs:
-                kwargs.pop(key)
-            else:
-                kwargs[key] = str(kwargs[key])
-        return template.format(**kwargs)
+        Only ``{key}`` tokens whose key is present in ``kwargs`` are
+        replaced. Any other braces — unmatched placeholders, or literal
+        brace characters embedded in an upstream error body such as a dict
+        or JSON repr — are left untouched. This avoids feeding arbitrary
+        text to ``str.format`` (which would raise ``KeyError``/``ValueError``
+        on stray ``{...}`` tokens) so message formatting never crashes.
+        """
+        result = str(template)
+        for key, value in kwargs.items():
+            result = result.replace("{" + str(key) + "}", str(value))
+        return result
 
     def _parse_pydantic_errors(*errors: Dict[str, Any]) -> str:
         errs = ("\n",)
