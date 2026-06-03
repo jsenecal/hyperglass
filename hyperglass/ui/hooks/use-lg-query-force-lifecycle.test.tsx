@@ -58,7 +58,8 @@ const makeResponse = (output: string): Response =>
     text: async () => '',
   }) as unknown as Response;
 
-const makeWrapper = (qc: QueryClient) =>
+const makeWrapper =
+  (qc: QueryClient) =>
   ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );

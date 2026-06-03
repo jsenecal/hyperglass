@@ -54,4 +54,4 @@ jobs:
 
             - name: Tests
               working-directory: ${{ env.working-directory }}
-              run: pnpm run test
+              run: pnpm run test:coverage
