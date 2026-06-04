@@ -50,6 +50,7 @@ interface FormStateType<Opt extends SingleOption = SingleOption> {
   responses: Responses;
   selections: FormSelections<Opt>;
   status: FormStatus;
+  submissionId: string | null;
   target: Target;
   resolvedIsOpen: boolean;
 
@@ -64,6 +65,7 @@ interface FormStateType<Opt extends SingleOption = SingleOption> {
     Opt extends SingleOption,
     K extends keyof FormSelections<Opt> = keyof FormSelections<Opt>,
   >(field: K, value: FormSelections[K]): void;
+  setSubmissionId(value: string | null): void;
   setTarget(update: Partial<Target>): void;
   getDirective(): Directive | null;
   reset(): Promise<void>;
@@ -86,6 +88,7 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
   responses: {},
   selections: { queryLocation: [], queryType: null },
   status: 'form',
+  submissionId: null,
   target: { display: '' },
   resolvedIsOpen: false,
 
@@ -110,6 +113,10 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
 
   setTarget(update: Partial<Target>): void {
     set(state => ({ target: { ...state.target, ...update } }));
+  },
+
+  setSubmissionId(submissionId: string | null): void {
+    set({ submissionId });
   },
 
   resolvedOpen(): void {
@@ -209,6 +216,7 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
       responses: {},
       selections: { queryLocation: [], queryType: null },
       status: 'form',
+      submissionId: null,
       target: { display: '' },
       resolvedIsOpen: false,
     });
