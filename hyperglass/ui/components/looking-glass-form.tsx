@@ -13,6 +13,7 @@ import {
   QueryType,
   SubmitButton,
 } from '~/components';
+import { HistoryDisabledHint } from '~/components/history/history-disabled-hint';
 import { useConfig } from '~/context';
 import { FormRow } from '~/elements';
 import { useDevice, useFormState, useGreeting, useStrf } from '~/hooks';
@@ -231,12 +232,15 @@ export const LookingGlassForm = (): JSX.Element => {
               label={web.text.queryType}
               labelAddOn={
                 directive !== null && (
-                  <DirectiveInfoModal
-                    name="queryType"
-                    title={directive.name ?? null}
-                    item={directive.info ?? null}
-                    visible={selections.queryType !== null && directive.info !== null}
-                  />
+                  <>
+                    <DirectiveInfoModal
+                      name="queryType"
+                      title={directive.name ?? null}
+                      item={directive.info ?? null}
+                      visible={selections.queryType !== null && directive.info !== null}
+                    />
+                    <HistoryDisabledHint directiveHistory={directive.history} />
+                  </>
                 )
               }
             >
