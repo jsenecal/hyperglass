@@ -43,9 +43,11 @@ interface ResultProps {
   index: number;
   queryLocation: string;
   /** Snapshot from a share link — skips the live LG query and renders directly. */
-  snapshot?: ShareResponse;
-  /** When true, hides the ShareButton and RequeryButton (used on the share view page). */
+  snapshot?: ResultSnapshot;
+  /** When true, hides the RequeryButton (used on the share view page). */
   readOnly?: boolean;
+  /** Controls ShareButton visibility; defaults to !readOnly. */
+  showShare?: boolean;
 }
 
 const AnimatedAccordionItem = motion(AccordionItem);
@@ -63,7 +65,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   props: ResultProps,
   ref,
 ) => {
-  const { index, queryLocation, snapshot, readOnly = false } = props;
+  const { index, queryLocation, snapshot, readOnly = false, showShare = !readOnly } = props;
   const toast = useToast();
   const { web, cache, messages } = useConfig();
   const { index: indices, setIndex } = useAccordionContext();
@@ -291,7 +293,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
           {!snapshot && isStructuredOutput(data) && data.level === 'success' && tableComponent && (
             <Path device={deviceId} />
           )}
-          {!readOnly && data?.id && <ShareButton cacheId={data.id} />}
+          {showShare && data?.id && <ShareButton cacheId={data.id} />}
           <CopyButton copyValue={copyValue} isDisabled={!snapshot && isLoading} />
           {!readOnly && (
             <RequeryButton
