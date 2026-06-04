@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - [#304](https://github.com/thatmattlove/hyperglass/pull/304): Add FRR structured output for BGP Routes - @chriswiggins
 - Sharable result snapshots: clicking the new Share button on a result mints a `/result/<id>` URL (default 7-day TTL, operator-tunable via `cache.share_timeout`).
 - `params.public_url` (optional): when set, share URLs use this base; otherwise derived from request headers.
+- Per-browser query history on the landing page (Open / Share / Re-run / Re-run with new target / Delete), with an operator kill-switch (`cache.history_enabled`), retention limit (`cache.history_limit`), and per-directive opt-out (`directives.<id>.history`).
 
 ### Changed
 
