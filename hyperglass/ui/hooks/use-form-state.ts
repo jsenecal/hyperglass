@@ -2,7 +2,8 @@ import intersectionWith from 'lodash/intersectionWith';
 import plur from 'plur';
 import { useMemo } from 'react';
 import isEqual from 'react-fast-compare';
-import create from 'zustand';
+import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { queryClient } from '~/context';
 import { all, andJoin, dedupObjectArray, withDev } from '~/util';
 
@@ -227,7 +228,7 @@ export function useFormSelections<Opt extends SingleOption = SingleOption>(): Fo
 }
 
 export function useView(): FormStatus {
-  const { status, form } = useFormState(({ status, form }) => ({ status, form }));
+  const { status, form } = useFormState(useShallow(({ status, form }) => ({ status, form })));
   return useMemo(() => {
     const ready = all(
       status === 'results',
@@ -240,6 +241,8 @@ export function useView(): FormStatus {
 }
 
 export function useFormInteractive(): boolean {
-  const { status, selections } = useFormState(({ status, selections }) => ({ status, selections }));
+  const { status, selections } = useFormState(
+    useShallow(({ status, selections }) => ({ status, selections })),
+  );
   return status === 'results' || selections.queryLocation.length > 0;
 }

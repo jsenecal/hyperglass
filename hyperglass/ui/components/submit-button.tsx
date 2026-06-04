@@ -15,6 +15,7 @@ import {
 import { forwardRef } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Else, If, Then } from 'react-if';
+import { useShallow } from 'zustand/react/shallow';
 import { ResolvedTarget } from '~/components';
 import { DynamicIcon } from '~/elements';
 import { useColorValue, useFormState, useMobile } from '~/hooks';
@@ -106,11 +107,13 @@ export const SubmitButton = (props: SubmitButtonProps): JSX.Element => {
     resolvedIsOpen,
     resolvedClose,
     reset: resetForm,
-  } = useFormState(({ resolvedIsOpen, resolvedClose, reset }) => ({
-    resolvedIsOpen,
-    resolvedClose,
-    reset,
-  }));
+  } = useFormState(
+    useShallow(({ resolvedIsOpen, resolvedClose, reset }) => ({
+      resolvedIsOpen,
+      resolvedClose,
+      reset,
+    })),
+  );
 
   const { reset } = useFormContext();
 

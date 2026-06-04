@@ -1,16 +1,16 @@
-import { useMemo } from 'react';
-import create from 'zustand';
 import { Box, Button, HStack, useRadio, useRadioGroup } from '@chakra-ui/react';
+import { useMemo } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { components } from 'react-select';
+import { create } from 'zustand';
 import { Select } from '~/components';
-import { useFormState, useFormSelections } from '~/hooks';
 import { isSingleValue } from '~/components/select';
+import { useFormSelections, useFormState } from '~/hooks';
 
 import type { UseRadioProps } from '@chakra-ui/react';
 import type { MenuListProps } from 'react-select';
-import type { SingleOption, OptionGroup, OptionsOrGroup, OnChangeArgs } from '~/types';
 import type { SelectOnChange } from '~/components/select';
+import type { OnChangeArgs, OptionGroup, OptionsOrGroup, SingleOption } from '~/types';
 
 type QueryTypeOption = SingleOption<{ group?: string }>;
 
