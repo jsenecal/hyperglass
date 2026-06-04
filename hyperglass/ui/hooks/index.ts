@@ -13,3 +13,4 @@ export * from './use-share';
 export * from './use-strf';
 export * from './use-table-to-string';
 export * from './use-wtf';
+export * from './use-query-history';
