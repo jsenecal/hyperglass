@@ -1,3 +1,22 @@
+import type { ErrorLevels } from '~/types';
+
+/**
+ * Map a backend response level onto an alert status.
+ *
+ * `ResponseLevel` includes `danger`, which has no alert-status equivalent and
+ * renders as `error`. (Regression guard: an earlier `case 'warning' || 'error'`
+ * expression made the `error` branch unreachable — see issue #106.)
+ */
+export function levelToStatus(level: ResponseLevel): ErrorLevels {
+  switch (level) {
+    case 'success':
+    case 'warning':
+      return level;
+    default:
+      return 'error';
+  }
+}
+
 export function all<I extends unknown>(...iter: I[]): boolean {
   for (const i of iter) {
     if (!i) {
