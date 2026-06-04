@@ -17,7 +17,7 @@ import { useConfig } from '~/context';
 import { FormRow } from '~/elements';
 import { useDevice, useFormState, useGreeting, useStrf } from '~/hooks';
 import { Directive, isQueryField, isString } from '~/types';
-import { isFQDN } from '~/util';
+import { isFQDN, makeSubmissionId } from '~/util';
 
 import type { FormData, OnChangeArgs } from '~/types';
 
@@ -39,6 +39,7 @@ export const LookingGlassForm = (): JSX.Element => {
     useShallow(({ form, filtered, selections }) => ({ form, filtered, selections })),
   );
 
+  const setSubmissionId = useFormState(s => s.setSubmissionId);
   const getDirective = useFormState(useCallback(s => s.getDirective, []));
   const resolvedOpen = useFormState(useCallback(s => s.resolvedOpen, []));
   const resetForm = useFormState(useCallback(s => s.reset, []));
@@ -106,6 +107,9 @@ export const LookingGlassForm = (): JSX.Element => {
       location.reload();
       return;
     }
+
+    // Stamp this submission so its per-device results group into one history entry.
+    setSubmissionId(makeSubmissionId());
 
     // Determine if queryTarget is an FQDN.
     const isFqdn = isFqdnQuery(form.queryTarget, directive?.fieldType ?? null);
