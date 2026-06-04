@@ -42,9 +42,9 @@ describe('useQueryHistory.record', () => {
 
   it('groups multiple devices of the same submission into one entry', () => {
     useQueryHistory.getState().record(input());
-    useQueryHistory.getState().record(
-      input({ deviceId: 'edge2', deviceLabel: 'Edge 2', snapshot: snapshot('B') }),
-    );
+    useQueryHistory
+      .getState()
+      .record(input({ deviceId: 'edge2', deviceLabel: 'Edge 2', snapshot: snapshot('B') }));
     const { entries } = useQueryHistory.getState();
     expect(entries).toHaveLength(1);
     expect(Object.keys(entries[0].results).sort()).toEqual(['core1', 'edge2']);

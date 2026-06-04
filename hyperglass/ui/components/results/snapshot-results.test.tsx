@@ -78,7 +78,9 @@ const snap = (location: string, output: string) =>
 
 const Providers = ({ children }: { children: React.ReactNode }) => (
   <ChakraProvider>
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       {children}
     </QueryClientProvider>
   </ChakraProvider>

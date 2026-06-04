@@ -78,7 +78,9 @@ const snapshot = {
 const renderResult = (props: Record<string, unknown>) =>
   render(
     <ChakraProvider>
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
         <Accordion>
           <Result index={0} queryLocation="core1" snapshot={snapshot} {...props} />
         </Accordion>
