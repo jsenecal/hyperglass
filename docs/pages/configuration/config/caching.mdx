@@ -12,9 +12,15 @@ hyperglass automatically caches responses to reduce the number of times devices 
 | `cache.share_timeout`        | Number  | 604800        | Seconds to retain a shared snapshot (default 7 days).                                               |
 | `cache.share_sliding`        | Boolean | False         | If true, viewing a share extends its TTL by another `share_timeout`.                                |
 | `cache.refresh_min_interval` | Number  | 120           | Minimum seconds between manual refreshes from the UI.                                               |
+| `cache.history_enabled`      | Boolean | True          | Enable the per-browser query history panel on the landing page. Disabling requires a UI rebuild.    |
+| `cache.history_limit`        | Number  | 10            | Maximum number of recent queries retained per browser. Disabling requires a UI rebuild.             |
 
 <Callout type="warning">
     Disabling `share_enabled` (or changing any cache UI knob) requires a UI rebuild — the values are baked into the static `hyperglass.json` at build time.
+</Callout>
+
+<Callout type="warning" title="Privacy">
+    Query history stores query targets (e.g. IP addresses, BGP communities) in the **user's browser localStorage** — it is never sent to the server and is not shared across devices or browsers. On shared, public, or kiosk terminals, consider setting `history_enabled: false` or lowering `history_limit` to minimise exposure of previous users' queries. Only successful query results are recorded.
 </Callout>
 
 ### Example with Defaults
@@ -27,4 +33,6 @@ cache:
     share_timeout: 604800
     share_sliding: false
     refresh_min_interval: 120
+    history_enabled: true
+    history_limit: 10
 ```

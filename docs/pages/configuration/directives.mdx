@@ -26,6 +26,7 @@ Each directive has the following options:
 | `groups`             | List of Strings |               | List of names by which directives are grouped in the UI.                                                                                                                   |
 | `multiple`           | Boolean         | `false`       | Command supports receiving multiple values. For example, Cisco IOS's `show ip bgp community` accepts multiple communities as arguments.                                    |
 | `multiple_separator` | String          | `" "`         | String by which multiple values are separated. For example, a list of values `[65001, 65002, 65003]` would be rendered as `65001 65002 65003` for when the command is run. |
+| `history`            | Boolean         | `true`        | Whether queries of this directive type are saved to the browser's query history. Set to `false` to keep sensitive query types (e.g. internal diagnostic commands) out of history. When `cache.history_enabled` is `true` and this field is `false`, the UI shows a "not saved to history" hint. |
 
 ## Rules
 
