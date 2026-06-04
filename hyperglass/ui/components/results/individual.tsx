@@ -18,6 +18,7 @@ import { forwardRef, memo, useEffect, useMemo, useState } from 'react';
 import isEqual from 'react-fast-compare';
 import { Else, If, Then } from 'react-if';
 import { BGPTable, Path, TextOutput } from '~/components';
+import { HistoryDisabledHint } from '~/components/history/history-disabled-hint';
 import { useConfig } from '~/context';
 import { Countdown, DynamicIcon } from '~/elements';
 import {
@@ -329,6 +330,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
             <Path device={deviceId} />
           )}
           {showShare && data?.id && <ShareButton cacheId={data.id} />}
+          {!snapshot && <HistoryDisabledHint directiveHistory={getDirective()?.history ?? true} />}
           <CopyButton copyValue={copyValue} isDisabled={!snapshot && isLoading} />
           {!readOnly && (
             <RequeryButton
