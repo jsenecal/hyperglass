@@ -80,6 +80,11 @@ class Messages(HyperglassModel):
         title="No Output",
         description="Displayed when hyperglass can connect to a device and execute a query, but the response is empty.",
     )
+    history_device_unavailable: str = Field(
+        "The device for this saved query is no longer available.",
+        title="History Device Unavailable",
+        description="Displayed when re-running a saved query whose device no longer exists.",
+    )
 
     def has(self, attr: str) -> bool:
         """Determine if message type exists in Messages model."""
