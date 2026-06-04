@@ -25,16 +25,12 @@ def test_cache_share_disabled():
 
 
 def test_cache_history_defaults():
-    from hyperglass.models.config.cache import Cache
-
     cache = Cache()
     assert cache.history_enabled is True
     assert cache.history_limit == 10
 
 
 def test_cache_history_overrides():
-    from hyperglass.models.config.cache import Cache
-
     cache = Cache(history_enabled=False, history_limit=25)
     assert cache.history_enabled is False
     assert cache.history_limit == 25

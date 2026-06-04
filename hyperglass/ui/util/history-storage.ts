@@ -23,6 +23,7 @@ export function shrinkSerialized(serialized: string): string | null {
     const results = entry.results ?? {};
     for (const key of Object.keys(results)) {
       if (results[key] && 'output' in results[key]) {
+        // biome-ignore lint/performance/noDelete: key must be absent (not undefined) so JSON.stringify omits it; verified by test
         delete results[key].output;
         return JSON.stringify(parsed);
       }
