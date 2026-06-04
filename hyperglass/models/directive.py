@@ -271,6 +271,7 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
     groups: t.List[str] = []
     multiple: bool = False
     multiple_separator: str = " "
+    history: bool = True
 
     @field_validator("rules", mode="before")
     @classmethod
@@ -341,6 +342,7 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
             "groups": self.groups,
             "description": self.field.description if self.field is not None else '',
             "info": None,
+            "history": self.history,
         }
 
         if self.info is not None:
