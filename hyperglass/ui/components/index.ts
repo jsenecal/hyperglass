@@ -11,6 +11,7 @@ export * from './footer';
 export * from './form-field';
 export * from './greeting';
 export * from './header';
+export * from './history';
 export * from './layout';
 export * from './location-card';
 export * from './looking-glass-form';
