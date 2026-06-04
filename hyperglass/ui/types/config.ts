@@ -14,6 +14,7 @@ interface _Messages {
   connection_error: string;
   authentication_error: string;
   no_output: string;
+  history_device_unavailable: string;
 }
 
 interface _ThemeConfig {
@@ -57,6 +58,16 @@ interface _Text {
   share_run_fresh_query: string;
   refresh_cooldown: string;
   requery_tooltip: string;
+  history_title: string;
+  history_clear_all: string;
+  history_clear_confirm: string;
+  history_back: string;
+  history_open: string;
+  history_share: string;
+  history_rerun: string;
+  history_new_target: string;
+  history_delete: string;
+  history_disabled_hint: string;
 }
 
 interface _Greeting {
@@ -118,6 +129,7 @@ type _DirectiveBase = {
   description: string;
   groups: string[];
   info: string | null;
+  history: boolean;
 };
 
 type _DirectiveOption = {
@@ -152,6 +164,8 @@ interface _Cache {
   share_enabled: boolean;
   share_timeout: number;
   refresh_min_interval: number;
+  history_enabled: boolean;
+  history_limit: number;
 }
 
 type _Config = _ConfigDeep & _ConfigShallow;
