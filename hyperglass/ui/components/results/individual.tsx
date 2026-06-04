@@ -26,6 +26,7 @@ import {
   useFormState,
   useLGQuery,
   useMobile,
+  useRecordHistory,
   useStrf,
   useTableToString,
 } from '~/hooks';
@@ -82,6 +83,9 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
 
   const addResponse = useFormState(s => s.addResponse);
   const form = useFormState(s => s.form);
+  const recordHistory = useRecordHistory();
+  const getDirective = useFormState(s => s.getDirective);
+  const submissionId = useFormState(s => s.submissionId);
   const [errorLevel, _setErrorLevel] = useState<ErrorLevels>('error');
   const [force, setForce] = useState<true | undefined>(undefined);
   // Track when data last arrived for the cooldown gate. Initialise to mount
@@ -178,6 +182,37 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
     // fetch cycle. Re-running on any of those would risk double-firing the
     // setQueryData / setForce(undefined) calls.
   }, [dataUpdatedAt, isFetching]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Record a successful result into query history. Keyed on dataUpdatedAt +
+  // submissionId so it fires for both fresh and cache-served settles, once per
+  // run. Skipped for snapshot/read-only renders. The global + per-directive
+  // gates live inside useRecordHistory.
+  useEffect(() => {
+    if (snapshot || readOnly) return;
+    if (data?.level === 'success' && submissionId && device !== null) {
+      const directive = getDirective();
+      recordHistory({
+        submissionId,
+        deviceId: device.id,
+        deviceLabel: device.name,
+        directiveHistory: directive?.history ?? true,
+        query: { queryType: form.queryType, queryTarget: form.queryTarget },
+        labels: { type: directive?.name ?? form.queryType, target: form.queryTarget.join(' ') },
+        snapshot: {
+          id: data.id,
+          output: data.output,
+          format: data.format,
+          level: data.level,
+          timestamp: data.timestamp,
+          runtime: data.runtime,
+          cached: data.cached,
+          keywords: data.keywords ?? [],
+          queryLabels: { location: device.name, type: directive?.name ?? form.queryType },
+        },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataUpdatedAt, submissionId]);
 
   const isError = useMemo(() => isLGOutputOrError(data), [data, error]);
 
