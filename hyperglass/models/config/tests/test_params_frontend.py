@@ -34,6 +34,8 @@ def test_ui_params_cache_projection_excludes_private_fields():
         "shareEnabled",
         "shareTimeout",
         "refreshMinInterval",
+        "historyEnabled",
+        "historyLimit",
     }
 
 
@@ -45,3 +47,11 @@ def test_ui_params_export_excludes_public_url():
 
     ui = init_ui_params(params=Params(), devices=Devices())
     assert "publicUrl" not in ui.export_dict(by_alias=True)
+
+
+def test_frontend_includes_cache_history_fields():
+    """Cache history fields must be projected to frontend()."""
+    p = Params()
+    fe = p.frontend()
+    assert fe["cache"]["history_enabled"] is True
+    assert fe["cache"]["history_limit"] == 10

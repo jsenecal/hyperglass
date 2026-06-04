@@ -166,6 +166,8 @@ class Params(ParamsPublic, HyperglassModel):
                     "share_enabled",
                     "share_timeout",
                     "refresh_min_interval",
+                    "history_enabled",
+                    "history_limit",
                 },
                 "developer_mode": ...,
                 "primary_asn": ...,
