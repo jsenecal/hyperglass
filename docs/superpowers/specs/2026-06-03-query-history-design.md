@@ -18,7 +18,8 @@ This builds directly on the already-merged **share-results** feature (`/api/quer
 - Surface them on the landing page, below the form, on the clean (pristine) form view.
 - Per entry, offer four actions plus delete: **Open** (locally-cached output), **Share** (single-device, reusing share-results), **Re-run**, **New target** (re-run with a different target), **Delete**.
 - Keep a **timeline** of runs — repeated runs of the same query are distinct entries so a user can see how output evolved.
-- Operator-configurable: a kill-switch and a retention count, flowing through the same build-time config path as `share_enabled`.
+- Operator-configurable: a global kill-switch, a retention count, and a **per-directive opt-out** (for sensitive query types), flowing through the existing config paths.
+- **Frontend hint** when the selected query type has history disabled, so the absence of a saved entry is explained rather than mysterious.
 - No hard-coded user-visible strings (CLAUDE.md).
 - Mobile-friendly and Lighthouse-100 accessible.
 
@@ -44,6 +45,7 @@ This builds directly on the already-merged **share-results** feature (`/api/quer
 | 7 | **Inline icon-button row per entry**, reusing the result-header idiom (ghost `Button` + `DynamicIcon` + `Tooltip`). | Visual consistency with the existing result controls. |
 | 8 | **Row Share only for single-device entries.** Multi-device entries' Share icon Opens the entry, where each rendered `Result` carries its own per-device `ShareButton`. | A multi-device entry has one `cacheId` per device — a single row-level share is ambiguous. |
 | 9 | **Zustand store + `persist` middleware** (Approach 1), not a bespoke hook or the existing form store. | Idiomatic here; `persist` handles serialization/versioning; keeps the ephemeral `useFormState` clean. |
+| 10 | **Per-directive history opt-out** via a `history: bool = True` field on the `Directive` model. Effective recording = `cache.history_enabled` **AND** `directive.history`. When the global is on but the directive opts out, the UI shows a hint that this query type isn't saved. | Some query types expose sensitive targets/output that shouldn't persist in localStorage; per-directive control is finer than the global switch, and directives already carry their own UI-affecting fields. |
 
 ## Architecture
 
@@ -108,12 +110,15 @@ Device results arrive asynchronously (each `Result` runs its own `useLGQuery`). 
 
 ```ts
 useEffect(() => {
-  if (!historyEnabled || snapshot || readOnly) return;        // skip share/history-open renders
+  // skip when disabled globally or per-directive, and on share/history-open renders
+  if (!historyEnabled || !directiveHistory || snapshot || readOnly) return;
   if (data?.level === 'success' && submissionId) {
     recordHistory({ submissionId, deviceId, deviceLabel, query, labels, snapshot: toSnapshot(data), limit });
   }
 }, [dataUpdatedAt, submissionId]);
 ```
+
+`directiveHistory` is the selected directive's `history` flag, looked up from `form.queryType`. `useRecordHistory` no-ops when either the global switch or the directive flag is off, so a directive opt-out is enforced at the recording site regardless of caller.
 
 `record()` is an **idempotent upsert** by `submissionId`: create the entry if absent (stamp `savedAt`), set `results[deviceId]`, merge the device label into `labels.locations`, add `deviceId` to `query.queryLocation`, and move the entry to the front. A force-refresh (same `submissionId`) just overwrites that run's snapshot. The existing in-memory `addResponse(device.id, data)` is left untouched.
 
@@ -156,6 +161,7 @@ interface QueryHistoryState {
 
 - **`components/history/recent-queries.tsx`** — list container. Renders only when `cache.historyEnabled` AND `entries.length > 0` AND `!useFormInteractive()` (pristine landing view), and only after `persist` rehydration (avoids `next export` hydration mismatch). Header: `historyTitle` label + a Clear-all button that confirms (Chakra `AlertDialog`/`Popover`) before `clear()`.
 - **`components/history/history-entry-row.tsx`** — one row per entry, result-header button idiom. Left: location label(s) · type label · target · prominent relative timestamp (`dayjs().fromNow()`). Right icon row: **Open** (`FiEye`), **Share** (`FiShare2`, single-device only — renders the existing `ShareButton` with `cacheId`), **Re-run** (`FiRepeat`), **New target** (`FiEdit`), **Delete** (`FiTrash2`). Icon-only buttons carry `aria-label`s from config.
+- **`components/history/history-disabled-hint.tsx`** — a small icon (`FiEyeOff`) + `Tooltip` carrying the config string `historyDisabledHint`. Rendered when `cache.historyEnabled && selectedDirective.history === false`. Placed (a) in the form next to the Query Type field, via the existing `labelAddOn` slot already used by `DirectiveInfoModal`, and (b) in the live result header, so the "not saved" state is visible both before and after submitting. Hidden entirely when global history is off (nothing is saved regardless, so the per-directive note would be noise).
 
 ### View switch — `pages/index.tsx`
 
@@ -181,14 +187,14 @@ else → <LookingGlassForm /> + <RecentQueries />
 - `Result.snapshot` prop type: `ShareResponse` → `ResultSnapshot` (`ShareResponse extends ResultSnapshot`; every field the component reads is already in `ResultSnapshot`).
 - Decouple the overloaded `readOnly`: add `showShare?: boolean` (default `!readOnly`). Share render → `{showShare && data?.id && <ShareButton/>}`; Requery stays `{!readOnly && …}`. History-open passes `readOnly` (no Requery) **+ `showShare`** (per-device Share visible) — enabling multi-device sharing after Open. `pages/result/[id].tsx` keeps `readOnly` (Share stays hidden there, unchanged behavior).
 
-### TypeScript types — `types/config.d.ts`, `types/globals.d.ts`
+### TypeScript types — `types/config.ts`, `types/globals.d.ts`
 
-- `config.d.ts`: add `historyEnabled: boolean`, `historyLimit: number` under `cache`; add the new `web.text` history strings; add `messages.historyDeviceUnavailable`.
+- `config.ts`: add `history_enabled: boolean`, `history_limit: number` under the cache type (camelized to `historyEnabled`/`historyLimit`); add `history: boolean` to `_DirectiveBase` (→ `directive.history`); add the new `web.text` history strings; add `messages.historyDeviceUnavailable`.
 - `globals.d.ts` (or wherever response types live): add `ResultSnapshot`; make `ShareResponse extends ResultSnapshot`.
 
 ### i18n — no hard-coded strings
 
-New `web.text` fields (defaults in the backend `Text` model, projected to the frontend, added to the UI `Text` type — same path share-results used): `historyTitle`, `historyClearAll`, `historyClearConfirm`, `historyBack`, `historyOpen`, `historyShare`, `historyRerun`, `historyNewTarget`, `historyDelete`. New `messages.historyDeviceUnavailable` (error-shaped). Relative time via `dayjs().fromNow()` — no literal copy.
+New `web.text` fields (defaults in the backend `Text` model, projected to the frontend, added to the UI `Text` type — same path share-results used): `historyTitle`, `historyClearAll`, `historyClearConfirm`, `historyBack`, `historyOpen`, `historyShare`, `historyRerun`, `historyNewTarget`, `historyDelete`, `historyDisabledHint`. New `messages.historyDeviceUnavailable` (error-shaped). Relative time via `dayjs().fromNow()` — no literal copy.
 
 ## Backend changes
 
@@ -217,6 +223,17 @@ Extend the `cache` include set so the two new fields ship in build-time `hypergl
 
 `/api/info` and `APIParams` are untouched. Like all UI config, flipping these requires a UI rebuild — documented alongside the feature.
 
+### `hyperglass/models/directive.py`
+
+Add `history: bool = True` to the `Directive` model. Project it to the UI by adding `"history": self.history` to the dict returned by `Directive.frontend()` (which whitelists UI-visible fields). `BuiltinDirective` inherits the field; built-ins default to `True`. In directive YAML it reads naturally:
+
+```yaml
+directives:
+  my-sensitive-directive:
+    name: Sensitive Lookup
+    history: false
+```
+
 ### Backend `Text` model
 
 Add the new history string fields (with defaults) to the `Text` model and ensure they project to the frontend `web.text`, mirroring how share-results added its strings.
@@ -225,7 +242,9 @@ Add the new history string fields (with defaults) to the `Text` model and ensure
 
 | Case | Behavior |
 |------|----------|
-| `history_enabled = false` | Recording no-ops; `RecentQueries` hidden. Existing localStorage entries remain but are never shown. |
+| `history_enabled = false` | Recording no-ops; `RecentQueries` hidden; per-directive hint suppressed. Existing localStorage entries remain but are never shown. |
+| Directive `history: false` | That query type is never recorded; the form (next to Query Type) and the result header show the hint — but only while global history is on. |
+| Directive toggled off after entries exist | Previously-recorded entries remain (no retroactive deletion); only future runs are skipped. |
 | Output too big to store | Entry kept without `output`; row swaps Open → Re-run (tooltip explains). |
 | Device renamed/removed | Open still works (frozen snapshot/labels). Re-run / New-target hit the stale-device guard → toast `historyDeviceUnavailable`. |
 | `cacheId` aged out of Redis | Share returns 410 → existing `shareCreateExpired` message. |
@@ -244,13 +263,15 @@ Add the new history string fields (with defaults) to the `Text` model and ensure
 - **Store** (mocked localStorage): upsert + group by `submissionId`; promote-to-front; N-cap eviction; quota → drop-oldest then strip-output; `remove`; `clear`; persist round-trip; `crypto.randomUUID` fallback.
 - **`RecentQueries`**: hidden when disabled / empty / form-interactive; renders rows; clear-all confirm flow; renders only after rehydration.
 - **`HistoryEntryRow`**: Share icon only on single-device entries; Open → `open()`; Delete → `remove()`; Re-run sets store + status + new `submissionId`; New-target sets store + empty target; stale-device guard toasts; output-stripped entry swaps Open → Re-run.
-- **`Result`**: `showShare` defaults to `!readOnly`; history mode (readOnly + showShare) shows Share, hides Requery; snapshot renders.
+- **`Result`**: `showShare` defaults to `!readOnly`; history mode (readOnly + showShare) shows Share, hides Requery; snapshot renders; recording is skipped when `directive.history === false`.
 - **`SnapshotResults`**: renders N results for a multi-device entry.
+- **`HistoryDisabledHint`**: renders when `historyEnabled && !directive.history`; hidden when global history is off or the directive allows history.
 
 ### Backend (pytest, `hyperglass/`)
 
 - `Cache` defaults: `history_enabled is True`, `history_limit == 10`.
 - `Params.frontend()` projects `history_enabled` / `history_limit` into the cache include set (and they appear in the serialized output).
+- `Directive.history` defaults to `True`; `Directive.frontend()` includes `history` in its output.
 - `Text` model exposes the new history string defaults and they project to the frontend.
 
 ### Manual
@@ -260,6 +281,7 @@ Add the new history string fields (with defaults) to the `Text` model and ensure
 - Single-device query: row Share mints a link (or 410s gracefully after `cache.timeout`).
 - Re-run and New-target prefill correctly, including multi-device.
 - Delete and Clear-all behave; survive reload; respect `history_limit`; `history_enabled=false` hides the list after a rebuild.
+- A directive with `history: false`: queries of that type never appear in history, and the hint shows next to Query Type and in the result header (and disappears entirely when global history is off).
 
 ## Risks
 
