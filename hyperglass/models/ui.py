@@ -21,6 +21,8 @@ class UICache(HyperglassModel):
     share_enabled: bool
     share_timeout: int
     refresh_min_interval: int
+    history_enabled: bool
+    history_limit: int
 
 
 class UIDirective(HyperglassModel):
