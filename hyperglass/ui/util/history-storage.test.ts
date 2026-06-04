@@ -1,8 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { shrinkSerialized } from './history-storage';
 
-const make = (entries: unknown[]) =>
-  JSON.stringify({ state: { entries }, version: 1 });
+const make = (entries: unknown[]) => JSON.stringify({ state: { entries }, version: 1 });
 
 describe('shrinkSerialized', () => {
   it('strips output from the oldest entry that still has one', () => {

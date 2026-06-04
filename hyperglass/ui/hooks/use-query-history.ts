@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { historyStorage } from '~/util/history-storage';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { withDev } from '~/util';
+import { historyStorage } from '~/util/history-storage';
 
 export interface HistoryEntry {
   id: string;

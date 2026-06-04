@@ -35,6 +35,7 @@ class UIDirective(HyperglassModel):
     description: str
     info: t.Optional[str] = None
     options: t.Optional[t.List[t.Dict[str, t.Any]]] = None
+    history: bool = True
 
 
 class UILocation(HyperglassModel):

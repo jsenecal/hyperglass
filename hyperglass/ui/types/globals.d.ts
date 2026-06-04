@@ -57,6 +57,7 @@ export declare global {
     id: string;
     output: QueryResponse['output'];
     format: QueryResponse['format'];
+    // Backend stores 'success' for cached/shared results; typed as ResponseLevel for future warning/error support.
     level: ResponseLevel;
     timestamp: string;
     runtime: number;
