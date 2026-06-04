@@ -22,9 +22,14 @@ vi.mock('~/components/results/share-button', () => ({
   ShareButton: () => <div data-testid="share-button" />,
 }));
 
+// Mutable so individual tests can control which devices `useDevice` resolves.
+const configState = vi.hoisted(() => ({ devices: [] as unknown[] }));
+
 vi.mock('~/context', () => ({
+  // useFormState.reset() evicts react-query caches via the context's queryClient.
+  queryClient: { removeQueries: vi.fn() },
   useConfig: () => ({
-    devices: [],
+    devices: configState.devices,
     web: {
       text: {
         historyOpen: 'Open',
@@ -39,6 +44,7 @@ vi.mock('~/context', () => ({
   }),
 }));
 
+import { useFormState } from '~/hooks/use-form-state';
 import { useQueryHistory } from '~/hooks/use-query-history';
 import type { HistoryEntry } from '~/hooks/use-query-history';
 import { HistoryEntryRow } from './history-entry-row';
@@ -68,6 +74,19 @@ const singleEntry: HistoryEntry = {
   results: { core1: snapshot('cache-single') },
 };
 
+const device = (id: string, name: string) =>
+  ({
+    id,
+    name,
+    directives: [{ id: 'bgp_route', name: 'BGP Route', groups: ['ip'] }],
+  }) as never;
+
+// Shape consumed by useDevice: groups of locations.
+const deviceGroup = {
+  group: 'All Devices',
+  locations: [device('core1', 'Core 1'), device('edge2', 'Edge 2')],
+};
+
 const multiEntry: HistoryEntry = {
   id: 'entry-multi',
   savedAt: Date.now() - 120_000,
@@ -94,8 +113,10 @@ const renderRow = (entry: HistoryEntry) =>
     </ChakraProvider>,
   );
 
-beforeEach(() => {
+beforeEach(async () => {
+  configState.devices = [deviceGroup];
   useQueryHistory.setState({ entries: [singleEntry, multiEntry], openId: null });
+  await useFormState.getState().reset();
 });
 
 // ---------------------------------------------------------------------------
@@ -124,5 +145,49 @@ describe('HistoryEntryRow', () => {
     fireEvent.click(screen.getByLabelText('Delete'));
     const ids = useQueryHistory.getState().entries.map(e => e.id);
     expect(ids).not.toContain(singleEntry.id);
+  });
+
+  it('clicking Re-run prefills the form, stamps a new submissionId, and shows results', () => {
+    useFormState.getState().setSubmissionId('previous-submission');
+    renderRow(singleEntry);
+    fireEvent.click(screen.getByLabelText('Run again'));
+    const state = useFormState.getState();
+    expect(state.form.queryLocation).toEqual(['core1']);
+    expect(state.form.queryType).toBe('bgp_route');
+    expect(state.form.queryTarget).toEqual(['192.0.2.1']);
+    expect(state.submissionId).not.toBeNull();
+    expect(state.submissionId).not.toBe('previous-submission');
+    expect(state.status).toBe('results');
+  });
+
+  it('clicking New target prefills the form with queryTarget cleared and stays on the form', () => {
+    useFormState.getState().setStatus('results');
+    renderRow(singleEntry);
+    fireEvent.click(screen.getByLabelText('Run with a new target'));
+    const state = useFormState.getState();
+    expect(state.form.queryLocation).toEqual(['core1']);
+    expect(state.form.queryType).toBe('bgp_route');
+    expect(state.form.queryTarget).toEqual([]);
+    expect(state.status).toBe('form');
+    expect(state.submissionId).toBeNull();
+  });
+
+  it('Re-run aborts with a toast when no device resolves', async () => {
+    configState.devices = [];
+    renderRow(singleEntry);
+    fireEvent.click(screen.getByLabelText('Run again'));
+    expect(await screen.findByText('Device unavailable.')).toBeInTheDocument();
+    const state = useFormState.getState();
+    expect(state.submissionId).toBeNull();
+    expect(state.status).toBe('form');
+  });
+
+  it('New target aborts with a toast when no device resolves', async () => {
+    configState.devices = [];
+    useFormState.getState().setStatus('results');
+    renderRow(singleEntry);
+    fireEvent.click(screen.getByLabelText('Run with a new target'));
+    expect(await screen.findByText('Device unavailable.')).toBeInTheDocument();
+    expect(useFormState.getState().status).toBe('results');
   });
 });
