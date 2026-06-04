@@ -1,5 +1,28 @@
 import { describe, expect, it, test } from 'vitest';
-import { all, andJoin, chunkArray, dedupObjectArray, entries, isFQDN } from './common';
+import {
+  all,
+  andJoin,
+  chunkArray,
+  dedupObjectArray,
+  entries,
+  isFQDN,
+  levelToStatus,
+} from './common';
+
+describe('levelToStatus - map backend response level to alert status', () => {
+  it('passes success through', () => {
+    expect(levelToStatus('success')).toBe('success');
+  });
+  it('passes warning through', () => {
+    expect(levelToStatus('warning')).toBe('warning');
+  });
+  it('maps error to error (regression: was unreachable via `warning || error` case)', () => {
+    expect(levelToStatus('error')).toBe('error');
+  });
+  it("maps danger to error (no 'danger' alert status exists)", () => {
+    expect(levelToStatus('danger')).toBe('error');
+  });
+});
 
 test('all - all items are truthy', () => {
   // biome-ignore lint/suspicious/noSelfCompare: because this is a test, duh

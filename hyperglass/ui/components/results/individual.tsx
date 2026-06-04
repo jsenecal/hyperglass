@@ -30,6 +30,7 @@ import {
   useTableToString,
 } from '~/hooks';
 import { isStringOutput, isStructuredOutput } from '~/types';
+import { levelToStatus } from '~/util';
 import { CopyButton } from './copy-button';
 import { FormattedError } from './formatted-error';
 import { isFetchError, isLGError, isLGOutputOrError, isStackError } from './guards';
@@ -87,16 +88,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   const [lastResponseAt, setLastResponseAt] = useState<number>(() => Date.now());
 
   const setErrorLevel = (level: ResponseLevel): void => {
-    let e: ErrorLevels = 'error';
-    switch (level) {
-      case 'success':
-        e = level;
-        break;
-      case 'warning' || 'error':
-        e = 'warning';
-        break;
-    }
-    _setErrorLevel(e);
+    _setErrorLevel(levelToStatus(level));
   };
 
   // When snapshot is provided, coerce it to a QueryResponse shape so all
