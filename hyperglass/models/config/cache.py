@@ -13,3 +13,5 @@ class Cache(HyperglassModel):
     share_timeout: int = 604800
     share_sliding: bool = False
     refresh_min_interval: int = 120
+    history_enabled: bool = True
+    history_limit: int = 10
