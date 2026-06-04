@@ -134,6 +134,16 @@ class Text(HyperglassModel):
     share_run_fresh_query: str = "Run a fresh query"
     refresh_cooldown: str = "Refresh available in {seconds}s"  # Formatted by Javascript
     requery_tooltip: str = "Reload Query"
+    history_title: str = "Recent queries"
+    history_clear_all: str = "Clear all"
+    history_clear_confirm: str = "Clear all saved queries?"
+    history_back: str = "Back"
+    history_open: str = "Open"
+    history_share: str = "Share"
+    history_rerun: str = "Run again"
+    history_new_target: str = "Run with a new target"
+    history_delete: str = "Delete"
+    history_disabled_hint: str = "Results for this query type are not saved to history."
 
     @field_validator("cache_prefix")
     def validate_cache_prefix(cls: "Text", value: str) -> str:
