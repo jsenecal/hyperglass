@@ -1,6 +1,7 @@
 import { Flex, Stack, Wrap, chakra } from '@chakra-ui/react';
 import { useMemo } from 'react';
 import { useFormContext } from 'react-hook-form';
+import { useShallow } from 'zustand/react/shallow';
 import { LocationCard, Select } from '~/components';
 import { isMultiValue, isSingleValue } from '~/components/select';
 import { useConfig } from '~/context';
@@ -54,7 +55,7 @@ export const QueryLocation = (props: QueryLocationProps): JSX.Element => {
   } = useFormContext<FormData>();
   const selections = useFormState(s => s.selections);
   const setSelection = useFormState(s => s.setSelection);
-  const { form, filtered } = useFormState(({ form, filtered }) => ({ form, filtered }));
+  const { form, filtered } = useFormState(useShallow(({ form, filtered }) => ({ form, filtered })));
   const options = useMemo(() => buildOptions(devices), [devices]);
 
   const element = useMemo(() => {

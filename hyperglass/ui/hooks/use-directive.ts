@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useFormState } from './use-form-state';
 
 import type { Directive } from '~/types';
 
 export function useDirective(): Nullable<Directive> {
-  const { getDirective, form } = useFormState(({ getDirective, form }) => ({ getDirective, form }));
+  const { getDirective, form } = useFormState(
+    useShallow(({ getDirective, form }) => ({ getDirective, form })),
+  );
 
   return useMemo<Nullable<Directive>>(() => {
     if (form.queryType === '') {

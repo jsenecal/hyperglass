@@ -1,7 +1,8 @@
 import { Flex } from '@chakra-ui/react';
-import { useCallback, useRef } from 'react';
+import { useRef } from 'react';
 import { isSafari } from 'react-device-detect';
 import { If, Then } from 'react-if';
+import { useShallow } from 'zustand/react/shallow';
 import { Debugger, Footer, Greeting, Header, ResetButton } from '~/components';
 import { useConfig } from '~/context';
 import { motionChakra } from '~/elements';
@@ -26,7 +27,7 @@ const Main = motionChakra('main', {
 export const Layout = (props: FlexProps): JSX.Element => {
   const { developerMode } = useConfig();
   const { setStatus, reset } = useFormState(
-    useCallback(({ setStatus, reset }) => ({ setStatus, reset }), []),
+    useShallow(({ setStatus, reset }) => ({ setStatus, reset })),
   );
 
   const containerRef = useRef<HTMLDivElement>({} as HTMLDivElement);

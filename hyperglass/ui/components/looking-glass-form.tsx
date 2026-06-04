@@ -2,9 +2,9 @@ import { Flex, ScaleFade, SlideFade, chakra } from '@chakra-ui/react';
 import { vestResolver } from '@hookform/resolvers/vest';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import isEqual from 'react-fast-compare';
 import { FormProvider, useForm } from 'react-hook-form';
 import vest, { test, enforce } from 'vest';
+import { useShallow } from 'zustand/react/shallow';
 import {
   DirectiveInfoModal,
   FormField,
@@ -36,8 +36,7 @@ export const LookingGlassForm = (): JSX.Element => {
   const setTarget = useFormState(s => s.setTarget);
   const setFormValue = useFormState(s => s.setFormValue);
   const { form, filtered, selections } = useFormState(
-    useCallback(({ form, filtered, selections }) => ({ form, filtered, selections }), []),
-    isEqual,
+    useShallow(({ form, filtered, selections }) => ({ form, filtered, selections })),
   );
 
   const getDirective = useFormState(useCallback(s => s.getDirective, []));

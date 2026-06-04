@@ -1,4 +1,4 @@
-import create from 'zustand';
+import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { withDev } from '~/util';
 
@@ -11,7 +11,7 @@ interface UseGreeting {
   close(): void;
 }
 
-export const useGreeting = create<UseGreeting>(
+export const useGreeting = create<UseGreeting>()(
   persist(
     withDev<UseGreeting>(
       set => ({
