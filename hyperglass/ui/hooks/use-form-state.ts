@@ -79,6 +79,10 @@ interface FormStateType<Opt extends SingleOption = SingleOption> {
       text: Text;
     },
   ): void;
+  prefillForm(
+    query: { queryLocation: string[]; queryType: string; queryTarget: string[] },
+    getDevice: UseDeviceReturn,
+  ): string[];
 }
 
 const formState: StateCreator<FormStateType> = (set, get) => ({
@@ -195,6 +199,43 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
     } else if (intersectingDirectives.length === 1) {
       set(state => ({ form: { ...state.form, queryType: intersectingDirectives[0].id } }));
     }
+  },
+
+  prefillForm(
+    query: { queryLocation: string[]; queryType: string; queryTarget: string[] },
+    getDevice: UseDeviceReturn,
+  ): string[] {
+    const validDevices = query.queryLocation
+      .map(getDevice)
+      .filter((device): device is Device => device !== null);
+    const validLocations = validDevices.map(d => d.id);
+
+    const allGroups = validDevices.map(dev =>
+      Array.from(new Set(dev.directives.flatMap(dir => dir.groups))),
+    );
+    const intersecting = validDevices.length ? intersectionWith(...allGroups, isEqual) : [];
+
+    const allDirectives = validDevices.map(device => device.directives);
+    const intersectingDirectives = validDevices.length
+      ? intersectionWith(...allDirectives, isEqual)
+      : [];
+    const directives = dedupObjectArray(intersectingDirectives, 'id');
+
+    set({
+      form: {
+        queryLocation: validLocations,
+        queryType: query.queryType,
+        queryTarget: query.queryTarget,
+      },
+      selections: {
+        queryLocation: validDevices.map(d => ({ value: d.id, label: d.name })),
+        queryType: null,
+      },
+      filtered: { groups: intersecting, types: directives },
+      target: { display: query.queryTarget.join(' ') },
+    });
+
+    return validLocations;
   },
 
   response(deviceId: string): QueryResponse | null {

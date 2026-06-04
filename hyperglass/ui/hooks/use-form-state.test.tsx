@@ -83,3 +83,39 @@ describe('useFormState.submissionId', () => {
     expect(useFormState.getState().submissionId).toBeNull();
   });
 });
+
+describe('useFormState.prefillForm', () => {
+  beforeEach(async () => {
+    await useFormState.getState().reset();
+  });
+
+  const device = (id: string) =>
+    ({
+      id,
+      name: id.toUpperCase(),
+      directives: [{ id: 'bgp_route', name: 'BGP Route', groups: ['ip'] }],
+    }) as never;
+
+  it('sets form values and selections for valid locations', () => {
+    const getDevice = (id: string) => (id === 'core1' ? device('core1') : null);
+    useFormState.getState().prefillForm(
+      { queryLocation: ['core1'], queryType: 'bgp_route', queryTarget: ['8.8.8.0/24'] },
+      getDevice as never,
+    );
+    const state = useFormState.getState();
+    expect(state.form.queryLocation).toEqual(['core1']);
+    expect(state.form.queryType).toBe('bgp_route');
+    expect(state.form.queryTarget).toEqual(['8.8.8.0/24']);
+    expect(state.selections.queryLocation.map(o => o.value)).toEqual(['core1']);
+  });
+
+  it('drops unknown devices and returns the valid subset', () => {
+    const getDevice = (id: string) => (id === 'core1' ? device('core1') : null);
+    const valid = useFormState.getState().prefillForm(
+      { queryLocation: ['core1', 'ghost'], queryType: 'bgp_route', queryTarget: ['x'] },
+      getDevice as never,
+    );
+    expect(valid).toEqual(['core1']);
+    expect(useFormState.getState().form.queryLocation).toEqual(['core1']);
+  });
+});
