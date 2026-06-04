@@ -53,24 +53,26 @@ export declare global {
     format: 'text/plain' | 'application/json';
   };
 
-  type ShareResponse = {
+  interface ResultSnapshot {
     id: string;
-    output: string | StructuredResponse;
-    cached: boolean;
-    shared: boolean;
-    runtime: number;
-    timestamp: string;
-    format: string;
-    // Backend declares level as a plain string and always stores 'success' today;
-    // typed as ResponseLevel to allow future warning/error shares.
+    output: QueryResponse['output'];
+    format: QueryResponse['format'];
     level: ResponseLevel;
+    timestamp: string;
+    runtime: number;
+    cached: boolean;
     keywords: string[];
     // Nested dict keys are NOT camelCased by backend pydantic; keep snake_case.
-    query: { query_location: string; query_target: string | string[]; query_type: string };
     queryLabels: { location: string; type: string };
+  }
+
+  interface ShareResponse extends ResultSnapshot {
+    shared: boolean;
+    // Nested dict keys are NOT camelCased by backend pydantic; keep snake_case.
+    query: { query_location: string; query_target: string | string[]; query_type: string };
     createdAt: string;
     expiresAt: string;
-  };
+  }
 
   type ShareCreateResponse = {
     id: string;
