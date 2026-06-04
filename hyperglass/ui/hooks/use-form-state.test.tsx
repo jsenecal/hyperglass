@@ -65,3 +65,21 @@ describe('useFormInteractive', () => {
     expect(result.current).toBe(true);
   });
 });
+
+describe('useFormState.submissionId', () => {
+  beforeEach(async () => {
+    await useFormState.getState().reset();
+  });
+
+  it('defaults to null and can be set', () => {
+    expect(useFormState.getState().submissionId).toBeNull();
+    useFormState.getState().setSubmissionId('abc');
+    expect(useFormState.getState().submissionId).toBe('abc');
+  });
+
+  it('is cleared by reset', async () => {
+    useFormState.getState().setSubmissionId('abc');
+    await useFormState.getState().reset();
+    expect(useFormState.getState().submissionId).toBeNull();
+  });
+});
