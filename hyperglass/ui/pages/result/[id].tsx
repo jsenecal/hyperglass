@@ -1,16 +1,15 @@
-import { Accordion, Box, Flex, Text } from '@chakra-ui/react';
+import { Box, Flex, Text } from '@chakra-ui/react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Result } from '~/components/results/individual';
+import { SnapshotResults } from '~/components/results/snapshot-results';
 import { useConfig } from '~/context';
-import { AnimatedDiv } from '~/elements';
 import { useShareGet, useStrf } from '~/hooks';
 
 import type { NextPage } from 'next';
 
 const ResultPage: NextPage = () => {
   const router = useRouter();
-  const { web, messages } = useConfig();
+  const { web } = useConfig();
   const strF = useStrf();
 
   const id = typeof router.query.id === 'string' ? router.query.id : undefined;
@@ -69,30 +68,7 @@ const ResultPage: NextPage = () => {
         <Text>{banner}</Text>
         <Text>{expires}</Text>
       </Flex>
-      <AnimatedDiv
-        p={0}
-        my={4}
-        w="100%"
-        mx="auto"
-        rounded="lg"
-        textAlign="left"
-        borderWidth="1px"
-        overflow="hidden"
-        initial={{ opacity: 1 }}
-        exit={{ opacity: 0, y: 300 }}
-        transition={{ duration: 0.3 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        {/* Result is an AccordionItem — it must live inside an Accordion */}
-        <Accordion defaultIndex={[0]} allowMultiple>
-          <Result
-            index={0}
-            queryLocation={snapshot.query.query_location}
-            snapshot={snapshot}
-            readOnly
-          />
-        </Accordion>
-      </AnimatedDiv>
+      <SnapshotResults items={[{ queryLocation: snapshot.query.query_location, snapshot }]} />
       <Flex justifyContent="center" mt={4}>
         <Link href={freshUrl}>{web.text.shareRunFreshQuery}</Link>
       </Flex>
