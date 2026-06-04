@@ -12,6 +12,13 @@
 
 **Key environment facts:**
 - Zustand is **v3** (`^3.7.2`). The `persist` middleware uses `getStorage: () => StateStorage` (NOT v4's `createJSONStorage`). Mirror the existing store in `hyperglass/ui/hooks/use-greeting.ts`.
+
+> ⚠️ **Version assumption — READ FIRST.** This plan was authored against **zustand v3**. A separate PR/session may upgrade zustand to **v4/v5 first** (decided 2026-06-04). **Before implementing, check `hyperglass/ui/package.json`.** If zustand is now v4+, apply these deltas to the affected tasks:
+> - **Imports (Tasks 9):** `import create from 'zustand'` → `import { create } from 'zustand'`. (Match whatever style the upgraded `use-greeting.ts` / `use-form-state.ts` now use.)
+> - **Persist storage (Task 9):** replace `getStorage: () => historyStorage` with `storage: createJSONStorage(() => historyStorage)` — but note v4's `createJSONStorage` expects a `StateStorage` returning **strings**, which `historyStorage` already does; confirm the wrapper still receives the serialized blob so `shrinkSerialized` (Task 8) keeps working unchanged.
+> - **Hydration (Task 19):** the mounted-flag guard still works and remains the recommended approach; optionally simplify using v4's `useQueryHistory.persist.hasHydrated()` if the upgraded codebase adopts that pattern elsewhere.
+> - **`withDev` (Task 9 dependency):** if the upgrade rewrote `util/state.ts` for v4 middleware typing, ensure `withDev<QueryHistoryState>(...)` still composes inside `persist(...)`; mirror the post-upgrade `use-greeting.ts` composition order exactly.
+> Everything else in this plan (backend config, components, recording, prefillForm, SnapshotResults) is version-independent.
 - `Directive.frontend()` (`hyperglass/models/directive.py:334`) **whitelists** UI-visible fields — a new directive field must be added there explicitly.
 - `Params.frontend()` (`hyperglass/models/config/params.py:158`) includes `web` and `messages` wholesale (`"web": ...`, `"messages": ...`), so new `Text`/`Messages` fields reach the UI automatically; only the `cache` include set must be edited.
 - Backend attrs are snake_case; `HyperglassModel` camelCases JSON keys. UI config types are written snake_case and run through `CamelCasedProperties`.
