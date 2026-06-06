@@ -1,0 +1,262 @@
+{
+  "requestTimeout": 90,
+  "primaryAsn": "65001",
+  "orgName": "Beloved Hyperglass User",
+  "siteTitle": "hyperglass",
+  "siteDescription": "Beloved Hyperglass User Network Looking Glass",
+  "cache": {
+    "timeout": 600,
+    "showText": true,
+    "shareEnabled": true,
+    "shareTimeout": 604800,
+    "refreshMinInterval": 120,
+    "historyEnabled": true,
+    "historyLimit": 10
+  },
+  "web": {
+    "credit": {
+      "enable": true
+    },
+    "dnsProvider": {
+      "name": "cloudflare",
+      "url": "https://cloudflare-dns.com/dns-query"
+    },
+    "links": [
+      {
+        "title": "PeeringDB",
+        "url": "https://www.peeringdb.com/asn/65001",
+        "showIcon": true,
+        "side": "left",
+        "order": 0
+      }
+    ],
+    "menus": [
+      {
+        "title": "Terms",
+        "content": "\nBy using hyperglass, you agree to be bound by the following terms of use:\n\nAll queries executed on this page are logged for analysis and troubleshooting. Users are prohibited from automating queries, or attempting to process queries in bulk. This service is provided on a best effort basis, and Beloved Hyperglass User makes no availability or performance warranties or guarantees whatsoever.\n",
+        "side": "left",
+        "order": 0
+      },
+      {
+        "title": "Help",
+        "content": "\n##### BGP Route\n\nPerforms BGP table lookup based on IPv4/IPv6 prefix.\n\n---\n\n##### BGP Community\n\nPerforms BGP table lookup based on [Extended](https://tools.ietf.org/html/rfc4360) or [Large](https://tools.ietf.org/html/rfc8195) community value.\n\n---\n\n##### BGP AS Path\n\nPerforms BGP table lookup based on `AS_PATH` regular expression.\n\n---\n\n##### Ping\n\nSends 5 ICMP echo requests to the target.\n\n---\n\n##### Traceroute\n\nPerforms UDP Based traceroute to the target.\n\nFor information about how to interpret traceroute results, [click here](https://hyperglass.dev/traceroute_nanog.pdf).\n",
+        "side": "left",
+        "order": 0
+      }
+    ],
+    "greeting": {
+      "enable": false,
+      "file": null,
+      "title": "Welcome",
+      "button": "Continue",
+      "required": false
+    },
+    "logo": {
+      "light": "hyperglass-light.svg",
+      "dark": "hyperglass-dark.svg",
+      "favicon": "hyperglass-icon.svg",
+      "width": "50%",
+      "height": null,
+      "lightFormat": ".svg",
+      "darkFormat": ".svg"
+    },
+    "opengraph": {
+      "image": "/home/jsenecal/Code/hyperglass/hyperglass/images/hyperglass-opengraph.jpg"
+    },
+    "text": {
+      "titleMode": "logo_only",
+      "title": "hyperglass",
+      "subtitle": "Network Looking Glass",
+      "queryLocation": "Location",
+      "queryType": "Query Type",
+      "queryTarget": "Target",
+      "fqdnTooltip": "Use {protocol}",
+      "fqdnMessage": "Your browser has resolved {fqdn} to",
+      "fqdnError": "Unable to resolve {fqdn}",
+      "fqdnErrorButton": "Try Again",
+      "cachePrefix": "Results cached for ",
+      "cacheIcon": "Cached from {time} UTC",
+      "completeTime": "Completed in {seconds}",
+      "rpkiInvalid": "Invalid",
+      "rpkiValid": "Valid",
+      "rpkiUnknown": "No ROAs Exist",
+      "rpkiUnverified": "Not Verified",
+      "noCommunities": "No Communities",
+      "ipError": "Unable to determine IP Address",
+      "noIp": "No {protocol} Address",
+      "ipSelect": "Select an IP Address",
+      "ipButton": "My IP",
+      "shareButton": "Share",
+      "sharePopoverTitle": "Share this result",
+      "shareCopyLink": "Copy link",
+      "shareLinkCopied": "Copied!",
+      "shareExpiresAt": "Expires {expires}",
+      "shareCreateError": "Could not create share link.",
+      "shareCreateExpired": "This result has expired from cache. Refresh and try again.",
+      "shareNotFound": "Share not found or expired.",
+      "shareSnapshotBanner": "Snapshot taken at {timestamp}",
+      "shareRunFreshQuery": "Run a fresh query",
+      "refreshCooldown": "Refresh available in {seconds}s",
+      "requeryTooltip": "Reload Query",
+      "historyTitle": "Recent queries",
+      "historyClearAll": "Clear all",
+      "historyClearConfirm": "Clear all saved queries?",
+      "historyBack": "Back",
+      "historyOpen": "Open",
+      "historyRerun": "Run again",
+      "historyNewTarget": "Run with a new target",
+      "historyDelete": "Delete",
+      "historyDisabledHint": "Results for this query type are not saved to history."
+    },
+    "theme": {
+      "colors": {
+        "black": "black",
+        "white": "white",
+        "dark": "#010101",
+        "light": "#f5f6f7",
+        "gray": "#c1c7cc",
+        "red": "#d84b4b",
+        "orange": "#ff6b35",
+        "yellow": "#edae49",
+        "green": "#35b246",
+        "blue": "#314cb6",
+        "teal": "#35b299",
+        "cyan": "#118ab2",
+        "pink": "#f2607d",
+        "purple": "#8d30b5",
+        "primary": "#118ab2",
+        "secondary": "#314cb6",
+        "success": "#35b246",
+        "warning": "#edae49",
+        "error": "#ff6b35",
+        "danger": "#d84b4b"
+      },
+      "defaultColorMode": null,
+      "fonts": {
+        "body": "Nunito",
+        "mono": "Fira Code"
+      }
+    },
+    "locationDisplayMode": "auto",
+    "customJavascript": null,
+    "customHtml": null,
+    "highlight": []
+  },
+  "messages": {
+    "noInput": "{field} must be specified.",
+    "targetNotAllowed": "{target} is not allowed.",
+    "featureNotEnabled": "{feature} is not enabled.",
+    "invalidInput": "{target} is not valid.",
+    "invalidQuery": "{target} is not a valid {query_type} target.",
+    "invalidField": "{input} is an invalid {field}.",
+    "general": "Something went wrong.",
+    "notFound": "{type} '{name}' not found.",
+    "requestTimeout": "Request timed out.",
+    "connectionError": "Error connecting to {device_name}: {error}",
+    "authenticationError": "Authentication error occurred.",
+    "noResponse": "No response.",
+    "noOutput": "The query completed, but no matching results were found.",
+    "historyDeviceUnavailable": "The device for this saved query is no longer available."
+  },
+  "version": "2.1.0.dev0",
+  "devices": [
+    {
+      "group": "Test",
+      "locations": [
+        {
+          "id": "example_device",
+          "name": "Example Device",
+          "group": "Test",
+          "avatar": null,
+          "description": null,
+          "directives": [
+            {
+              "id": "juniper_bgp_route",
+              "name": "BGP Route",
+              "fieldType": "text",
+              "groups": [
+                "Global"
+              ],
+              "description": "IP Address or Prefix",
+              "info": null,
+              "options": null,
+              "history": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "parsedDataFields": [
+    [
+      "Prefix",
+      "prefix",
+      "left"
+    ],
+    [
+      "Active",
+      "active",
+      null
+    ],
+    [
+      "RPKI State",
+      "rpki_state",
+      "center"
+    ],
+    [
+      "AS Path",
+      "as_path",
+      "left"
+    ],
+    [
+      "Next Hop",
+      "next_hop",
+      "left"
+    ],
+    [
+      "Origin",
+      "source_as",
+      null
+    ],
+    [
+      "Weight",
+      "weight",
+      "center"
+    ],
+    [
+      "Local Preference",
+      "local_preference",
+      "center"
+    ],
+    [
+      "MED",
+      "med",
+      "center"
+    ],
+    [
+      "Communities",
+      "communities",
+      "center"
+    ],
+    [
+      "Originator",
+      "source_rid",
+      "right"
+    ],
+    [
+      "Peer",
+      "peer_rid",
+      "right"
+    ],
+    [
+      "Age",
+      "age",
+      "right"
+    ]
+  ],
+  "content": {
+    "credit": "\nPowered by [**hyperglass**](https://hyperglass.dev) version 2.1.0.dev0. Source code licensed [_BSD 3-Clause Clear_](https://hyperglass.dev/license/).\n",
+    "greeting": ""
+  },
+  "developerMode": false
+}

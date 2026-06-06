@@ -19,7 +19,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                node-version: [20.x, 21.x, 22.x]
+                node-version: [20.x, 22.x, 24.x]
                 pnpm-version: [9, 10]
                 os: [ubuntu-latest]
         runs-on: ${{ matrix.os }}
@@ -43,9 +43,12 @@ jobs:
               working-directory: ${{ env.working-directory }}
               run: pnpm install
 
-            - name: Create empty hyperglass.json
+            # next build prerenders pages that import hyperglass.json at build
+            # time, so an empty stub isn't enough — use a realistic fixture
+            # generated from the .tests config (see .tests/hyperglass.json).
+            - name: Create hyperglass.json from fixture
               working-directory: ${{ env.working-directory }}
-              run: echo '{}' > hyperglass.json
+              run: cp ../../.tests/hyperglass.json hyperglass.json
 
             - name: Formatting
               working-directory: ${{ env.working-directory }}
@@ -62,3 +65,9 @@ jobs:
             - name: Tests
               working-directory: ${{ env.working-directory }}
               run: pnpm run test:coverage
+
+            # Catch production-build breakage (webpack/prerender) that
+            # format/lint/typecheck/vitest don't exercise.
+            - name: Production Build
+              working-directory: ${{ env.working-directory }}
+              run: pnpm exec next build
