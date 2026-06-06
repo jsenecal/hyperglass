@@ -139,7 +139,6 @@ class Text(HyperglassModel):
     history_clear_confirm: str = "Clear all saved queries?"
     history_back: str = "Back"
     history_open: str = "Open"
-    history_share: str = "Share"
     history_rerun: str = "Run again"
     history_new_target: str = "Run with a new target"
     history_delete: str = "Delete"

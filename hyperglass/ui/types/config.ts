@@ -63,7 +63,6 @@ interface _Text {
   history_clear_confirm: string;
   history_back: string;
   history_open: string;
-  history_share: string;
   history_rerun: string;
   history_new_target: string;
   history_delete: string;
