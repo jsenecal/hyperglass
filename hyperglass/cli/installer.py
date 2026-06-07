@@ -33,13 +33,15 @@ class Installer:
     progress: Progress
     user: str
     assets: int
+    build_ui: bool
 
-    def __init__(self):
+    def __init__(self, build_ui: bool = True):
         """Start hyperglass installer."""
         self.app_path = Settings.app_path
         self.progress: Progress = Progress(console=echo._console)
         self.user = getpass.getuser()
         self.assets = len([p for p in ASSET_DIR.iterdir() if p.name not in IGNORED_FILES])
+        self.build_ui = build_ui
 
     def install(self) -> None:
         """Initialize tasks and start installer."""
@@ -50,14 +52,17 @@ class Installer:
         asset_task = self.progress.add_task(
             "[bright cyan]Migrating Static Assets", total=self.assets
         )
-        ui_task = self.progress.add_task("[bright teal]Initialzing UI", total=1, start=False)
+        ui_task = None
+        if self.build_ui:
+            ui_task = self.progress.add_task("[bright teal]Initializing UI", total=1, start=False)
 
         self.progress.start()
 
         self.check_permissions(task_id=permissions_task)
         self.scaffold(task_id=scaffold_task)
         self.migrate_static_assets(task_id=asset_task)
-        self.init_ui(task_id=ui_task)
+        if ui_task is not None:
+            self.init_ui(task_id=ui_task)
 
     def __enter__(self) -> t.Callable[[], None]:
         """Initialize tasks."""
