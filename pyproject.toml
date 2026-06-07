@@ -22,12 +22,7 @@ dependencies = [
     "pydantic>=2.6.3",
     "redis==4.5.4",
     "rich>=13.7.0",
-    # The CLI uses typer 0.9 APIs (e.g. Typer.callback(name=...)); the cap was
-    # previously implicit via the removed favicons package. click<8.2 pairs
-    # with typer 0.9 (click 8.2+ crashes it at startup). Modernizing the CLI
-    # to lift both caps is tracked as a follow-up.
-    "typer>=0.9.0,<0.10",
-    "click>=8.1,<8.2",
+    "typer>=0.12",
     "uvicorn==0.21.1",
     "uvloop>=0.17.0",
     "xmltodict==0.13.0",

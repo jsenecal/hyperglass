@@ -6,7 +6,17 @@ touch /tmp/hyperglass.log
 . .venv/bin/activate
 
 echo "[INFO] Starting setup..."
-python3 -m hyperglass.console setup -d &>$LOG_FILE
+# Scaffold only — config files aren't in place yet and the UI is built
+# explicitly below. (Historical note: this used to pass an invalid '-d'
+# flag and fail silently; the scaffold step now actually runs and is
+# checked.)
+python3 -m hyperglass.console setup --no-ui &>$LOG_FILE
+
+if [[ ! $? == 0 ]]; then
+    echo "[ERROR] Setup failed."
+    cat $LOG_FILE
+    exit 1
+fi
 echo "[SUCCESS] Setup completed."
 sleep 2
 

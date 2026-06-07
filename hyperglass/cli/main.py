@@ -11,8 +11,15 @@ import typer
 # Local
 from .echo import echo
 
+cli = typer.Typer(name="hyperglass", help="hyperglass Command Line Interface", no_args_is_help=True)
 
-def _version(value: bool) -> None:
+
+def run():
+    """Run the hyperglass CLI."""
+    return cli()
+
+
+def _print_version(value: bool) -> None:
     # Project
     from hyperglass import __version__
 
@@ -21,36 +28,32 @@ def _version(value: bool) -> None:
         raise typer.Exit()
 
 
-cli = typer.Typer(name="hyperglass", help="hyperglass Command Line Interface", no_args_is_help=True)
-
-
-def run():
-    """Run the hyperglass CLI."""
-    return typer.run(cli())
-
-
-@cli.callback(name="version")
-def _version(
-    version: t.Optional[bool] = typer.Option(
-        None, "--version", help="hyperglass version", callback=_version
-    ),
+@cli.callback()
+def _main(
+    version: t.Annotated[
+        t.Optional[bool],
+        typer.Option(
+            "--version",
+            help="Show hyperglass version and exit",
+            callback=_print_version,
+            is_eager=True,
+        ),
+    ] = None,
 ) -> None:
-    """hyperglass"""
-    pass
+    """hyperglass Command Line Interface."""
 
 
 @cli.command(name="start")
-def _start(build: bool = False, workers: t.Optional[int] = None) -> None:
+def _start(
+    build: t.Annotated[bool, typer.Option("--build", help="Build the UI before starting")] = False,
+    workers: t.Annotated[t.Optional[int], typer.Option(help="Number of server processes")] = None,
+) -> None:
     """Start hyperglass"""
     # Project
     from hyperglass.main import run
 
     # Local
     from .util import build_ui
-
-    kwargs = {}
-    if workers != 0:
-        kwargs["workers"] = workers
 
     try:
         if build:
@@ -69,7 +72,9 @@ def _start(build: bool = False, workers: t.Optional[int] = None) -> None:
 
 
 @cli.command(name="build-ui")
-def _build_ui(timeout: int = typer.Option(180, help="Timeout in seconds")) -> None:
+def _build_ui(
+    timeout: t.Annotated[int, typer.Option(help="Timeout in seconds")] = 180,
+) -> None:
     """Create a new UI build."""
     # Local
     from .util import build_ui as _build_ui
@@ -77,7 +82,7 @@ def _build_ui(timeout: int = typer.Option(180, help="Timeout in seconds")) -> No
     with echo._console.status(
         f"Starting new UI build with a {timeout} second timeout...", spinner="aesthetic"
     ):
-        _build_ui(timeout=120)
+        _build_ui(timeout=timeout)
 
 
 @cli.command(name="system-info")
@@ -139,7 +144,9 @@ def _clear_cache():
 
 @cli.command(name="devices")
 def _devices(
-    search: t.Optional[str] = typer.Argument(None, help="Device ID or Name Search Pattern"),
+    search: t.Annotated[
+        t.Optional[str], typer.Argument(help="Device ID or Name Search Pattern")
+    ] = None,
 ):
     """Show all configured devices"""
     # Third Party
@@ -188,9 +195,11 @@ def _devices(
 
 @cli.command(name="directives")
 def _directives(
-    search: t.Optional[str] = typer.Argument(None, help="Directive ID or Name Search Pattern"),
+    search: t.Annotated[
+        t.Optional[str], typer.Argument(help="Directive ID or Name Search Pattern")
+    ] = None,
 ):
-    """Show all configured devices"""
+    """Show all configured directives"""
     # Third Party
     from rich.columns import Columns
     from rich._inspect import Inspect
@@ -237,15 +246,17 @@ def _directives(
 
 @cli.command(name="plugins")
 def _plugins(
-    search: t.Optional[str] = typer.Argument(None, help="Plugin ID or Name Search Pattern"),
-    _input: bool = typer.Option(
-        False, "--input", show_default=False, is_flag=True, help="Show Input Plugins"
-    ),
-    output: bool = typer.Option(
-        False, "--output", show_default=False, is_flag=True, help="Show Output Plugins"
-    ),
+    search: t.Annotated[
+        t.Optional[str], typer.Argument(help="Plugin ID or Name Search Pattern")
+    ] = None,
+    _input: t.Annotated[
+        bool, typer.Option("--input", show_default=False, help="Show Input Plugins")
+    ] = False,
+    output: t.Annotated[
+        bool, typer.Option("--output", show_default=False, help="Show Output Plugins")
+    ] = False,
 ):
-    """Show all configured devices"""
+    """Show all configured plugins"""
     # Third Party
     from rich.columns import Columns
 
@@ -277,9 +288,10 @@ def _plugins(
 
 @cli.command(name="params")
 def _params(
-    path: t.Optional[str] = typer.Argument(
-        None, help="Parameter Object Path, for example 'messages.no_input'"
-    ),
+    path: t.Annotated[
+        t.Optional[str],
+        typer.Argument(help="Parameter Object Path, for example 'messages.no_input'"),
+    ] = None,
 ):
     """Show configuration parameters"""
     # Standard Library
@@ -329,12 +341,20 @@ def _params(
 
 
 @cli.command(name="setup")
-def _setup():
+def _setup(
+    ui: t.Annotated[
+        bool,
+        typer.Option(
+            "--ui/--no-ui",
+            help="Build the UI after scaffolding (requires config, Redis, and Node)",
+        ),
+    ] = True,
+):
     """Initialize hyperglass setup."""
     # Local
     from .installer import Installer
 
-    with Installer() as start:
+    with Installer(build_ui=ui) as start:
         start()
 
 
