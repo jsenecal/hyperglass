@@ -132,6 +132,9 @@ importers:
       '@types/dagre':
         specifier: ^0.7.44
         version: 0.7.54
+      '@types/isomorphic-fetch':
+        specifier: ^0.0.39
+        version: 0.0.39
       '@types/lodash':
         specifier: ^4.14.177
         version: 4.14.177
@@ -1577,6 +1580,9 @@ packages:
 
   '@types/geojson@7946.0.7':
     resolution: {integrity: sha512-wE2v81i4C4Ol09RtsWFAqg3BUitWbHSpSlIo+bNdsCJijO9sjme+zm+73ZMCa/qMC8UEERxzGbvmr1cffo2SiQ==}
+
+  '@types/isomorphic-fetch@0.0.39':
+    resolution: {integrity: sha512-I0gou/ZdA1vMG7t7gMzL7VYu2xAKU78rW9U1l10MI0nn77pEHq3tQqHQ8hMmXdMpBlkxZOorjI4sO594Z3kKJw==}
 
   '@types/istanbul-lib-coverage@2.0.6':
     resolution: {integrity: sha512-2QF/t/auWm0lsy8XtKVPG19v3sSOQlJe/YHZgfjb/KBBHOGSV+J2q/S671rcq9uTBrLAXmZpqJiaQbMT+zNU1w==}
@@ -5735,6 +5741,8 @@ snapshots:
   '@types/estree@1.0.5': {}
 
   '@types/geojson@7946.0.7': {}
+
+  '@types/isomorphic-fetch@0.0.39': {}
 
   '@types/istanbul-lib-coverage@2.0.6': {}
 
