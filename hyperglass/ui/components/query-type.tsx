@@ -86,14 +86,15 @@ const GroupFilter = (props: React.PropsWithChildren<UseRadioProps>): JSX.Element
   const { children, ...rest } = props;
   const {
     getInputProps,
-    getCheckboxProps,
+    // Chakra 2.9 renamed this getter from getCheckboxProps to getRadioProps.
+    getRadioProps,
     getLabelProps,
     htmlProps,
     state: { isChecked },
   } = useRadio(rest);
   const label = getLabelProps();
   const input = getInputProps();
-  const checkbox = getCheckboxProps();
+  const checkbox = getRadioProps();
 
   return (
     <Box as="label" {...label}>
