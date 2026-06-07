@@ -60,19 +60,24 @@ export async function fetchWithTimeout(
   controller: AbortController,
 ): Promise<Response> {
   /**
-   * Lets set up our `AbortController`, and create a request options object that includes the
-   * controller's `signal` to pass to `fetch`.
+   * Create a request options object that includes the controller's `signal` to pass to `fetch`,
+   * unless the caller provided its own `signal`.
    */
-  const { signal = new AbortController().signal, ...allOptions } = options;
+  const { signal = controller.signal, ...allOptions } = options;
   const config = { ...allOptions, signal };
   /**
    * Set a timeout limit for the request using `setTimeout`. If the body of this timeout is
-   * reached before the request is completed, it will be cancelled.
+   * reached before the request is completed, it will be cancelled. Clear the timer once the
+   * request settles so a completed request doesn't abort the controller afterwards.
    */
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     controller.abort();
   }, timeout);
-  return await fetch(uri, config);
+  try {
+    return await fetch(uri, config);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function dedupObjectArray<E extends Record<string, unknown>, P extends keyof E = keyof E>(
