@@ -1,10 +1,11 @@
-import { describe, expect, it, test } from 'vitest';
+import { afterEach, describe, expect, it, test, vi } from 'vitest';
 import {
   all,
   andJoin,
   chunkArray,
   dedupObjectArray,
   entries,
+  fetchWithTimeout,
   isFQDN,
   levelToStatus,
 } from './common';
@@ -119,5 +120,40 @@ describe('isFQDN - determine if a string is an FQDN pattern', () => {
   });
   it('is an array of FQDNs and should be true', () => {
     expect(isFQDN(['www.example.com'])).toBe(true);
+  });
+});
+
+describe('fetchWithTimeout - fetch with abort timeout', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('passes the controller signal to fetch', async () => {
+    const controller = new AbortController();
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchSpy);
+    await fetchWithTimeout('https://example.com', {}, 1_000, controller);
+    // Identity check — deep equality cannot distinguish AbortSignal instances.
+    expect(fetchSpy.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  it('aborts the controller when the timeout elapses', () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    // A fetch that never settles on its own.
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
+    fetchWithTimeout('https://example.com', {}, 1_000, controller);
+    vi.advanceTimersByTime(1_000);
+    expect(controller.signal.aborted).toBe(true);
+  });
+
+  it('does not abort the controller after the fetch settles', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    await fetchWithTimeout('https://example.com', {}, 1_000, controller);
+    vi.advanceTimersByTime(2_000);
+    expect(controller.signal.aborted).toBe(false);
   });
 });
