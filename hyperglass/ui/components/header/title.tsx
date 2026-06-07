@@ -1,8 +1,8 @@
 import { Button, Flex, VStack } from '@chakra-ui/react';
-import { motion } from 'framer-motion';
 import { isSafari } from 'react-device-detect';
 import { Case, Switch } from 'react-if';
 import { useConfig } from '~/context';
+import { motionChakra } from '~/elements';
 import { useFormInteractive, useFormState, useMobile } from '~/hooks';
 import { Logo } from './logo';
 import { SubtitleOnly } from './subtitle-only';
@@ -15,8 +15,10 @@ type DWrapperProps = Omit<StackProps, 'transition'> & MotionProps;
 type MWrapperProps = Omit<StackProps, 'transition'> & MotionProps;
 type WrapperProps = Partial<MotionProps & Omit<StackProps, 'transition'>>;
 
-const AnimatedVStack = motion(VStack);
-const AnimatedFlex = motion(Flex);
+// motionChakra (rather than raw `motion(...)`) reconciles the conflicting
+// chakra/framer `transition` prop types — see elements/animated.ts.
+const AnimatedVStack = motionChakra<StackProps>(VStack);
+const AnimatedFlex = motionChakra<FlexProps>(Flex);
 
 /**
  * Title wrapper for mobile devices, breakpoints sm & md.
@@ -115,7 +117,10 @@ const All = (props: WrapperProps): JSX.Element => (
  * Title component which renders sub-components based on the `title_mode` configuration variable.
  */
 export const Title = (props: FlexProps): JSX.Element => {
-  const { fontSize, ...rest } = props;
+  // framer-motion and chakra/DOM declare incompatible types for these props;
+  // AnimatedFlex expects framer's versions, so exclude the DOM ones from the
+  // spread (they are never passed — <Title /> takes no props at its call site).
+  const { fontSize, transition, onAnimationStart, onDragStart, onDragEnd, onDrag, ...rest } = props;
   const { web } = useConfig();
   const { titleMode } = web.text;
 
