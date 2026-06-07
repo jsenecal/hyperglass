@@ -7,7 +7,7 @@ authors = [
     { name = "Jonathan Senecal", email = "jonathan.senecal@metrooptic.com" }
 ]
 dependencies = [
-    "Pillow>=10.4.0,<11.0",
+    "Pillow>=12.2,<12.3",
     "PyJWT==2.6.0",
     "PyYAML>=6.0",
     "aiofiles>=23.2.1",
