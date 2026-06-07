@@ -1,9 +1,8 @@
 import { Flex, ScaleFade, SlideFade, chakra } from '@chakra-ui/react';
-import { vestResolver } from '@hookform/resolvers/vest';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
-import vest, { test, enforce } from 'vest';
+import { create, enforce, test } from 'vest';
 import { useShallow } from 'zustand/react/shallow';
 import {
   DirectiveInfoModal,
@@ -18,7 +17,7 @@ import { useConfig } from '~/context';
 import { FormRow } from '~/elements';
 import { useDevice, useFormState, useGreeting, useStrf } from '~/hooks';
 import { Directive, isQueryField, isString } from '~/types';
-import { isFQDN, makeSubmissionId } from '~/util';
+import { isFQDN, makeSubmissionId, vestResolver } from '~/util';
 
 import type { FormData, OnChangeArgs } from '~/types';
 
@@ -51,7 +50,7 @@ export const LookingGlassForm = (): JSX.Element => {
 
   const queryTypes = useMemo(() => filtered.types.map(t => t.id), [filtered.types]);
 
-  const formSchema = vest.create((data: FormData = {} as FormData) => {
+  const formSchema = create((data: FormData = {} as FormData) => {
     test('queryLocation', noQueryLoc, () => {
       enforce(data.queryLocation).isArrayOf(enforce.isString()).isNotEmpty();
     });
@@ -64,7 +63,7 @@ export const LookingGlassForm = (): JSX.Element => {
   });
 
   const formInstance = useForm<FormData>({
-    resolver: vestResolver(formSchema),
+    resolver: vestResolver<FormData>(formSchema),
     defaultValues: {
       queryTarget: [],
       queryLocation: [],
