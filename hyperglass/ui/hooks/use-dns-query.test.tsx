@@ -1,5 +1,5 @@
-import 'isomorphic-fetch';
-import { expect, describe, it } from 'vitest';
+import isomorphicFetch from 'isomorphic-fetch';
+import { expect, describe, it, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { renderHook } from '@testing-library/react-hooks';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
@@ -7,6 +7,13 @@ import { HyperglassContext } from '~/context';
 import { useDNSQuery } from './use-dns-query';
 
 import type { Config } from '~/types';
+
+// These tests perform live DNS-over-HTTPS queries. Node's native fetch (undici) brand-checks
+// `RequestInit.signal` and rejects jsdom's AbortSignal (enforced as of Node 24), so the
+// isomorphic-fetch (node-fetch) implementation — which accepts cross-realm signals — must be
+// explicitly stubbed in; its side-effect global assignment is a no-op when a global fetch
+// already exists (always, since Node 18).
+vi.stubGlobal('fetch', isomorphicFetch);
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, cacheTime: Infinity } },
