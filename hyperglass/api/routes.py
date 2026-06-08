@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 # Third Party
 from litestar import Request, Response, get, post
 from litestar.di import Provide
+from litestar.params import FromPath
 from litestar.exceptions import HTTPException, NotFoundException
 from litestar.background_tasks import BackgroundTask
 
@@ -74,7 +75,7 @@ def _build_share_url(params, request, share_id: str) -> str:
 
 
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
-async def device(devices: Devices, id: str) -> APIDevice:
+async def device(devices: Devices, id: FromPath[str]) -> APIDevice:
     """Retrieve a device by ID."""
     return devices[id].export_api()
 
@@ -222,7 +223,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 async def share_create(
     _state: HyperglassState,
     request: Request,
-    cache_id: str,
+    cache_id: FromPath[str],
 ) -> Response:
     """Promote a cached query result to a long-lived shareable snapshot."""
     # TODO: make configurable via params.messages (no existing precedent for
@@ -273,7 +274,7 @@ async def share_create(
 
 
 @get("/api/query/share/{share_id:str}", dependencies={"_state": Provide(get_state)})
-async def share_get(_state: HyperglassState, share_id: str) -> Response:
+async def share_get(_state: HyperglassState, share_id: FromPath[str]) -> Response:
     """Read a shared snapshot."""
     if not _state.params.cache.share_enabled:
         raise NotFoundException()

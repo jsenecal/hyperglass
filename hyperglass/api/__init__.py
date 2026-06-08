@@ -6,8 +6,10 @@ import logging
 
 # Third Party
 from litestar import Litestar, get
+from litestar.params import FromPath
 from litestar.openapi import OpenAPIConfig
 from litestar.response import File
+from litestar.openapi.plugins import StoplightRenderPlugin
 from litestar.exceptions import HTTPException, NotFoundException, ValidationException
 from litestar.static_files import create_static_files_router
 
@@ -37,12 +39,14 @@ OPEN_API = OpenAPIConfig(
     version=__version__,
     description=STATE.params.docs.description,
     path=STATE.params.docs.path,
-    root_schema_site="elements",
+    # Stoplight Elements served at the OpenAPI root path (the first/only
+    # render plugin), replacing the deprecated root_schema_site="elements".
+    render_plugins=[StoplightRenderPlugin()],
 )
 
 
 @get("/result/{share_id:str}", include_in_schema=False)
-async def share_view_html(share_id: str) -> File:
+async def share_view_html(share_id: FromPath[str]) -> File:
     """Serve the SPA shell (index.html) for share result URLs.
 
     Litestar's static-files html_mode serves 404.html (the Next.js error

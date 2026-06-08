@@ -9,7 +9,7 @@ import typing as t
 from pathlib import Path
 
 # Third Party
-from pydantic import HttpUrl, BaseModel, RootModel, ConfigDict, PrivateAttr
+from pydantic import BaseModel, RootModel, ConfigDict, PrivateAttr
 
 # Project
 from hyperglass.log import log
@@ -37,9 +37,11 @@ def alias_generator(field: str) -> str:
 class HyperglassModel(BaseModel):
     """Base model for all hyperglass configuration models."""
 
+    # Pydantic v2 natively serializes HttpUrl and Path to strings in JSON mode
+    # (model_dump_json / export_json), so the deprecated json_encoders config
+    # for those types is redundant and has been removed.
     model_config = ConfigDict(
         extra="forbid",
-        json_encoders={HttpUrl: lambda v: str(v), Path: str},
         populate_by_name=True,
         validate_assignment=True,
         validate_default=True,
