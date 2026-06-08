@@ -1,15 +1,15 @@
 """hyperglass state dependencies."""
 
-# Standard Library
-import typing as t
-
 # Project
 from hyperglass.state import use_state
 
 
-async def get_state(attr: t.Optional[str] = None):
-    """Get hyperglass state as a FastAPI dependency."""
-    return use_state(attr)
+async def get_state():
+    """Get hyperglass state as a dependency."""
+    # No parameters: a parameter here would be inferred as a request query
+    # parameter by Litestar (the deprecated inferred style), exposing an
+    # unintended `?attr=` surface that could coerce a state subset.
+    return use_state()
 
 
 async def get_params():
