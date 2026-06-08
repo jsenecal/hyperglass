@@ -9,18 +9,20 @@
 
 <hr/>
 
-> ### Fork notice
+> ### About this fork — hyperglass-ng
 >
-> This repository is a maintained fork of [**thatmattlove/hyperglass**](https://github.com/thatmattlove/hyperglass). The upstream project has been quiet for an extended period, so this fork carries production-oriented fixes that hadn't landed upstream as of v2.0.4.
+> **hyperglass-ng** is a maintained fork of [**thatmattlove/hyperglass**](https://github.com/thatmattlove/hyperglass). The upstream project has been quiet for an extended period, so this fork carries production-oriented fixes and dependency modernization that hadn't landed upstream as of v2.0.4.
+>
+> The rename is **branding and distribution only**: the `hyperglass` import package, the `hyperglass` CLI command, the `HYPERGLASS_` environment prefix, and the `/etc/hyperglass` config layout are unchanged, so existing deployments upgrade in place. The distribution is published as `hyperglass-ng` on PyPI and `ghcr.io/<owner>/hyperglass-ng` on GHCR.
 >
 > **Container images** are published to GHCR on every push to `main` and on tag pushes:
 >
 > | Tag | Updated by | Use case |
 > | --- | --- | --- |
-> | `ghcr.io/jsenecal/hyperglass:2.0.4-jsenecal.2` | tag push | immutable, recommended for production |
-> | `ghcr.io/jsenecal/hyperglass:sha-<short>` | every build | per-commit immutable |
-> | `ghcr.io/jsenecal/hyperglass:main` | every push to `main` | rolling HEAD |
-> | `ghcr.io/jsenecal/hyperglass:latest` | every build | rolling whatever's freshest |
+> | `ghcr.io/jsenecal/hyperglass-ng:2.1.0` | tag push | immutable, recommended for production |
+> | `ghcr.io/jsenecal/hyperglass-ng:sha-<short>` | every build | per-commit immutable |
+> | `ghcr.io/jsenecal/hyperglass-ng:main` | every push to `main` | rolling HEAD |
+> | `ghcr.io/jsenecal/hyperglass-ng:latest` | every build | rolling whatever's freshest |
 >
 > **Maintained by** Jonathan Senecal &lt;jonathan.senecal@metrooptic.com&gt;. **Issues** belong in the [fork's tracker](https://github.com/jsenecal/hyperglass/issues), not upstream's.
 

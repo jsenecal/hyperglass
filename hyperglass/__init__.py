@@ -1,6 +1,7 @@
 """hyperglass is a modern, customizable network looking glass.
 
-https://github.com/thatmattlove/hyperglass
+hyperglass-ng (maintained fork): https://github.com/jsenecal/hyperglass
+Upstream: https://github.com/thatmattlove/hyperglass
 
 The Clear BSD License
 
