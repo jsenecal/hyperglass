@@ -79,7 +79,7 @@ importers:
         version: 4.3.1(react@18.2.0)
       react-if:
         specifier: ^4.1.4
-        version: 4.1.4(react@18.2.0)
+        version: 4.1.6(react@18.2.0)
       react-markdown:
         specifier: ^5.0.3
         version: 5.0.3(@types/node@20.11.20)(@types/react@18.2.60)(react@18.2.0)
@@ -3398,11 +3398,11 @@ packages:
     peerDependencies:
       react: '*'
 
-  react-if@4.1.4:
-    resolution: {integrity: sha512-bjufPfCdPBiBy9EO/BeoxaqGc/xCwTu0coKtHfjpJw+v85DLMbpG43IUPISh+m3DzENx1rOYLpqbp2KaDmEYlg==}
+  react-if@4.1.6:
+    resolution: {integrity: sha512-vEwRUAiNVD+UWE5vRIU+wTPZOSlw81xpR8ffDRxkff+68y63I8Lbv9PIGdookNDAKbyCRqtKxccKoFtgIhEM/w==}
     engines: {node: '>=12'}
     peerDependencies:
-      react: ^16.x || ^17.x || ^18.x
+      react: ^16.x || ^17.x || ^18.x || ^19.x
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -7920,7 +7920,7 @@ snapshots:
     dependencies:
       react: 18.2.0
 
-  react-if@4.1.4(react@18.2.0):
+  react-if@4.1.6(react@18.2.0):
     dependencies:
       react: 18.2.0
 
