@@ -6,8 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-06-08
+
+First release under the **hyperglass-ng** name — a maintained fork of
+[thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass) that
+carries production-oriented fixes and dependency modernization that had not
+landed upstream as of v2.0.4.
+
+This rename is **branding and distribution only**: the Python import package
+(`hyperglass`), the `hyperglass` CLI command, the `HYPERGLASS_` environment
+prefix, and the `/etc/hyperglass` configuration layout are all unchanged, so
+existing deployments upgrade in place. Only the distribution name has changed —
+`hyperglass-ng` on PyPI and `ghcr.io/<owner>/hyperglass-ng` on GHCR.
+
 ### Added
 
+- Renamed the project to **hyperglass-ng** and cut the first release under that name.
 - [#304](https://github.com/thatmattlove/hyperglass/pull/304): Add FRR structured output for BGP Routes - @chriswiggins
 - Sharable result snapshots: clicking the new Share button on a result mints a `/result/<id>` URL (default 7-day TTL, operator-tunable via `cache.share_timeout`).
 - `params.public_url` (optional): when set, share URLs use this base; otherwise derived from request headers.
@@ -18,6 +32,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
 - [#292](https://github.com/thatmattlove/hyperglass/pull/292): Updates Mikrotik BGP route command so supernets are selected as well as exact matches. - @GrandArcher
 - `cache.timeout` default raised from 120s → 600s. End-user refresh behavior is preserved by `cache.refresh_min_interval` (UI cooldown, default 120s) and the new query `force` flag. Operators relying on 2-minute cache staleness should set `cache.timeout: 120` explicitly.
+- Dependency and toolchain modernization to unblock automated updates and clear the path to Python 3.12+ / Litestar v3 / Pydantic v3:
+  - [#115](https://github.com/jsenecal/hyperglass/issues/115): Frontend CI now runs a production `next build` and tests across Node 20/22/24.
+  - [#110](https://github.com/jsenecal/hyperglass/issues/110): Migrated form validation to vest 6, dropping the incompatible `@hookform/resolvers` dependency in favor of a small in-tree resolver.
+  - [#105](https://github.com/jsenecal/hyperglass/issues/105): Modernized the CLI for typer 0.26 / click 8.4 and added a non-interactive `setup --ui/--no-ui` flag.
+  - [#108](https://github.com/jsenecal/hyperglass/issues/108) / [#90](https://github.com/jsenecal/hyperglass/issues/90) / [#109](https://github.com/jsenecal/hyperglass/issues/109): Restored compatibility with framer-motion v12 and Chakra UI 2.9.
+  - [#114](https://github.com/jsenecal/hyperglass/issues/114): Replaced the react-icons template-literal import with an explicit family map for react-icons v5.
+  - [#126](https://github.com/jsenecal/hyperglass/issues/126): Cleared Litestar v3 / Pydantic v3 deprecations in first-party code and added a regression gate.
 
 ### Fixed
 - [#280](https://github.com/thatmattlove/hyperglass/issues/280): Fix: `condition: None` caused error in directive @Jimmy01240397
@@ -618,4 +639,5 @@ Version comparison links. Only the fork-era tags exist in this repository
 (v2.0.4-jsenecal.*); historical upstream versions below were never tagged
 here, so they are intentionally left unlinked.
 -->
-[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.0.4-jsenecal.2...HEAD
+[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/jsenecal/hyperglass/compare/v2.0.4-jsenecal.2...v2.1.0

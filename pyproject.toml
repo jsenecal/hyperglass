@@ -1,7 +1,7 @@
 [project]
 name = "hyperglass-ng"
-version = "2.1.0.dev0"
-description = "hyperglass is the modern network looking glass that tries to make the internet better."
+version = "2.1.0"
+description = "hyperglass-ng is a maintained fork of hyperglass, the modern network looking glass that tries to make the internet better."
 authors = [
     { name = "thatmattlove", email = "matt@hyperglass.dev" },
     { name = "Jonathan Senecal", email = "jonathan.senecal@metrooptic.com" }
