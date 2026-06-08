@@ -6,6 +6,31 @@ import { chakra, Icon as ChakraIcon } from '@chakra-ui/react';
 import isEqual from 'react-fast-compare';
 
 import type { IconProps as ChakraIconProps, TooltipProps } from '@chakra-ui/react';
+import type { IconType } from 'react-icons';
+
+/**
+ * Lazy importers for every react-icons family used in the app, keyed by the
+ * family's lowercase prefix.
+ *
+ * These are static `import()` specifiers rather than a `react-icons/${family}`
+ * template literal on purpose: react-icons v5 ships an `exports` map that
+ * forbids arbitrary subpath enumeration, so a template literal makes webpack
+ * build a context module over `react-icons/*` and fail to compile. An explicit
+ * map keeps the families tree-shakeable to the ones we actually use and is the
+ * full set DynamicIcon accepts — add an entry here to support a new family.
+ */
+const ICON_FAMILIES: Record<string, () => Promise<Record<string, unknown>>> = {
+  bi: () => import('react-icons/bi'),
+  bs: () => import('react-icons/bs'),
+  cg: () => import('react-icons/cg'),
+  fa: () => import('react-icons/fa'),
+  fi: () => import('react-icons/fi'),
+  go: () => import('react-icons/go'),
+  hi: () => import('react-icons/hi'),
+  io: () => import('react-icons/io'),
+  md: () => import('react-icons/md'),
+  ri: () => import('react-icons/ri'),
+};
 
 interface IconMap {
   [library: string]: string;
@@ -131,23 +156,28 @@ const _DynamicIcon = (props: DynamicIconProps): JSX.Element => {
 
     const Component = useMemo(
       () =>
-        dynamic(() =>
-          import(`react-icons/${library}/index.js`)
+        dynamic(() => {
+          const importFamily = ICON_FAMILIES[library];
+          if (importFamily === undefined) {
+            // Unknown family — not in the supported map.
+            throw new IconError({ original: iconObj, iconName, library });
+          }
+          return importFamily()
             .then(i => {
               if (!(iconName in i)) {
                 // If the icon name doesn't exist in the module, error out.
                 throw new IconError({ original: iconObj, iconName, library });
               }
               // Otherwise, return the imported icon.
-              return i[iconName as keyof typeof i];
+              return i[iconName] as IconType;
             })
             .catch(error => {
               // Handle any error that occurs during dynamic import.
               console.error(error);
               const CaughtError = (): JSX.Element => <ErrorIcon message={String(error)} />;
               return CaughtError;
-            }),
-        ),
+            });
+        }),
       [library, iconName],
     );
 
