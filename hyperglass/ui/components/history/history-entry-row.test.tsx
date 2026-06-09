@@ -155,6 +155,7 @@ describe('HistoryEntryRow', () => {
     expect(state.form.queryLocation).toEqual(['core1']);
     expect(state.form.queryType).toBe('bgp_route');
     expect(state.form.queryTarget).toEqual(['192.0.2.1']);
+    expect(state.selections.queryType).toEqual({ value: 'bgp_route', label: 'BGP Route' });
     expect(state.submissionId).not.toBeNull();
     expect(state.submissionId).not.toBe('previous-submission');
     expect(state.status).toBe('results');
@@ -168,6 +169,7 @@ describe('HistoryEntryRow', () => {
     expect(state.form.queryLocation).toEqual(['core1']);
     expect(state.form.queryType).toBe('bgp_route');
     expect(state.form.queryTarget).toEqual([]);
+    expect(state.selections.queryType).toEqual({ value: 'bgp_route', label: 'BGP Route' });
     expect(state.status).toBe('form');
     expect(state.submissionId).toBeNull();
   });
