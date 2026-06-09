@@ -18,6 +18,7 @@ import { useConfig } from '~/context';
 import { DynamicIcon } from '~/elements';
 import { useShareCreate, useStrf } from '~/hooks';
 import { ShareError } from '~/hooks/use-share';
+import { formatTimestamp } from '~/util';
 
 export interface ShareButtonProps {
   cacheId: string;
@@ -78,7 +79,7 @@ export const ShareButton = (props: ShareButtonProps): JSX.Element | null => {
 
   const expiryText =
     isSuccess && data?.expiresAt
-      ? strF(web.text.shareExpiresAt, { expires: new Date(data.expiresAt).toLocaleString() })
+      ? strF(web.text.shareExpiresAt, { expires: formatTimestamp(data.expiresAt) })
       : null;
 
   const errorText = isError

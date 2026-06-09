@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Timestamps shown to viewers (shared-result snapshot/expiry banners and the cached-result tooltip) are now formatted consistently through a single helper: parsed as UTC (the backend emits naive-UTC values), then rendered in the viewer's locale and timezone using a 24-hour clock. Previously these were a mix of raw UTC strings and browser-local times that were not actually timezone-converted.
+
 ## [2.1.4] - 2026-06-09
 
 ### Fixed
