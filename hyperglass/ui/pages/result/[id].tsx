@@ -6,6 +6,7 @@ import { SnapshotResults } from '~/components/results/snapshot-results';
 import { useConfig } from '~/context';
 import { FloatingBackButton } from '~/elements';
 import { useShareGet, useStrf } from '~/hooks';
+import { formatTimestamp } from '~/util';
 
 import type { NextPage } from 'next';
 
@@ -49,11 +50,12 @@ const ResultPage: NextPage = () => {
   }
 
   const banner = strF(web.text.shareSnapshotBanner, {
-    timestamp: snapshot.timestamp,
+    timestamp: formatTimestamp(snapshot.timestamp),
   });
 
-  const expiresDisplay = new Date(snapshot.expiresAt).toLocaleString();
-  const expires = strF(web.text.shareExpiresAt, { expires: expiresDisplay });
+  const expires = strF(web.text.shareExpiresAt, {
+    expires: formatTimestamp(snapshot.expiresAt),
+  });
 
   const rawTarget = snapshot.query.query_target;
   const queryTarget = typeof rawTarget === 'string' ? rawTarget : rawTarget[0];

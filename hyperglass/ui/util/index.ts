@@ -4,3 +4,4 @@ export * from './history-id';
 export * from './state';
 export * from './theme';
 export * from './vest-resolver';
+export * from './timestamp';

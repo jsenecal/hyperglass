@@ -32,7 +32,7 @@ import {
   useTableToString,
 } from '~/hooks';
 import { isStringOutput, isStructuredOutput } from '~/types';
-import { levelToStatus } from '~/util';
+import { formatTimestamp, levelToStatus } from '~/util';
 import { CopyButton } from './copy-button';
 import { FormattedError } from './formatted-error';
 import { isFetchError, isLGError, isLGOutputOrError, isStackError } from './guards';
@@ -221,7 +221,9 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   const isCached = useMemo(() => data?.cached || !isFetchedAfterMount, [data, isFetchedAfterMount]);
 
   const strF = useStrf();
-  const cacheLabel = strF(web.text.cacheIcon, { time: data?.timestamp });
+  const cacheLabel = strF(web.text.cacheIcon, {
+    time: data?.timestamp ? formatTimestamp(data.timestamp) : '',
+  });
 
   const errorKeywords = useMemo(() => {
     let kw = [] as string[];
