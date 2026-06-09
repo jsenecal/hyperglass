@@ -91,7 +91,7 @@ importers:
         version: 1.1.1
       react-table:
         specifier: ^7.7.0
-        version: 7.7.0(react@18.2.0)
+        version: 7.8.0(react@18.2.0)
       reactflow:
         specifier: ^11.10.4
         version: 11.10.4(@types/react@18.2.60)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -143,7 +143,7 @@ importers:
         version: 18.2.60
       '@types/react-table':
         specifier: ^7.7.1
-        version: 7.7.1
+        version: 7.7.20
       '@types/string-format':
         specifier: ^2.0.0
         version: 2.0.3
@@ -1629,8 +1629,8 @@ packages:
   '@types/react-dom@18.0.11':
     resolution: {integrity: sha512-O38bPbI2CWtgw/OoQoY+BRelw7uysmXbWvw3nLWO21H1HSh+GOlqPuXshJfjmpNlKiiSDG9cc1JZAaMmVdcTlw==}
 
-  '@types/react-table@7.7.1':
-    resolution: {integrity: sha512-oed13swLIS4Ffyo4jAjl9lGbYMaY0uavKoI9GNMvf2R6vh8JfpRUpizQ90X1VI4WrhfaMb/HMsN7TTBvkGOQXQ==}
+  '@types/react-table@7.7.20':
+    resolution: {integrity: sha512-ahMp4pmjVlnExxNwxyaDrFgmKxSbPwU23sGQw2gJK4EhCvnvmib2s/O/+y1dfV57dXOwpr2plfyBol+vEHbi2w==}
 
   '@types/react-transition-group@4.4.4':
     resolution: {integrity: sha512-7gAPz7anVK5xzbeQW9wFBDg7G++aPLAFY0QaSMOou9rJZpbuI58WAuJrgu+qR92l61grlnCUe7AFX8KGahAgug==}
@@ -3831,10 +3831,10 @@ packages:
       '@types/react':
         optional: true
 
-  react-table@7.7.0:
-    resolution: {integrity: sha512-jBlj70iBwOTvvImsU9t01LjFjy4sXEtclBovl3mTiqjz23Reu0DKnRza4zlLtOPACx6j2/7MrQIthIK1Wi+LIA==}
+  react-table@7.8.0:
+    resolution: {integrity: sha512-hNaz4ygkZO4bESeFfnfOft73iBUj8K5oKi1EcSHPAibEydfsX2MyU6Z8KCr3mv3C9Kqqh71U+DhZkFvibbnPbA==}
     peerDependencies:
-      react: ^16.8.3 || ^17.0.0-0
+      react: ^16.8.3 || ^17.0.0-0 || ^18.0.0
 
   react-test-renderer@18.2.0:
     resolution: {integrity: sha512-JWD+aQ0lh2gvh4NM3bBM42Kx+XybOxCpgYK7F8ugAlpaTSnWsX+39Z4XkOykGZAHrjwwTZT3x3KxswVWxHPUqA==}
@@ -6261,7 +6261,7 @@ snapshots:
     dependencies:
       '@types/react': 18.2.60
 
-  '@types/react-table@7.7.1':
+  '@types/react-table@7.7.20':
     dependencies:
       '@types/react': 18.2.60
 
@@ -8872,7 +8872,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.2.60
 
-  react-table@7.7.0(react@18.2.0):
+  react-table@7.8.0(react@18.2.0):
     dependencies:
       react: 18.2.0
 
