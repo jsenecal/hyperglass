@@ -1,7 +1,7 @@
 import { ChakraProvider } from '@chakra-ui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // jsdom does not implement window.matchMedia; Chakra UI requires it.
@@ -23,15 +23,18 @@ import type { Config } from '~/types';
 import { LookingGlassForm } from './looking-glass-form';
 
 // ---------------------------------------------------------------------------
-// next/router mock — query params that should pre-fill the form
+// next/router mock — mutable so each test can control which query params are
+// present without conflicting vi.mock hoisting across describe blocks.
 // ---------------------------------------------------------------------------
+let mockRouterQuery: Record<string, string> = {
+  location: 'test1',
+  target: '192.0.2.0/24',
+  type: 'juniper_bgp_route',
+};
+
 vi.mock('next/router', () => ({
   useRouter: () => ({
-    query: {
-      location: 'test1',
-      target: '192.0.2.0/24',
-      type: 'juniper_bgp_route',
-    },
+    query: mockRouterQuery,
     isReady: true,
     push: vi.fn(),
     replace: vi.fn(),
@@ -175,8 +178,14 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Reset Zustand form state between tests so pre-fill useEffect fires cleanly
+// Reset Zustand form state and router query between tests so pre-fill useEffect
+// fires cleanly and tests do not bleed state into each other.
 beforeEach(async () => {
+  mockRouterQuery = {
+    location: 'test1',
+    target: '192.0.2.0/24',
+    type: 'juniper_bgp_route',
+  };
   const { useFormState } = await import('~/hooks');
   await useFormState.getState().reset();
 });
@@ -218,5 +227,32 @@ describe('LookingGlassForm — query-string pre-fill', () => {
     expect(checkedCard).toBeInTheDocument();
     // Confirm it is the card for the correct location by checking it contains the device name.
     expect(checkedCard?.textContent).toContain('Test Router 1');
+  });
+
+  it('prefills type + target from URL and mirrors them into react-hook-form', async () => {
+    const { useFormState } = await import('~/hooks');
+    // Default mockRouterQuery already has location, type, and target set.
+    render(<LookingGlassForm />, { wrapper });
+    await waitFor(() =>
+      expect(useFormState.getState().selections.queryType).toEqual({
+        value: 'juniper_bgp_route',
+        label: 'BGP Route',
+      }),
+    );
+    await waitFor(() => expect(useFormState.getState().form.queryTarget).toEqual(['192.0.2.0/24']));
+  });
+
+  it('auto-runs when ?run=1 is present', async () => {
+    const { useFormState } = await import('~/hooks');
+    // Override query to include run=1.
+    mockRouterQuery = {
+      location: 'test1',
+      type: 'juniper_bgp_route',
+      target: '192.0.2.0/24',
+      run: '1',
+    };
+    render(<LookingGlassForm />, { wrapper });
+    await waitFor(() => expect(useFormState.getState().status).toBe('results'));
+    expect(useFormState.getState().submissionId).not.toBeNull();
   });
 });
