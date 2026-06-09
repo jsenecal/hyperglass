@@ -11,10 +11,12 @@ interface SnapshotResultsProps {
   items: SnapshotResultsItem[];
   /** Show each result's ShareButton (history-open); default false (share page). */
   showShare?: boolean;
+  /** Called with the minted share id after a successful share; only meaningful for single-device entries. */
+  onShared?: (shareId: string) => void;
 }
 
 export const SnapshotResults = (props: SnapshotResultsProps): JSX.Element => {
-  const { items, showShare = false } = props;
+  const { items, showShare = false, onShared } = props;
   return (
     <AnimatedDiv
       p={0}
@@ -39,6 +41,7 @@ export const SnapshotResults = (props: SnapshotResultsProps): JSX.Element => {
             snapshot={item.snapshot}
             readOnly
             showShare={showShare}
+            onShared={onShared}
           />
         ))}
       </Accordion>

@@ -34,6 +34,7 @@ const Index: NextPage = () => {
   const openId = useQueryHistory(s => s.openId);
   const close = useQueryHistory(s => s.close);
   const entries = useQueryHistory(s => s.entries);
+  const setShareId = useQueryHistory(s => s.setShareId);
   const router = useRouter();
 
   const openEntry = openId ? entries.find(e => e.id === openId) : undefined;
@@ -61,10 +62,15 @@ const Index: NextPage = () => {
     const items: SnapshotResultsItem[] = Object.entries(openEntry.results).map(
       ([queryLocation, snapshot]) => ({ queryLocation, snapshot }),
     );
+    const isSingleDevice = Object.keys(openEntry.results).length === 1;
     return (
       <Box w="100%" maxW={{ base: '100%', md: '75%' }} mx="auto">
         <FloatingBackButton isVisible onClick={handleClose} label={web.text.historyBack} />
-        <SnapshotResults items={items} showShare />
+        <SnapshotResults
+          items={items}
+          showShare
+          onShared={isSingleDevice ? shareId => setShareId(openEntry.id, shareId) : undefined}
+        />
       </Box>
     );
   }
