@@ -15,3 +15,4 @@ export * from './use-table-to-string';
 export * from './use-wtf';
 export * from './use-query-history';
 export * from './use-record-history';
+export * from './use-prefill-navigate';
