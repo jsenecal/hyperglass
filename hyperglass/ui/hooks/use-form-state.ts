@@ -221,6 +221,11 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
       : [];
     const directives = dedupObjectArray(intersectingDirectives, 'id');
 
+    const matchingType = directives.find(d => d.id === query.queryType) ?? null;
+    const queryTypeSelection = matchingType
+      ? { value: matchingType.id, label: matchingType.name ?? matchingType.id }
+      : null;
+
     set({
       form: {
         queryLocation: validLocations,
@@ -229,7 +234,7 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
       },
       selections: {
         queryLocation: validDevices.map(d => ({ value: d.id, label: d.name })),
-        queryType: null,
+        queryType: queryTypeSelection,
       },
       filtered: { groups: intersecting, types: directives },
       target: { display: query.queryTarget.join(' ') },
