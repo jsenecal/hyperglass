@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-06-09
+
 ### Fixed
 
 - Re-running a query from history or a shared result now populates the form correctly (location, query type, and target) and the form can be submitted; previously the query type was blank and a prefilled "new target" form could not be submitted.
@@ -668,7 +670,8 @@ Version comparison links. Only the fork-era tags exist in this repository
 (v2.0.4-jsenecal.*); historical upstream versions below were never tagged
 here, so they are intentionally left unlinked.
 -->
-[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.3...HEAD
+[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/jsenecal/hyperglass/compare/v2.1.3...v2.2.0
 [2.1.3]: https://github.com/jsenecal/hyperglass/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/jsenecal/hyperglass/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/jsenecal/hyperglass/compare/v2.1.0...v2.1.1
