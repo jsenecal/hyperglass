@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-06-09
+
+### Fixed
+
+- Shared result links (`/result/<id>`) opened the landing page instead of the shared result. The backend served the home page's export (`index.html`), whose Next.js bundle pins the route to `/`, so the client never rendered the result page. The UI now emits a dedicated `/result/[id]` export that the backend serves for every share URL, and the page parses the share ID from the address bar (statically-exported pages don't get it from the router). Completes the 2.1.2 fix, which only stopped the page from downloading.
+
 ## [2.1.2] - 2026-06-09
 
 ### Fixed
@@ -652,7 +658,8 @@ Version comparison links. Only the fork-era tags exist in this repository
 (v2.0.4-jsenecal.*); historical upstream versions below were never tagged
 here, so they are intentionally left unlinked.
 -->
-[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.3...HEAD
+[2.1.3]: https://github.com/jsenecal/hyperglass/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/jsenecal/hyperglass/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/jsenecal/hyperglass/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/jsenecal/hyperglass/compare/v2.0.4-jsenecal.2...v2.1.0
