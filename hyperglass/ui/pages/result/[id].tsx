@@ -1,8 +1,10 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
-import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
+import { SnapshotActions } from '~/components/results/snapshot-actions';
 import { SnapshotResults } from '~/components/results/snapshot-results';
 import { useConfig } from '~/context';
+import { FloatingBackButton } from '~/elements';
 import { useShareGet, useStrf } from '~/hooks';
 
 import type { NextPage } from 'next';
@@ -10,6 +12,7 @@ import type { NextPage } from 'next';
 const ResultPage: NextPage = () => {
   const { web } = useConfig();
   const strF = useStrf();
+  const router = useRouter();
 
   // This page ships as a single static placeholder export (result/shared.html)
   // that the backend serves for every /result/<id> URL. Because it's a
@@ -52,19 +55,17 @@ const ResultPage: NextPage = () => {
   const expiresDisplay = new Date(snapshot.expiresAt).toLocaleString();
   const expires = strF(web.text.shareExpiresAt, { expires: expiresDisplay });
 
-  const queryTarget =
-    typeof snapshot.query.query_target === 'string'
-      ? snapshot.query.query_target
-      : snapshot.query.query_target[0];
-
-  const freshUrl = `/?location=${encodeURIComponent(
-    snapshot.query.query_location,
-  )}&target=${encodeURIComponent(queryTarget)}&type=${encodeURIComponent(
-    snapshot.query.query_type,
-  )}`;
+  const rawTarget = snapshot.query.query_target;
+  const queryTarget = typeof rawTarget === 'string' ? rawTarget : rawTarget[0];
+  const actionsQuery = {
+    queryLocation: snapshot.query.query_location,
+    queryType: snapshot.query.query_type,
+    queryTarget,
+  };
 
   return (
     <Box w="100%" maxW={{ base: '100%', md: '75%' }} mx="auto">
+      <FloatingBackButton isVisible onClick={() => router.push('/')} label={web.text.historyBack} />
       <Flex
         mb={3}
         gap={2}
@@ -81,7 +82,7 @@ const ResultPage: NextPage = () => {
       </Flex>
       <SnapshotResults items={[{ queryLocation: snapshot.query.query_location, snapshot }]} />
       <Flex justifyContent="center" mt={4}>
-        <Link href={freshUrl}>{web.text.shareRunFreshQuery}</Link>
+        <SnapshotActions query={actionsQuery} />
       </Flex>
     </Box>
   );

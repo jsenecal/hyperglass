@@ -1,8 +1,11 @@
 import { ChakraProvider } from '@chakra-ui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const push = vi.fn();
+vi.mock('next/router', () => ({ useRouter: () => ({ push }) }));
 
 // jsdom does not implement window.matchMedia; Chakra UI's useBreakpointValue requires it.
 Object.defineProperty(window, 'matchMedia', {
@@ -52,6 +55,9 @@ vi.mock('~/context', () => ({
         shareLinkCopied: 'Copied!',
         shareCreateError: 'Could not create share link.',
         shareCreateExpired: 'Result expired. Refresh and try again.',
+        historyBack: 'Back',
+        historyRerun: 'Run again',
+        historyNewTarget: 'Run with a new target',
       },
       highlight: [],
     },
@@ -107,6 +113,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
 
 beforeEach(() => {
   global.fetch = vi.fn();
+  push.mockClear();
   // Simulate the browser loading /result/<id>; the page reads the ID from here.
   window.history.pushState({}, '', `/result/${SHARE_ID}`);
 });
@@ -145,17 +152,14 @@ describe('ResultPage', () => {
     );
   });
 
-  it('exposes a "Run a fresh query" link with prefilled query string', async () => {
+  it('renders a re-run action that navigates home with prefill + run flag', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse({}));
-
     render(<ResultPage />, { wrapper });
-
-    const link = await screen.findByRole('link', { name: /Run a fresh query/i });
-    expect(link).toBeInTheDocument();
-
-    const href = link.getAttribute('href') ?? '';
-    expect(href).toMatch(/location=test1/);
-    expect(href).toMatch(/target=192\.0\.2\.0%2F24/);
-    expect(href).toMatch(/type=juniper_bgp_route/);
+    const rerun = await screen.findByLabelText('Run again');
+    fireEvent.click(rerun);
+    expect(push).toHaveBeenCalledWith(
+      expect.stringContaining('/?location='),
+    );
+    expect(push).toHaveBeenCalledWith(expect.stringContaining('run=1'));
   });
 });
