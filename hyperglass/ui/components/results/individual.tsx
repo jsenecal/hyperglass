@@ -51,6 +51,8 @@ interface ResultProps {
   readOnly?: boolean;
   /** Controls ShareButton visibility; defaults to !readOnly. */
   showShare?: boolean;
+  /** Called with the minted share id after a successful share; only passed for single-device history entries. */
+  onShared?: (shareId: string) => void;
 }
 
 const AnimatedAccordionItem = motion(AccordionItem);
@@ -68,7 +70,14 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
   props: ResultProps,
   ref,
 ) => {
-  const { index, queryLocation, snapshot, readOnly = false, showShare = !readOnly } = props;
+  const {
+    index,
+    queryLocation,
+    snapshot,
+    readOnly = false,
+    showShare = !readOnly,
+    onShared,
+  } = props;
   const toast = useToast();
   const { web, cache, messages } = useConfig();
   const { index: indices, setIndex } = useAccordionContext();
@@ -321,7 +330,7 @@ const _Result: React.ForwardRefRenderFunction<HTMLDivElement, ResultProps> = (
           {!snapshot && isStructuredOutput(data) && data.level === 'success' && tableComponent && (
             <Path device={deviceId} />
           )}
-          {showShare && data?.id && <ShareButton cacheId={data.id} />}
+          {showShare && data?.id && <ShareButton cacheId={data.id} onShared={onShared} />}
           {!snapshot && <HistoryDisabledHint directiveHistory={getDirective()?.history ?? true} />}
           <CopyButton copyValue={copyValue} isDisabled={!snapshot && isLoading} />
           {!readOnly && (

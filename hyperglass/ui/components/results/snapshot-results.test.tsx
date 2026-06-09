@@ -1,7 +1,7 @@
 import { ChakraProvider } from '@chakra-ui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 
 // jsdom does not implement window.matchMedia; Chakra UI requires it.
@@ -20,7 +20,9 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 vi.mock('./share-button', () => ({
-  ShareButton: () => <div data-testid="share-button" />,
+  ShareButton: ({ onShared }: { cacheId: string; onShared?: (shareId: string) => void }) => (
+    <button type="button" data-testid="share-button" onClick={() => onShared?.('test-share-id')} />
+  ),
 }));
 
 vi.mock('~/context', () => ({
@@ -99,4 +101,22 @@ it('renders one result per item', () => {
   );
   expect(screen.getByText('Core 1')).toBeInTheDocument();
   expect(screen.getByText('Edge 2')).toBeInTheDocument();
+});
+
+it('forwards onShared to ShareButton and fires callback on share', () => {
+  const handleShared = vi.fn();
+  render(
+    <Providers>
+      <SnapshotResults
+        items={[{ queryLocation: 'core1', snapshot: snap('Core 1', 'A') }]}
+        showShare
+        onShared={handleShared}
+      />
+    </Providers>,
+  );
+  const shareBtn = screen.getByTestId('share-button');
+  expect(shareBtn).toBeInTheDocument();
+  fireEvent.click(shareBtn);
+  expect(handleShared).toHaveBeenCalledOnce();
+  expect(handleShared).toHaveBeenCalledWith('test-share-id');
 });
