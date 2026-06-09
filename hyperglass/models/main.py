@@ -310,15 +310,15 @@ class MultiModel(RootModel[MultiModelT]):
     def _merge_with(self, *items, unique_by: t.Optional[str] = None) -> Series[MultiModelT]:
         to_add = self._valid_items(*items)
         if unique_by is not None:
-            unique_by_values = {
-                getattr(obj, unique_by) for obj in (*self, *to_add) if hasattr(obj, unique_by)
-            }
-            unique_by_objects = {
-                v: o
-                for v in unique_by_values
-                for o in (*self, *to_add)
-                if getattr(o, unique_by) == v
-            }
+            # Dedupe by `unique_by`, last write wins for the value but first-seen
+            # insertion order is preserved. A dict keyed on the value (rather than
+            # a set) keeps ordering deterministic regardless of hash seed —
+            # otherwise collection order varies per process and id resolution
+            # becomes non-deterministic across restarts.
+            unique_by_objects: t.Dict[t.Any, MultiModelT] = {}
+            for obj in (*self, *to_add):
+                if hasattr(obj, unique_by):
+                    unique_by_objects[getattr(obj, unique_by)] = obj
             return tuple(unique_by_objects.values())
         return (*self.root, *to_add)
 
