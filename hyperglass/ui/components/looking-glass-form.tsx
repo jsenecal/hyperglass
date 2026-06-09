@@ -32,9 +32,9 @@ export const LookingGlassForm = (): JSX.Element => {
   const setLoading = useFormState(s => s.setLoading);
   const setStatus = useFormState(s => s.setStatus);
   const locationChange = useFormState(s => s.locationChange);
-  const setSelection = useFormState(s => s.setSelection);
   const setTarget = useFormState(s => s.setTarget);
   const setFormValue = useFormState(s => s.setFormValue);
+  const prefillForm = useFormState(s => s.prefillForm);
   const { form, filtered, selections } = useFormState(
     useShallow(({ form, filtered, selections }) => ({ form, filtered, selections })),
   );
@@ -72,6 +72,15 @@ export const LookingGlassForm = (): JSX.Element => {
   });
 
   const { handleSubmit, register, setValue, setError, clearErrors } = formInstance;
+
+  // Mirror Zustand form values into react-hook-form. Prefill paths write to
+  // Zustand (form/selections) but not RHF; without this, RHF's validation still
+  // sees empty values and a prefilled form cannot be submitted.
+  useEffect(() => {
+    setValue('queryLocation', form.queryLocation);
+    setValue('queryType', form.queryType);
+    setValue('queryTarget', form.queryTarget);
+  }, [form.queryLocation, form.queryType, form.queryTarget, setValue]);
 
   const isFqdnQuery = useCallback(
     (target: string | string[], fieldType: Directive['fieldType'] | null): boolean =>
@@ -138,38 +147,41 @@ export const LookingGlassForm = (): JSX.Element => {
   const handleLocChange = (locations: string[]) =>
     locationChange(locations, { setError, clearErrors, getDevice, text: web.text });
 
-  // Pre-fill form from URL query params (?location=&target=&type=).
-  // Applied once on mount when router.isReady — a ref guard prevents re-applying
-  // if the component re-renders after the user has edited the form.
+  // Pre-fill from URL query params (?location=&target=&type=[&run=1]). Applied
+  // once on mount when router.isReady; the ref guard prevents re-applying after
+  // the user edits the form. Delegates to prefillForm (single source of truth);
+  // the Zustand→RHF mirror above keeps react-hook-form in sync for validation.
   const prefillApplied = useRef(false);
   useEffect(() => {
     if (!router.isReady || prefillApplied.current) return;
+    const { location, target, type, run } = router.query;
+    if (typeof location !== 'string') {
+      prefillApplied.current = true;
+      return;
+    }
     prefillApplied.current = true;
 
-    const { location, target, type } = router.query;
+    const valid = prefillForm(
+      {
+        queryLocation: [location],
+        queryType: typeof type === 'string' ? type : '',
+        queryTarget: typeof target === 'string' ? [target] : [],
+      },
+      getDevice,
+    );
 
-    if (typeof location === 'string') {
-      setValue('queryLocation', [location]);
-      // Drive Zustand state through locationChange so filtered.types is populated.
-      locationChange([location], { setError, clearErrors, getDevice, text: web.text });
-      // Also populate selections.queryLocation so the dropdown <Select value=...> and
-      // the gallery <LocationCard defaultChecked=...> both reflect the pre-filled value.
-      // Guard for unknown location IDs: skip selection rather than inserting a null/bad option.
-      const device = getDevice(location);
-      if (device !== null) {
-        setSelection('queryLocation', [{ value: device.id, label: device.name }]);
-      }
+    const canRun =
+      run === '1' &&
+      valid.length > 0 &&
+      typeof type === 'string' &&
+      type.length > 0 &&
+      typeof target === 'string' &&
+      target.length > 0;
+    if (canRun) {
+      setSubmissionId(makeSubmissionId());
+      setStatus('results');
     }
-    if (typeof type === 'string') {
-      setValue('queryType', type);
-      setFormValue('queryType', type);
-    }
-    if (typeof target === 'string') {
-      setValue('queryTarget', [target]);
-      setFormValue('queryTarget', [target]);
-      setTarget({ display: target });
-    }
-  }, [router.isReady, router.query]);
+  }, [router.isReady, router.query]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleChange(e: OnChangeArgs): void {
     // Signal the field & value to react-hook-form.
