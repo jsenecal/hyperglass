@@ -20,6 +20,15 @@
       ],
       "matchCurrentVersion": "/^0\\./",
       "automerge": false
+    },
+    {
+      "description": "Hold deps with open tracking issues for manual review (never automerge). netmiko/paramiko bumps need live SSH validation that CI does not yet cover (#127); @biomejs/biome 1.9.4+ surfaces new lint findings to fix first (#107).",
+      "matchPackageNames": [
+        "netmiko",
+        "paramiko",
+        "@biomejs/biome"
+      ],
+      "automerge": false
     }
   ]
 }
