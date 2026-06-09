@@ -6,7 +6,7 @@ ENV HYPERGLASS_PORT=8001
 ENV HYPERGLASS_DEBUG=false
 ENV HYPERGLASS_DEV_MODE=false
 ENV HYPERGLASS_REDIS_HOST=redis
-ENV HYPEGLASS_DISABLE_UI=true
+ENV HYPERGLASS_DISABLE_UI=false
 ENV HYPERGLASS_CONTAINER=true
 RUN apk upgrade --no-cache && pip3 install --no-cache-dir --upgrade "setuptools>=78.1.1" pip
 COPY . .
@@ -16,7 +16,10 @@ WORKDIR /opt/hyperglass/hyperglass/ui
 # linux-headers: psutil (no musl wheel) compiles from source and needs kernel
 # headers; previously provided transitively by the removed cairo-dev chain.
 RUN apk add build-base linux-headers nodejs npm
-RUN npm install -g pnpm
+# Pin pnpm: pnpm 11 ignores the onlyBuiltDependencies allowlist (both the
+# package.json field and pnpm-workspace.yaml), so the runtime UI build's
+# `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS. 10.33.2 honors it.
+RUN npm install -g pnpm@10.33.2
 RUN pnpm install -P
 
 FROM ui AS hyperglass
