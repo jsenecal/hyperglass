@@ -21,10 +21,11 @@ import { ShareError } from '~/hooks/use-share';
 
 export interface ShareButtonProps {
   cacheId: string;
+  onShared?: (shareId: string) => void;
 }
 
 export const ShareButton = (props: ShareButtonProps): JSX.Element | null => {
-  const { cacheId } = props;
+  const { cacheId, onShared } = props;
 
   const { cache, web } = useConfig();
   const strF = useStrf();
@@ -44,6 +45,10 @@ export const ShareButton = (props: ShareButtonProps): JSX.Element | null => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (isSuccess && data?.id) onShared?.(data.id);
+  }, [isSuccess, data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!cacheId || !cache.shareEnabled) {
     return null;

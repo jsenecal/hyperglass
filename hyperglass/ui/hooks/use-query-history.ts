@@ -6,6 +6,7 @@ import { historyStorage } from '~/util/history-storage';
 export interface HistoryEntry {
   id: string;
   savedAt: number;
+  shareId?: string;
   query: { queryLocation: string[]; queryType: string; queryTarget: string[] };
   labels: { locations: string[]; type: string; target: string };
   results: Record<string, ResultSnapshot>;
@@ -29,6 +30,7 @@ interface QueryHistoryState {
   clear(): void;
   open(id: string): void;
   close(): void;
+  setShareId(id: string, shareId: string): void;
 }
 
 const uniq = (values: string[]): string[] => Array.from(new Set(values));
@@ -87,6 +89,12 @@ export const useQueryHistory = create<QueryHistoryState>()(
 
         close(): void {
           set({ openId: null });
+        },
+
+        setShareId(id: string, shareId: string): void {
+          set(state => ({
+            entries: state.entries.map(e => (e.id === id ? { ...e, shareId } : e)),
+          }));
         },
       }),
       'useQueryHistory',

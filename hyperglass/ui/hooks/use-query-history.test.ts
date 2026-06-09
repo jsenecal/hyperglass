@@ -69,6 +69,15 @@ describe('useQueryHistory.record', () => {
   });
 });
 
+describe('useQueryHistory setShareId', () => {
+  it('setShareId stores a share id on the matching entry', () => {
+    useQueryHistory.getState().record(input());
+    const id = useQueryHistory.getState().entries[0].id;
+    useQueryHistory.getState().setShareId(id, 'ABCDEFGHIJK');
+    expect(useQueryHistory.getState().entries[0].shareId).toBe('ABCDEFGHIJK');
+  });
+});
+
 describe('useQueryHistory remove/clear/open/close', () => {
   it('remove deletes by id', () => {
     useQueryHistory.getState().record(input({ submissionId: 's1' }));
