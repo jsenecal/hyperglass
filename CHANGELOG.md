@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-06-09
+
+### Fixed
+
+- Shared result links (`/result/<id>`) downloaded an `.htm` file instead of opening in the browser. The SPA-shell handler served `index.html` via Litestar's `File` response, which defaults to `Content-Disposition: attachment`; it now serves the page inline so the client router hydrates the shared result.
+
 ## [2.1.1] - 2026-06-09
 
 ### Fixed
@@ -646,5 +652,7 @@ Version comparison links. Only the fork-era tags exist in this repository
 (v2.0.4-jsenecal.*); historical upstream versions below were never tagged
 here, so they are intentionally left unlinked.
 -->
-[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/jsenecal/hyperglass/compare/v2.1.1...v2.1.2
+[2.1.1]: https://github.com/jsenecal/hyperglass/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/jsenecal/hyperglass/compare/v2.0.4-jsenecal.2...v2.1.0
