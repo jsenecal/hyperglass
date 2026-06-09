@@ -1,0 +1,88 @@
+name: SSH Integration
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - hyperglass/**
+            - .github/**
+    pull_request:
+
+# One run per branch; a re-push (e.g. a Renovate rebase) cancels the superseded run.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    ssh-integration:
+        name: SSH Integration Test
+        runs-on: ubuntu-latest
+
+        # Real OpenSSH server for the netmiko/paramiko transport test. `frr`
+        # maps to Netmiko's linux_ssh, so a plain sshd is a representative target.
+        services:
+            sshd:
+                image: lscr.io/linuxserver/openssh-server:latest
+                env:
+                    PUID: "1000"
+                    PGID: "1000"
+                    PASSWORD_ACCESS: "true"
+                    USER_NAME: hyperglass
+                    USER_PASSWORD: hyperglass
+                    SUDO_ACCESS: "false"
+                ports:
+                    - 2222:2222
+
+        steps:
+            - name: Git Checkout
+              uses: actions/checkout@v3
+
+            - name: Install system packages
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y python3-dev
+
+            - name: Install Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Setup uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
+
+            - name: Start Redis
+              uses: supercharge/redis-github-action@1.7.0
+              with:
+                  redis-version: latest
+
+            - name: Prepare
+              run: |
+                  mkdir -p "$HOME/hyperglass"
+                  echo "HYPERGLASS_APP_PATH=$HOME/hyperglass" >> $GITHUB_ENV
+                  echo "HYPERGLASS_HOST=127.0.0.1" >> $GITHUB_ENV
+                  echo "HYPERGLASS_PORT=8001" >> $GITHUB_ENV
+                  echo "HYPERGLASS_TEST_SSH_HOST=127.0.0.1" >> $GITHUB_ENV
+                  echo "HYPERGLASS_TEST_SSH_PORT=2222" >> $GITHUB_ENV
+                  echo "HYPERGLASS_TEST_SSH_USERNAME=hyperglass" >> $GITHUB_ENV
+                  echo "HYPERGLASS_TEST_SSH_PASSWORD=hyperglass" >> $GITHUB_ENV
+
+            - name: Install
+              run: uv sync --python 3.12
+
+            - name: Wait for SSH to accept connections
+              run: |
+                  for i in $(seq 1 30); do
+                      if ssh-keyscan -p 2222 -T 3 127.0.0.1 2>/dev/null | grep -q .; then
+                          echo "sshd is up after ${i}s"; exit 0
+                      fi
+                      sleep 1
+                  done
+                  echo "sshd did not become reachable in time" >&2
+                  exit 1
+
+            - name: SSH integration tests (PyTest)
+              run: |
+                  . .venv/bin/activate
+                  pytest hyperglass/execution/drivers/tests/test_ssh_integration.py -v
