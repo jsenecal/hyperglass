@@ -1,10 +1,10 @@
-import { Box, Button, Flex } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
 import { AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { Else, If, Then } from 'react-if';
 import { SnapshotResults } from '~/components/results/snapshot-results';
 import { useConfig } from '~/context';
-import { Loading } from '~/elements';
+import { FloatingBackButton, Loading } from '~/elements';
 import { useQueryHistory, useView } from '~/hooks';
 
 import type { NextPage } from 'next';
@@ -41,11 +41,7 @@ const Index: NextPage = () => {
     );
     return (
       <Box w="100%" maxW={{ base: '100%', md: '75%' }} mx="auto">
-        <Flex justify="flex-start" mb={2}>
-          <Button size="sm" variant="ghost" onClick={close}>
-            {web.text.historyBack}
-          </Button>
-        </Flex>
+        <FloatingBackButton isVisible onClick={close} label={web.text.historyBack} />
         <SnapshotResults items={items} showShare />
       </Box>
     );
