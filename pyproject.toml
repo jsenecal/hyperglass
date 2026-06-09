@@ -20,7 +20,7 @@ dependencies = [
     "psutil==5.9.8",
     "py-cpuinfo==9.0.0",
     "pydantic>=2.6.3",
-    "redis==4.5.4",
+    "redis==4.6.0",
     "rich>=13.7.0",
     "typer>=0.12",
     "uvicorn==0.21.1",
