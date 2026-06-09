@@ -47,22 +47,26 @@ OPEN_API = OpenAPIConfig(
 
 @get("/result/{share_id:str}", include_in_schema=False)
 async def share_view_html(share_id: FromPath[str]) -> File:
-    """Serve the SPA shell (index.html) for share result URLs.
+    """Serve the exported result page for share URLs.
 
-    Litestar's static-files html_mode serves 404.html (the Next.js error
-    page) for unknown paths rather than index.html, which breaks client-side
-    routing to /result/<id>. This explicit handler ensures the SPA shell is
-    returned so the Next.js client router can hydrate the correct page.
+    Share IDs are minted at runtime, so `next export` can't pre-render a file
+    per ID. The UI emits a single placeholder export at `result/shared.html`
+    whose bundle is the `/result/[id]` page; we serve it for every valid
+    /result/<id> request and the client parses the real ID from the URL.
+
+    We must NOT fall back to index.html here: index.html is the home page's
+    export (its __NEXT_DATA__ pins the route to "/"), so the browser would
+    render the landing page instead of the result page.
     """
     if not _SHARE_ID_RE.match(share_id):
         raise NotFoundException(detail="Invalid share ID format.")
-    index = UI_DIR / "index.html"
-    if not index.exists():
+    result_page = UI_DIR / "result" / "shared.html"
+    if not result_page.exists():
         raise NotFoundException(detail="UI not built.")
     # content_disposition_type defaults to "attachment", which makes browsers
-    # download the SPA shell instead of rendering it; force inline so /result/<id>
+    # download the page instead of rendering it; force inline so /result/<id>
     # loads in-page and the client router can hydrate.
-    return File(path=index, media_type="text/html", content_disposition_type="inline")
+    return File(path=result_page, media_type="text/html", content_disposition_type="inline")
 
 
 HANDLERS = [

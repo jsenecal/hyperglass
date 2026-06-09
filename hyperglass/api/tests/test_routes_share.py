@@ -2,7 +2,6 @@
 
 # Standard Library
 import re
-from pathlib import Path
 from datetime import datetime
 
 # Third Party
@@ -150,38 +149,57 @@ class TestShareFixed:
 
 
 class TestShareViewHtml:
-    """GET /result/<share_id> serves the SPA shell when index.html is present.
+    """GET /result/<share_id> serves the exported result page when present.
 
     Also verifies that invalid-format IDs are rejected with 404.
     """
 
     @pytest.fixture
-    def index_html(self):
-        """Ensure a minimal exported index.html exists for the share-view handler.
+    def result_page(self, tmp_path, monkeypatch):
+        """Point the handler at a tmp UI dir holding the result placeholder page.
 
-        The real file is a build artifact (`task ui-build`) that isn't present in
-        a bare checkout, so synthesize a placeholder and clean it up afterward.
-        Avoids skipping the serving tests in CI/local runs without a UI build.
+        The handler serves `<UI_DIR>/result/shared.html` (the `/result/[id]`
+        export), NOT index.html — index.html is the home page and would render
+        the landing page instead of the result. The real file is a build
+        artifact (`task ui-build`); rather than depend on its presence (UI_DIR
+        resolves to app_path/static/ui, which differs across dev/CI), redirect
+        UI_DIR to a tmp dir and synthesize the placeholder there.
         """
-        index = Path(__file__).parent.parent.parent / "static" / "ui" / "index.html"
-        created = False
-        if not index.exists():
-            index.parent.mkdir(parents=True, exist_ok=True)
-            index.write_text("<!doctype html><title>hyperglass</title>")
-            created = True
-        try:
-            yield index
-        finally:
-            if created:
-                index.unlink(missing_ok=True)
+        # Project
+        import hyperglass.api as api
 
-    def test_valid_id_serves_index_html(self, client, index_html):
-        """A well-formed 11-char share ID must return 200 text/html (the SPA shell)."""
+        ui_dir = tmp_path / "ui"
+        (ui_dir / "result").mkdir(parents=True)
+        page = ui_dir / "result" / "shared.html"
+        page.write_text("<!doctype html><title>hyperglass result</title>")
+        # UI_DIR is a module global read at request time, so patching it here
+        # takes effect for the handler without rebuilding the app.
+        monkeypatch.setattr(api, "UI_DIR", ui_dir)
+        yield page
+
+    def test_valid_id_serves_result_page(self, client, result_page):
+        """A well-formed 11-char share ID must return 200 text/html (the result page).
+
+        Must serve the /result/[id] export, not index.html (the home page) —
+        serving index.html renders the landing page instead of the result.
+        """
         r = client.get("/result/AAAAAAAAAAA")
         assert r.status_code == 200
         assert "text/html" in r.headers.get("content-type", "")
+        assert "hyperglass result" in r.text
 
-    def test_valid_id_served_inline_not_download(self, client, index_html):
+    def test_missing_result_page_returns_404(self, client, tmp_path, monkeypatch):
+        """Respond 404 when the result export is absent (UI not built).
+
+        Must not fall back to index.html, which would render the home page.
+        """
+        import hyperglass.api as api
+
+        monkeypatch.setattr(api, "UI_DIR", tmp_path / "empty-ui")
+        r = client.get("/result/AAAAAAAAAAA")
+        assert r.status_code == 404
+
+    def test_valid_id_served_inline_not_download(self, client, result_page):
         """The SPA shell must render in-browser, not be offered as a download.
 
         Litestar's File response defaults to content_disposition_type="attachment",

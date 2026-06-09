@@ -21,13 +21,10 @@ Object.defineProperty(window, 'matchMedia', {
 
 import ResultPage from '../../../pages/result/[id]';
 
-vi.mock('next/router', () => ({
-  useRouter: () => ({
-    query: { id: 'aaaaaaaaaaa' },
-    isReady: true,
-    push: vi.fn(),
-  }),
-}));
+// The page is served as a static placeholder export for every /result/<id>
+// URL, so it derives the share ID from window.location, NOT next/router (whose
+// query would hold the baked placeholder param). Tests set the URL accordingly.
+const SHARE_ID = 'aaaaaaaaaaa';
 
 vi.mock('~/context', () => ({
   useConfig: () => ({
@@ -110,6 +107,8 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
 
 beforeEach(() => {
   global.fetch = vi.fn();
+  // Simulate the browser loading /result/<id>; the page reads the ID from here.
+  window.history.pushState({}, '', `/result/${SHARE_ID}`);
 });
 
 describe('ResultPage', () => {
@@ -123,6 +122,15 @@ describe('ResultPage', () => {
 
     // Output text rendered in the component
     await waitFor(() => expect(screen.getByText(/BGP table output here/)).toBeInTheDocument());
+  });
+
+  it('fetches the share ID parsed from window.location, not the router', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse({}));
+
+    render(<ResultPage />, { wrapper });
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch).toHaveBeenCalledWith(`/api/query/share/${SHARE_ID}`);
   });
 
   it('shows configured "share not found" message on 404', async () => {

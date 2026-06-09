@@ -1,6 +1,6 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
 import { SnapshotResults } from '~/components/results/snapshot-results';
 import { useConfig } from '~/context';
 import { useShareGet, useStrf } from '~/hooks';
@@ -8,14 +8,25 @@ import { useShareGet, useStrf } from '~/hooks';
 import type { NextPage } from 'next';
 
 const ResultPage: NextPage = () => {
-  const router = useRouter();
   const { web } = useConfig();
   const strF = useStrf();
 
-  const id = typeof router.query.id === 'string' ? router.query.id : undefined;
+  // This page ships as a single static placeholder export (result/shared.html)
+  // that the backend serves for every /result/<id> URL. Because it's a
+  // statically-exported SSG route, Next bakes the placeholder param into
+  // router.query.id ("shared") and does NOT re-derive it from the address bar,
+  // so we parse the real share ID from window.location on the client instead.
+  // `id` is undefined until mount, which keeps useShareGet disabled (no fetch
+  // during prerender / first paint).
+  const [id, setId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const match = window.location.pathname.match(/\/result\/([^/]+)\/?$/);
+    setId(match ? decodeURIComponent(match[1]) : undefined);
+  }, []);
+
   const { data: snapshot, isLoading, error } = useShareGet(id);
 
-  if (!router.isReady || isLoading) {
+  if (!id || isLoading) {
     return null;
   }
 
@@ -79,11 +90,15 @@ const ResultPage: NextPage = () => {
 export default ResultPage;
 
 // `next export` requires getStaticPaths + getStaticProps for dynamic routes.
-// We return no pre-rendered paths because share IDs are generated at runtime;
-// the Litestar backend serves the SPA shell (index.html) as a fallback for
-// /result/<id> and the Next.js client router hydrates the correct page on load.
+// Share IDs are minted at runtime, so we can't enumerate real paths. We emit a
+// single placeholder export (`result/shared.html`) whose __NEXT_DATA__ pins the
+// page to `/result/[id]`; the Litestar backend serves this file for every
+// /result/<id> request, and the Next.js client router parses the real share ID
+// from window.location once `router.isReady`. Returning no paths (the previous
+// behavior) emitted no result HTML at all, so the backend fell back to
+// index.html — which boots the home page, not this one.
 export function getStaticPaths() {
-  return { paths: [], fallback: false };
+  return { paths: [{ params: { id: 'shared' } }], fallback: false };
 }
 
 // Required by Next.js alongside getStaticPaths. Returns empty props because
