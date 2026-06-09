@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-06-09
+
+### Fixed
+
+- [#134](https://github.com/jsenecal/hyperglass/issues/134): The 2.1.0 container crash-looped on first boot. The runtime UI build's `pnpm install` failed with `ERR_PNPM_IGNORED_BUILDS` because the image installed unpinned pnpm (v11), which ignores the `onlyBuiltDependencies` allowlist (in both `pnpm-workspace.yaml` and the legacy `package.json` field) and so never runs esbuild's postinstall that fetches its platform binary. Pinned pnpm to `10.33.2` (matches local dev) so the allowlist is honored and the build completes.
+- Corrected the `HYPEGLASS_DISABLE_UI` typo (missing `R`) in `Dockerfile` and `compose.yaml`. The misspelled variable never bound to the `hyperglass_`-prefixed setting, so `disable_ui` silently stayed `False`; it is now the real, overridable `HYPERGLASS_DISABLE_UI` knob (kept `False` — the image builds the UI at runtime rather than baking it).
+
 ## [2.1.0] - 2026-06-08
 
 First release under the **hyperglass-ng** name — a maintained fork of
