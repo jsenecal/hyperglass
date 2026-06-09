@@ -19,7 +19,7 @@
 >
 > | Tag | Updated by | Use case |
 > | --- | --- | --- |
-> | `ghcr.io/jsenecal/hyperglass-ng:2.1.0` | tag push | immutable, recommended for production |
+> | `ghcr.io/jsenecal/hyperglass-ng:2.1.1` | tag push | immutable, recommended for production |
 > | `ghcr.io/jsenecal/hyperglass-ng:sha-<short>` | every build | per-commit immutable |
 > | `ghcr.io/jsenecal/hyperglass-ng:main` | every push to `main` | rolling HEAD |
 > | `ghcr.io/jsenecal/hyperglass-ng:latest` | every build | rolling whatever's freshest |
