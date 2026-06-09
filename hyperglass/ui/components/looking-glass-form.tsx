@@ -73,9 +73,13 @@ export const LookingGlassForm = (): JSX.Element => {
 
   const { handleSubmit, register, setValue, setError, clearErrors } = formInstance;
 
-  // Mirror Zustand form values into react-hook-form. Prefill paths write to
-  // Zustand (form/selections) but not RHF; without this, RHF's validation still
-  // sees empty values and a prefilled form cannot be submitted.
+  // Mirror Zustand form values into react-hook-form. Prefill paths (URL params,
+  // store prefillForm) write to Zustand (form/selections) but not RHF; without
+  // this, RHF validation still sees empty values and a prefilled form cannot be
+  // submitted. NOTE: handleChange already calls setValue on user input, so this
+  // effect is load-bearing specifically for the prefill paths — do not remove it.
+  // Keep these setValue calls option-less (no shouldValidate) to avoid running
+  // the vest resolver on every Zustand mutation.
   useEffect(() => {
     setValue('queryLocation', form.queryLocation);
     setValue('queryType', form.queryType);
@@ -177,6 +181,8 @@ export const LookingGlassForm = (): JSX.Element => {
       type.length > 0 &&
       typeof target === 'string' &&
       target.length > 0;
+    // Auto-run skips submitHandler's FQDN-resolution modal: deep links carry a
+    // concrete target from a prior query, so go straight to the results view.
     if (canRun) {
       setSubmissionId(makeSubmissionId());
       setStatus('results');
