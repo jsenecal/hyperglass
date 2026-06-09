@@ -31,6 +31,7 @@ export const HistoryEntryRow = (props: HistoryEntryRowProps): JSX.Element => {
 
   const open = useQueryHistory(s => s.open);
   const remove = useQueryHistory(s => s.remove);
+  const setShareId = useQueryHistory(s => s.setShareId);
   const prefillForm = useFormState(s => s.prefillForm);
   const setStatus = useFormState(s => s.setStatus);
   const setSubmissionId = useFormState(s => s.setSubmissionId);
@@ -81,7 +82,12 @@ export const HistoryEntryRow = (props: HistoryEntryRowProps): JSX.Element => {
             </Button>
           </Tooltip>
         )}
-        {isSingleDevice && <ShareButton cacheId={entry.results[deviceIds[0]].id} />}
+        {isSingleDevice && (
+          <ShareButton
+            cacheId={entry.results[deviceIds[0]].id}
+            onShared={shareId => setShareId(entry.id, shareId)}
+          />
+        )}
         <Tooltip hasArrow label={web.text.historyRerun} placement="top">
           <Button {...iconBtn} aria-label={web.text.historyRerun} onClick={handleRerun}>
             <DynamicIcon icon={{ fi: 'FiRepeat' }} boxSize="16px" />

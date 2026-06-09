@@ -138,6 +138,25 @@ describe('ShareButton', () => {
     );
   });
 
+  it('calls onShared with the minted id on success', async () => {
+    const onShared = vi.fn();
+
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockResponse({
+        json: async () => ({
+          id: 'ABCDEFGHIJK',
+          url: 'http://x/result/ABCDEFGHIJK',
+          expiresAt: '2026-05-08T00:00:00Z',
+        }),
+      }),
+    );
+
+    render(<ShareButton cacheId="cache1" onShared={onShared} />, { wrapper });
+    fireEvent.click(screen.getByRole('button', { name: /Share/i }));
+
+    await waitFor(() => expect(onShared).toHaveBeenCalledWith('ABCDEFGHIJK'));
+  });
+
   it('does not POST again when popover is closed and reopened', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       mockResponse({
