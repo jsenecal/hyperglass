@@ -123,3 +123,38 @@ describe('useFormState.prefillForm', () => {
     expect(useFormState.getState().form.queryLocation).toEqual(['core1']);
   });
 });
+
+describe('useFormState.prefillForm selections.queryType', () => {
+  beforeEach(async () => {
+    await useFormState.getState().reset();
+  });
+
+  const makeGetDevice = () => {
+    const testDevice = {
+      id: 'test1',
+      name: 'Test Router 1',
+      directives: [{ id: 'juniper_bgp_route', name: 'BGP Route', groups: [] }],
+    } as never;
+    return (id: string) => (id === 'test1' ? testDevice : null);
+  };
+
+  it('prefillForm sets selections.queryType from the matching directive', () => {
+    const getDevice = makeGetDevice();
+    useFormState.getState().prefillForm(
+      { queryLocation: ['test1'], queryType: 'juniper_bgp_route', queryTarget: ['192.0.2.0/24'] },
+      getDevice as never,
+    );
+    const { selections, form } = useFormState.getState();
+    expect(form.queryType).toBe('juniper_bgp_route');
+    expect(selections.queryType).toEqual({ value: 'juniper_bgp_route', label: 'BGP Route' });
+  });
+
+  it('prefillForm leaves selections.queryType null for an empty type (new target)', () => {
+    const getDevice = makeGetDevice();
+    useFormState.getState().prefillForm(
+      { queryLocation: ['test1'], queryType: '', queryTarget: [] },
+      getDevice as never,
+    );
+    expect(useFormState.getState().selections.queryType).toBeNull();
+  });
+});
