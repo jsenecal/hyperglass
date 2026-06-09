@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- [#139](https://github.com/jsenecal/hyperglass/issues/139): A query type whose directive `id` is a substring of another directive's `id` (e.g. a text `<x>` vs. a structured `<x>-table` sibling) could resolve to the wrong directive — returning structured output for a text query, and non-deterministically across restarts. Query types now resolve by exact id (`MultiModel.filter`, not the substring `matching`), and `MultiModel` collections preserve first-seen insertion order (deterministic regardless of hash seed) instead of deriving order from set iteration.
+
 ### Changed
 
 - Timestamps shown to viewers (shared-result snapshot/expiry banners and the cached-result tooltip) are now formatted consistently through a single helper: parsed as UTC (the backend emits naive-UTC values), then rendered in the viewer's locale and timezone — including the locale's own 12-/24-hour convention. Previously these were a mix of raw UTC strings and browser-local times that were not actually timezone-converted.
