@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Re-running a query from history or a shared result now populates the form correctly (location, query type, and target) and the form can be submitted; previously the query type was blank and a prefilled "new target" form could not be submitted.
+- The opened-history "view result" and shared-result pages now use the same green bottom-left back control as live results, replacing the inconsistent text button. The shared page keeps its snapshot/expiry banner.
+- Shared results now offer Re-run and "new target" actions; "Run a fresh query" no longer lands on an empty form.
+
+### Added
+
+- Opening a stored result reflects it in the address bar (a `/result/<id>` link when the result has been shared, otherwise a bookmarkable deep link).
+
 ## [2.1.3] - 2026-06-09
 
 ### Fixed

@@ -133,20 +133,24 @@ describe('useFormState.prefillForm selections.queryType', () => {
   const getDevice = (id: string) => (id === 'test1' ? testDevice : null);
 
   it('sets the query-type selection from the matching directive', () => {
-    useFormState.getState().prefillForm(
-      { queryLocation: ['test1'], queryType: 'juniper_bgp_route', queryTarget: ['192.0.2.0/24'] },
-      getDevice as never,
-    );
+    useFormState
+      .getState()
+      .prefillForm(
+        { queryLocation: ['test1'], queryType: 'juniper_bgp_route', queryTarget: ['192.0.2.0/24'] },
+        getDevice as never,
+      );
     const { selections, form } = useFormState.getState();
     expect(form.queryType).toBe('juniper_bgp_route');
     expect(selections.queryType).toEqual({ value: 'juniper_bgp_route', label: 'BGP Route' });
   });
 
   it('leaves the query-type selection null for an empty type', () => {
-    useFormState.getState().prefillForm(
-      { queryLocation: ['test1'], queryType: '', queryTarget: [] },
-      getDevice as never,
-    );
+    useFormState
+      .getState()
+      .prefillForm(
+        { queryLocation: ['test1'], queryType: '', queryTarget: [] },
+        getDevice as never,
+      );
     expect(useFormState.getState().selections.queryType).toBeNull();
   });
 });

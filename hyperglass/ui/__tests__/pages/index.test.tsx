@@ -18,12 +18,16 @@ vi.mock('~/hooks', () => ({
 }));
 vi.mock('~/context', () => ({ useConfig: () => ({ web: { text: { historyBack: 'Back' } } }) }));
 
-import Index from './index';
+import Index from '../../pages/index';
 
 const entry = {
   id: 'e1',
   savedAt: 0,
-  query: { queryLocation: ['test1'], queryType: 'juniper_bgp_route', queryTarget: ['192.0.2.0/24'] },
+  query: {
+    queryLocation: ['test1'],
+    queryType: 'juniper_bgp_route',
+    queryTarget: ['192.0.2.0/24'],
+  },
   labels: { locations: ['Test1'], type: 'BGP Route', target: '192.0.2.0/24' },
   results: { test1: { id: 'c1' } },
 };

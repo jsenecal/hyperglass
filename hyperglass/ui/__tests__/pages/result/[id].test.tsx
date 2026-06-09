@@ -157,9 +157,7 @@ describe('ResultPage', () => {
     render(<ResultPage />, { wrapper });
     const rerun = await screen.findByLabelText('Run again');
     fireEvent.click(rerun);
-    expect(push).toHaveBeenCalledWith(
-      expect.stringContaining('/?location='),
-    );
+    expect(push).toHaveBeenCalledWith(expect.stringContaining('/?location='));
     expect(push).toHaveBeenCalledWith(expect.stringContaining('run=1'));
   });
 });
