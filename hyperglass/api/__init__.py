@@ -59,7 +59,10 @@ async def share_view_html(share_id: FromPath[str]) -> File:
     index = UI_DIR / "index.html"
     if not index.exists():
         raise NotFoundException(detail="UI not built.")
-    return File(path=index, media_type="text/html")
+    # content_disposition_type defaults to "attachment", which makes browsers
+    # download the SPA shell instead of rendering it; force inline so /result/<id>
+    # loads in-page and the client router can hydrate.
+    return File(path=index, media_type="text/html", content_disposition_type="inline")
 
 
 HANDLERS = [

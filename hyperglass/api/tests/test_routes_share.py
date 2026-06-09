@@ -155,18 +155,41 @@ class TestShareViewHtml:
     Also verifies that invalid-format IDs are rejected with 404.
     """
 
-    # Locate the exported index.html relative to this file.
-    _INDEX = Path(__file__).parent.parent.parent / "static" / "ui" / "index.html"
+    @pytest.fixture
+    def index_html(self):
+        """Ensure a minimal exported index.html exists for the share-view handler.
 
-    @pytest.mark.skipif(
-        not (_INDEX.exists()),
-        reason="static/ui/index.html not present; run `task ui-build` first",
-    )
-    def test_valid_id_serves_index_html(self, client):
+        The real file is a build artifact (`task ui-build`) that isn't present in
+        a bare checkout, so synthesize a placeholder and clean it up afterward.
+        Avoids skipping the serving tests in CI/local runs without a UI build.
+        """
+        index = Path(__file__).parent.parent.parent / "static" / "ui" / "index.html"
+        created = False
+        if not index.exists():
+            index.parent.mkdir(parents=True, exist_ok=True)
+            index.write_text("<!doctype html><title>hyperglass</title>")
+            created = True
+        try:
+            yield index
+        finally:
+            if created:
+                index.unlink(missing_ok=True)
+
+    def test_valid_id_serves_index_html(self, client, index_html):
         """A well-formed 11-char share ID must return 200 text/html (the SPA shell)."""
         r = client.get("/result/AAAAAAAAAAA")
         assert r.status_code == 200
         assert "text/html" in r.headers.get("content-type", "")
+
+    def test_valid_id_served_inline_not_download(self, client, index_html):
+        """The SPA shell must render in-browser, not be offered as a download.
+
+        Litestar's File response defaults to content_disposition_type="attachment",
+        which makes browsers download the page instead of rendering it. The handler
+        must serve it inline.
+        """
+        r = client.get("/result/AAAAAAAAAAA")
+        assert "attachment" not in r.headers.get("content-disposition", "")
 
     def test_invalid_id_returns_404(self, client):
         """An ID that doesn't match [A-Za-z0-9_-]{11} must be rejected with 404."""
