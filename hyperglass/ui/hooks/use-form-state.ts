@@ -223,7 +223,7 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
 
     const matchingType = directives.find(d => d.id === query.queryType) ?? null;
     const queryTypeSelection = matchingType
-      ? { value: matchingType.id, label: matchingType.name ?? matchingType.id }
+      ? { value: matchingType.id, label: matchingType.name }
       : null;
 
     set({

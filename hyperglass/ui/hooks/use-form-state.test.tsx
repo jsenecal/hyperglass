@@ -125,21 +125,14 @@ describe('useFormState.prefillForm', () => {
 });
 
 describe('useFormState.prefillForm selections.queryType', () => {
-  beforeEach(async () => {
-    await useFormState.getState().reset();
-  });
+  const testDevice = {
+    id: 'test1',
+    name: 'Test Router 1',
+    directives: [{ id: 'juniper_bgp_route', name: 'BGP Route', groups: [] }],
+  } as never;
+  const getDevice = (id: string) => (id === 'test1' ? testDevice : null);
 
-  const makeGetDevice = () => {
-    const testDevice = {
-      id: 'test1',
-      name: 'Test Router 1',
-      directives: [{ id: 'juniper_bgp_route', name: 'BGP Route', groups: [] }],
-    } as never;
-    return (id: string) => (id === 'test1' ? testDevice : null);
-  };
-
-  it('prefillForm sets selections.queryType from the matching directive', () => {
-    const getDevice = makeGetDevice();
+  it('sets the query-type selection from the matching directive', () => {
     useFormState.getState().prefillForm(
       { queryLocation: ['test1'], queryType: 'juniper_bgp_route', queryTarget: ['192.0.2.0/24'] },
       getDevice as never,
@@ -149,8 +142,7 @@ describe('useFormState.prefillForm selections.queryType', () => {
     expect(selections.queryType).toEqual({ value: 'juniper_bgp_route', label: 'BGP Route' });
   });
 
-  it('prefillForm leaves selections.queryType null for an empty type (new target)', () => {
-    const getDevice = makeGetDevice();
+  it('leaves the query-type selection null for an empty type', () => {
     useFormState.getState().prefillForm(
       { queryLocation: ['test1'], queryType: '', queryTarget: [] },
       getDevice as never,
