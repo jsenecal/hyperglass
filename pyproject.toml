@@ -16,7 +16,7 @@ dependencies = [
     "h11>=0.16.0",
     "loguru>=0.7.2",
     "netmiko==4.1.2",
-    "paramiko==3.4.0",
+    "paramiko==3.5.1",
     "psutil==5.9.8",
     "py-cpuinfo==9.0.0",
     "pydantic>=2.6.3",
