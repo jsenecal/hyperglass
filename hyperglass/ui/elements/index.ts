@@ -13,6 +13,7 @@ export * from './countdown';
 export * from './custom';
 export * from './dynamic-icon';
 export * from './favicon';
+export * from './floating-back-button';
 export * from './form-row';
 export * from './label';
 export * from './load-error';
