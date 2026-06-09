@@ -24,7 +24,7 @@
 > | `ghcr.io/jsenecal/hyperglass-ng:main` | every push to `main` | rolling HEAD |
 > | `ghcr.io/jsenecal/hyperglass-ng:latest` | every build | rolling whatever's freshest |
 >
-> **Maintained by** Jonathan Senecal &lt;jonathan.senecal@metrooptic.com&gt;. **Issues** belong in the [fork's tracker](https://github.com/jsenecal/hyperglass/issues), not upstream's.
+> **Issues** belong in the [fork's tracker](https://github.com/jsenecal/hyperglass/issues), not upstream's.
 
 #### Changes from upstream v2.0.4
 
