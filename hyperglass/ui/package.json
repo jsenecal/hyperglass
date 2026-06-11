@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.11.0",
-    "@biomejs/biome": "1.5.3",
+    "@biomejs/biome": "2.4.16",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.2.1",
     "@testing-library/react-hooks": "^8.0.1",
