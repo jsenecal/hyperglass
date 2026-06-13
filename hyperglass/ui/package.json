@@ -68,7 +68,7 @@
     "@types/dagre": "^0.7.44",
     "@types/isomorphic-fetch": "^0.0.39",
     "@types/lodash": "^4.14.177",
-    "@types/node": "^20.11.20",
+    "@types/node": "^24.0.0",
     "@types/react": "^18.2.60",
     "@types/react-table": "^7.7.1",
     "@types/string-format": "^2.0.0",
