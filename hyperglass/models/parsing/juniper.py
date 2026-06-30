@@ -9,6 +9,7 @@ from pydantic import ConfigDict, field_validator, model_validator
 # Project
 from hyperglass.log import log
 from hyperglass.util import deep_convert_keys
+from hyperglass.state import use_state
 from hyperglass.models.data.bgp_route import BGPRouteTable
 
 # Local
@@ -48,8 +49,8 @@ class JuniperRouteTableEntry(JuniperBase):
     validation_state: int = 3
     next_hop: str
     peer_rid: str
-    peer_as: int
-    source_as: int
+    peer_as: int = 0
+    source_as: int = 0
     source_rid: str
     communities: t.List[str] = None
 
@@ -89,7 +90,10 @@ class JuniperRouteTableEntry(JuniperBase):
         _path_attr = values.get("bgp_path_attributes", {})
         _path_attr_agg = _path_attr.get("attr_aggregator", {}).get("attr_value", {})
         values["as_path"] = _path_attr.get("attr_as_path_effective", {}).get("attr_value", "")
-        values["source_as"] = _path_attr_agg.get("aggr_as_number", 0)
+        # Some Juniper devices omit the aggregator AS number. Fall back to the
+        # network's configured primary ASN so source_as is still populated.
+        primary_asn = use_state("params").primary_asn
+        values["source_as"] = _path_attr_agg.get("aggr_as_number") or primary_asn
         values["source_rid"] = _path_attr_agg.get("aggr_router_id", "")
         values["peer_rid"] = values.get("peer_id", "")
 
