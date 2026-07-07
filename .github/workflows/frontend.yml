@@ -41,7 +41,11 @@ jobs:
 
             - name: Install Dependencies
               working-directory: ${{ env.working-directory }}
-              run: pnpm install
+              # --frozen-lockfile installs exactly the locked versions and fails
+              # loudly if pnpm-lock.yaml is out of sync or corrupt, instead of
+              # silently re-resolving newest-in-range (which previously surfaced
+              # as unrelated jsdom test crashes).
+              run: pnpm install --frozen-lockfile
 
             # next build prerenders pages that import hyperglass.json at build
             # time, so an empty stub isn't enough — use a realistic fixture
