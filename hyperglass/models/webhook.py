@@ -58,11 +58,20 @@ class Webhook(HyperglassModel):
     timestamp: datetime
 
     @model_validator(mode="before")
-    def validate_webhook(cls, model: "Webhook") -> "Webhook":
-        """Reset network attributes if the source is localhost."""
-        if model.source in ("127.0.0.1", "::1"):
-            model.network = {}
-        return model
+    @classmethod
+    def validate_webhook(cls, data: t.Any) -> t.Any:
+        """Reset network attributes if the source is localhost.
+
+        `mode="before"` runs prior to model construction, so the input is the
+        raw mapping passed to `Webhook(**query)` (a dict). The previous
+        implementation accessed it as if it were a model instance
+        (`model.source`, `model.network = {}`), which raised
+        `AttributeError: 'dict' object has no attribute 'source'` and
+        silently broke Slack/MS Teams/generic webhook delivery (#282).
+        """
+        if isinstance(data, dict) and data.get("source") in ("127.0.0.1", "::1"):
+            data["network"] = {}
+        return data
 
     def msteams(self) -> t.Dict[str, t.Any]:
         """Format the webhook data as a Microsoft Teams card."""
