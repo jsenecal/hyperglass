@@ -50,7 +50,7 @@ class JuniperRouteTableEntry(JuniperBase):
     next_hop: str
     peer_rid: str
     peer_as: int = 0
-    source_as: int = 0
+    source_as: int
     source_rid: str
     communities: t.List[str] = None
 
