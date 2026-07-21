@@ -90,8 +90,10 @@ class JuniperRouteTableEntry(JuniperBase):
         _path_attr = values.get("bgp_path_attributes", {})
         _path_attr_agg = _path_attr.get("attr_aggregator", {}).get("attr_value", {})
         values["as_path"] = _path_attr.get("attr_as_path_effective", {}).get("attr_value", "")
-        # Some Juniper devices omit the aggregator AS number. Fall back to the
-        # network's configured primary ASN so source_as is still populated.
+        # Some Juniper devices omit the aggregator AS number.
+        # Fall back to the network's primary ASN to keep source_as populated.
+        # `or` is deliberate here: it catches "missing", 0 (AS0 is reserved, RFC 7607),
+        # and None, unlike .get(key, default) which only catches a missing key.
         primary_asn = use_state("params").primary_asn
         values["source_as"] = _path_attr_agg.get("aggr_as_number") or primary_asn
         values["source_rid"] = _path_attr_agg.get("aggr_router_id", "")
