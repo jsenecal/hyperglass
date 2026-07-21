@@ -49,7 +49,7 @@ class JuniperRouteTableEntry(JuniperBase):
     validation_state: int = 3
     next_hop: str
     peer_rid: str
-    peer_as: int = 0
+    peer_as: t.Optional[int] = None
     source_as: int
     source_rid: str
     communities: t.List[str] = None
