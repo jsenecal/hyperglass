@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- [#142](https://github.com/jsenecal/hyperglass/pull/142): Route parsing failed outright for Juniper devices that omit BGP path attributes (`peer-as` and the aggregator AS number) from their XML response, because `JuniperRouteTableEntry` treated those fields as required. `peer_as` is now `Optional[int]` (a missing value reads as absent rather than a spurious AS0), and `source_as` falls back to the network's configured `primary_asn` when the aggregator AS number is missing, empty, or `0` (AS0 is reserved, RFC 7607).
 - [#139](https://github.com/jsenecal/hyperglass/issues/139): A query type whose directive `id` is a substring of another directive's `id` (e.g. a text `<x>` vs. a structured `<x>-table` sibling) could resolve to the wrong directive — returning structured output for a text query, and non-deterministically across restarts. Query types now resolve by exact id (`MultiModel.filter`, not the substring `matching`), and `MultiModel` collections preserve first-seen insertion order (deterministic regardless of hash seed) instead of deriving order from set iteration.
 
 ### Changed
