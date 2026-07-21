@@ -13,7 +13,7 @@
 >
 > **hyperglass-ng** is a maintained fork of [**thatmattlove/hyperglass**](https://github.com/thatmattlove/hyperglass). The upstream project has been quiet for an extended period, so this fork carries production-oriented fixes and dependency modernization that hadn't landed upstream as of v2.0.4.
 >
-> The rename is **branding and distribution only**: the `hyperglass` import package, the `hyperglass` CLI command, the `HYPERGLASS_` environment prefix, and the `/etc/hyperglass` config layout are unchanged, so existing deployments upgrade in place. The distribution is published as `hyperglass-ng` on PyPI and `ghcr.io/<owner>/hyperglass-ng` on GHCR.
+> The rename is **branding and distribution only**: the `hyperglass` import package, the `hyperglass` CLI command, the `HYPERGLASS_` environment prefix, and the `/etc/hyperglass` config layout are unchanged, so existing deployments upgrade in place. The distribution is published as `hyperglass-ng` on PyPI and `ghcr.io/jsenecal/hyperglass-ng` on GHCR.
 >
 > **Container images** are published to GHCR on every push to `main` and on tag pushes:
 >
