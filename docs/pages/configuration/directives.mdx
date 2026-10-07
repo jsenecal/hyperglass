@@ -38,6 +38,10 @@ A rule is a way of saying "if a query target matches the rule's conditions, run 
 | `action`    | String          | permit        | `permit` or `deny` the directive target when this rule is matched.                             |
 | `commands`  | List of Strings |               | Commands to run when this rule matches. `{target}` is replaced with the query target.          |
 
+<Callout type="info">
+On platforms whose commands run through a shell (`frr`, `bird`, `openbgpd` and `tnsr`), every word of a command that contains `{target}` (or another field) is shell-quoted once the field is filled in, so a query target always stays inside the word it was written in. Write the command as you would type it in a shell: quoting such as `vtysh -c "show bgp ipv4 unicast {target}"`, redirections such as `2>&1` and control operators such as `|` or `&&` work as expected, provided they are separated from a field by a space (`{target} | head`, not `{target}|head`). Query targets containing control characters (such as a line break) are rejected on every platform.
+</Callout>
+
 ### IP Rule
 
 | Parameter           | Type    | Default Value | Description                                                                                                                                                                                                       |
