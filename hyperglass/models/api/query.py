@@ -1,6 +1,7 @@
 """Input query validation model."""
 
 # Standard Library
+import re
 import typing as t
 import hashlib
 import secrets
@@ -24,6 +25,10 @@ from ..config.devices import Device
 QueryLocation = Annotated[str, StringConstraints(strict=True, min_length=1, strip_whitespace=True)]
 QueryTarget = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]
 QueryType = Annotated[str, StringConstraints(strict=True, min_length=1, strip_whitespace=True)]
+
+# ASCII control characters. No valid target contains one, and an embedded line break
+# would be sent to the device as an additional command line.
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class SimpleQuery(BaseModel):
@@ -140,6 +145,14 @@ class Query(BaseModel):
         if not devices.valid_id_or_name(value):
             raise QueryLocationNotFound(location=value)
 
+        return value
+
+    @field_validator("query_target")
+    def validate_query_target_characters(cls, value: t.Union[t.List[str], str]):
+        """Reject targets containing control characters."""
+        for target in value if isinstance(value, list) else [value]:
+            if CONTROL_CHARACTERS.search(target):
+                raise InputInvalid(target=target, error="Target contains a control character")
         return value
 
     @field_validator("query_type")

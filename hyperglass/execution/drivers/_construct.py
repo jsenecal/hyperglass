@@ -8,13 +8,14 @@ hyperglass API modules.
 # Standard Library
 import re
 import json as _json
+import shlex
 import typing as t
 import ipaddress
 
 # Project
 from hyperglass.log import log
 from hyperglass.util import get_fmt_keys
-from hyperglass.constants import TRANSPORT_REST, TARGET_FORMAT_SPACE
+from hyperglass.constants import TRANSPORT_REST, SHELL_PLATFORMS, TARGET_FORMAT_SPACE
 from hyperglass.exceptions.public import InputInvalid
 from hyperglass.exceptions.private import ConfigError
 
@@ -28,6 +29,54 @@ if t.TYPE_CHECKING:
     from hyperglass.models.config.devices import Device
 
 FormatterCallback = t.Callable[[str], t.Union[t.List[str], str]]
+
+
+def _shell_words(command: str) -> t.List[str]:
+    """Split a command at unquoted whitespace, keeping each word as written."""
+    words = []
+    word = ""
+    quote = None
+    escaped = False
+    for char in command:
+        if escaped:
+            escaped = False
+        elif char == "\\" and quote != "'":
+            escaped = True
+        elif quote is not None:
+            if char == quote:
+                quote = None
+        elif char in "'\"":
+            quote = char
+        elif char.isspace():
+            if word:
+                words.append(word)
+            word = ""
+            continue
+        word += char
+    if word:
+        words.append(word)
+    return words
+
+
+def shell_format(command: str, **fmt: t.Any) -> str:
+    """Fill a command template that will be parsed by a POSIX shell.
+
+    The template is trusted, but the values (notably the query target) are not.
+    The template is split into shell words *before* the values are substituted,
+    and every word containing a field is unquoted, filled in and re-quoted as a
+    whole, so a value always stays inside the single word it was written in,
+    whatever characters it contains. Words without a field are kept exactly as
+    written, so redirections and control operators (`2>&1`, `|`, `&&`) work, as
+    long as they are separated from any field by whitespace.
+    """
+    words = []
+    for word in _shell_words(command):
+        if get_fmt_keys(word):
+            (unquoted,) = shlex.split(word)
+            words.append(shlex.quote(unquoted.format(**fmt)))
+        else:
+            words.append(word.format())
+    return " ".join(words)
 
 
 class Construct:
@@ -110,7 +159,10 @@ class Construct:
         except ValueError:
             pass
 
-        return command.format(target=self.target, mask=mask, **attrs)
+        fmt = {"target": self.target, "mask": mask, **attrs}
+        if self.device.platform in SHELL_PLATFORMS:
+            return shell_format(command, **fmt)
+        return command.format(**fmt)
 
     def queries(self):
         """Return queries for each enabled AFI."""

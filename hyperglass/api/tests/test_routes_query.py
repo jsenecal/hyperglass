@@ -83,3 +83,17 @@ def test_force_skips_cache_hit(client, state):
     r3 = client.post("/api/query", json={**body, "force": True})
     assert r3.status_code == 201
     assert r3.json()["cached"] is False
+
+
+def test_query_rejects_control_characters_in_target(client):
+    """A target with an embedded line break is refused with the invalid input message."""
+    resp = client.post(
+        "/api/query",
+        json={
+            "queryLocation": "test1",
+            "queryTarget": "192.0.2.0/24\nshow running-config",
+            "queryType": "juniper_bgp_route",
+        },
+    )
+    assert 400 <= resp.status_code < 500
+    assert "is not valid" in resp.json()["output"]

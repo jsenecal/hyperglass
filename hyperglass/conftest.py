@@ -8,6 +8,7 @@ import pytest
 
 # Project
 from hyperglass.state import use_state
+from hyperglass.state.hooks import _use_state
 from hyperglass.configuration import init_ui_params
 from hyperglass.models.directive import Directives
 from hyperglass.models.config.params import Params
@@ -114,5 +115,12 @@ def state(
         pipeline.set("devices", _devices)
         pipeline.set("ui_params", ui_params)
 
+    # `use_state(<attr>)` memoizes the deserialized value, so drop it to make
+    # modules that override the `devices`/`directives` fixtures see their own.
+    _use_state.cache_clear()
+
     yield _state
     _state.clear()
+    # Restore the import-time stub state for tests that don't use this fixture.
+    _seed_stub_state()
+    _use_state.cache_clear()

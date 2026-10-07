@@ -87,3 +87,7 @@ LINUX_PLATFORMS = (
     "bird",
     "openbgpd",
 )
+
+# Platforms whose commands are parsed by a POSIX shell: the linux platforms, and
+# TNSR, whose builtin directives run `dataplane shell sudo vtysh -c ...`.
+SHELL_PLATFORMS = (*LINUX_PLATFORMS, "tnsr")

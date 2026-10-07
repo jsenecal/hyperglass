@@ -73,7 +73,20 @@ def directives() -> t.Sequence[t.Dict[str, t.Any]]:
                     },
                 ],
                 "field": {"description": "Target"},
-            }
+            },
+            # Same shape as the builtin FRR AS path directive: an unrestricted
+            # pattern rule whose target sits inside a double-quoted argument.
+            "echo_pattern": {
+                "name": "Echo Pattern",
+                "rules": [
+                    {
+                        "condition": "*",
+                        "action": "permit",
+                        "command": f'echo "{MARKER}_{{target}}"',
+                    }
+                ],
+                "field": {"description": "Target"},
+            },
         }
     ]
 
@@ -86,7 +99,7 @@ def devices() -> t.Sequence[t.Dict[str, t.Any]]:
         "port": int(SSH_PORT),
         "platform": "frr",
         "attrs": {},
-        "directives": ["echo_ssh"],
+        "directives": ["echo_ssh", "echo_pattern"],
     }
     return [
         {**base, "name": "ssh_ok", "credential": {"username": SSH_USER, "password": SSH_PASS}},
@@ -118,3 +131,16 @@ async def test_netmiko_bad_credentials_raise_autherror(state):
 
     with pytest.raises(AuthError):
         await conn.collect()
+
+
+@pytest.mark.asyncio
+async def test_netmiko_target_cannot_inject_shell_commands(state):
+    """A target that closes the quote does not run commands on the device (issue #383)."""
+    target = '_65000"; echo $((6*7))INJ; echo "'
+    query = Query(queryLocation="ssh_ok", queryTarget=target, queryType="echo_pattern")
+    conn = NetmikoConnection(device=state.devices["ssh_ok"], query_data=query)
+
+    responses = await conn.collect()
+
+    assert not any("42INJ" in r for r in responses), responses
+    assert any(f"{MARKER}_{target}" in r for r in responses), responses
