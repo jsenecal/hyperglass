@@ -6,13 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-10-07
+
+### Security
+
+- [#144](https://github.com/jsenecal/hyperglass/pull/144): **Unauthenticated OS command injection through the query target** (reported upstream as [thatmattlove/hyperglass#383](https://github.com/thatmattlove/hyperglass/issues/383)). On FRR, BIRD and OpenBGPD devices, commands run through the SSH user's shell, and the builtin BGP AS Path and BGP Community directives accept any target. A target such as `_65000"; id; echo "` therefore ran arbitrary commands on the device from a single unauthenticated `POST /api/query`. On these platforms every command word containing `{target}` (or another field) is now shell-quoted once the field is filled in, so a target can never leave its argument; template words without a field are sent as written, so redirections and `|`/`&&` in custom directives keep working when separated from a field by a space. Query targets containing control characters (such as an embedded line break, which non-shell platforms would run as a second command line) are now rejected on every platform. Upgrade if any FRR, BIRD or OpenBGPD device is configured.
+
 ### Fixed
 
+- Slack, Microsoft Teams and generic HTTP webhooks were never delivered: the webhook model's `mode="before"` validator treated its raw input as a model instance and raised on every query ([thatmattlove/hyperglass#282](https://github.com/thatmattlove/hyperglass/issues/282)).
 - [#142](https://github.com/jsenecal/hyperglass/pull/142): Route parsing failed outright for Juniper devices that omit BGP path attributes (`peer-as` and the aggregator AS number) from their XML response, because `JuniperRouteTableEntry` treated those fields as required. `peer_as` is now `Optional[int]` (a missing value reads as absent rather than a spurious AS0), and `source_as` falls back to the network's configured `primary_asn` when the aggregator AS number is missing, empty, or `0` (AS0 is reserved, RFC 7607).
 - [#139](https://github.com/jsenecal/hyperglass/issues/139): A query type whose directive `id` is a substring of another directive's `id` (e.g. a text `<x>` vs. a structured `<x>-table` sibling) could resolve to the wrong directive — returning structured output for a text query, and non-deterministically across restarts. Query types now resolve by exact id (`MultiModel.filter`, not the substring `matching`), and `MultiModel` collections preserve first-seen insertion order (deterministic regardless of hash seed) instead of deriving order from set iteration.
+- The container image could not be built since the base image moved to `python:3.14-alpine`: Pillow 10.x has no Python 3.14 wheel and failed to compile from source, so no image was published after 2.1.4. The base image is back on `python:3.12-alpine` (what every published image used), and Renovate now holds Python base-image updates for manual review.
 
 ### Changed
 
+- Runtime dependency updates: netmiko 4.1.2 → 4.7.0, paramiko 3.4.0 → 3.5.1, redis 4.5.4 → 4.6.0, PyJWT 2.6.0 → 2.13.0, distro 1.8.0 → 1.9.0. A new SSH integration test runs the netmiko/paramiko transport against a real OpenSSH server in CI.
 - Timestamps shown to viewers (shared-result snapshot/expiry banners and the cached-result tooltip) are now formatted consistently through a single helper: parsed as UTC (the backend emits naive-UTC values), then rendered in the viewer's locale and timezone — including the locale's own 12-/24-hour convention. Previously these were a mix of raw UTC strings and browser-local times that were not actually timezone-converted.
 
 ## [2.1.4] - 2026-06-09
@@ -679,7 +688,8 @@ Version comparison links. Only the fork-era tags exist in this repository
 (v2.0.4-jsenecal.*); historical upstream versions below were never tagged
 here, so they are intentionally left unlinked.
 -->
-[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.4...HEAD
+[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.5...HEAD
+[2.1.5]: https://github.com/jsenecal/hyperglass/compare/v2.1.4...v2.1.5
 [2.1.4]: https://github.com/jsenecal/hyperglass/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/jsenecal/hyperglass/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/jsenecal/hyperglass/compare/v2.1.1...v2.1.2
