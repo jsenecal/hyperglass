@@ -3,6 +3,17 @@ on:
   push:
     branches: [main]
     tags: ["*"]
+  # Build (without pushing) on PRs that can change the image, so a base image
+  # or dependency bump that breaks the build fails before merge, not after.
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - pyproject.toml
+      - uv.lock
+      - hyperglass/ui/package.json
+      - hyperglass/ui/pnpm-lock.yaml
+      - .github/workflows/docker.yml
 
 env:
   REGISTRY: ghcr.io
@@ -20,6 +31,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Log in to the Container registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -49,6 +61,6 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
