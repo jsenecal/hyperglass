@@ -31,7 +31,7 @@
       "automerge": false
     },
     {
-      "description": "Hold the Python base image for manual review (never automerge). PR CI does not build the Docker image, so a base bump that breaks it only surfaces after merge: python 3.14-alpine (#48) left Pillow <11 without a wheel and broke every image build until 2.1.5.",
+      "description": "Hold the Python base image for manual review (never automerge). A new Python minor also needs backend CI matrix coverage, which the image build alone does not prove: python 3.14-alpine (#48) left Pillow <11 without a wheel and broke every image build until 2.1.5.",
       "matchDatasources": [
         "docker"
       ],
