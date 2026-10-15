@@ -25,6 +25,10 @@ PassedValidation = t.Union[bool, None]
 IPFamily = t.Literal["ipv4", "ipv6"]
 RuleTypeAttr = t.Literal["ipv4", "ipv6", "pattern", "none"]
 
+# Characters allowed for a wildcard (`*`) pattern rule: AS-path and community syntax, while
+# excluding quotes, backslashes and control characters that could break out of a device command.
+WILDCARD_PATTERN = re.compile(r"[A-Za-z0-9 _.:^$*+?()\[\]{}|,-]+")
+
 
 class Input(HyperglassModel):
     """Base input field."""
@@ -204,11 +208,24 @@ class RuleWithPattern(Rule):
         """Validate a string target against configured regex patterns."""
 
         def validate_single_value(value: str) -> t.Union[bool, BaseException]:
-            if self.condition == "*":
-                pattern = re.compile(".+", re.IGNORECASE)
+            if self.action == "deny":
+                # Keep the start-anchored match for deny rules, so a deny condition still blocks
+                # every target it is a prefix of (e.g. `65000` denies `65000:666`), and `*`
+                # still denies everything.
+                if self.condition == "*":
+                    pattern = re.compile(".+", re.IGNORECASE)
+                else:
+                    pattern = re.compile(self.condition, re.IGNORECASE)
+                is_match = pattern.match(value)
             else:
-                pattern = re.compile(self.condition, re.IGNORECASE)
-            is_match = pattern.match(value)
+                if self.condition == "*":
+                    pattern = WILDCARD_PATTERN
+                else:
+                    pattern = re.compile(self.condition, re.IGNORECASE)
+                # Require the whole value to match, so a permitted target cannot smuggle extra
+                # characters (e.g. a quote to break out of a quoted device-command argument)
+                # past the pattern.
+                is_match = pattern.fullmatch(value)
 
             if is_match and self.action == "permit":
                 return True
@@ -340,7 +357,7 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
             "name": self.name,
             "field_type": self.field_type,
             "groups": self.groups,
-            "description": self.field.description if self.field is not None else '',
+            "description": self.field.description if self.field is not None else "",
             "info": None,
             "history": self.history,
         }

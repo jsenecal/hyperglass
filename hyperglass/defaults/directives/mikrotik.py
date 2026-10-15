@@ -1,6 +1,7 @@
 """Default Mikrotik Directives."""
 
 # Project
+from hyperglass.constants import PATTERN_AS_PATH, PATTERN_BGP_COMMUNITY
 from hyperglass.models.directive import (
     Text,
     RuleWithIPv4,
@@ -44,7 +45,7 @@ Mikrotik_BGPASPath = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 "ip route print where bgp-as-path={target}",
@@ -61,7 +62,7 @@ Mikrotik_BGPCommunity = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 "ip route print where bgp-communities={target}",

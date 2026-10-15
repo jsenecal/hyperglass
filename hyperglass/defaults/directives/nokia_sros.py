@@ -1,6 +1,7 @@
 """Default Nokia SR-OS Directives."""
 
 # Project
+from hyperglass.constants import PATTERN_AS_PATH, PATTERN_BGP_COMMUNITY
 from hyperglass.models.directive import (
     Text,
     RuleWithIPv4,
@@ -44,7 +45,7 @@ NokiaSROS_BGPASPath = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 "/show router bgp routes aspath-regex {target}",
@@ -60,7 +61,7 @@ NokiaSROS_BGPCommunity = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 "/show router bgp routes community {target}",

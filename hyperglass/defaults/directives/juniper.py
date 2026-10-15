@@ -1,6 +1,7 @@
 """Default Juniper Directives."""
 
 # Project
+from hyperglass.constants import PATTERN_AS_PATH, PATTERN_BGP_COMMUNITY
 from hyperglass.models.directive import (
     Text,
     RuleWithIPv4,
@@ -48,7 +49,7 @@ JuniperBGPASPath = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 'show route protocol bgp table inet.0 aspath-regex "{target}"',
@@ -66,7 +67,7 @@ JuniperBGPCommunity = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 'show route protocol bgp table inet.0 community "{target}" detail',
@@ -144,7 +145,7 @@ JuniperBGPASPathTable = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 'show route protocol bgp table inet.0 aspath-regex "{target}" detail | display xml',
@@ -161,7 +162,7 @@ JuniperBGPCommunityTable = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 "show route protocol bgp table inet.0 community {target} detail | display xml",
