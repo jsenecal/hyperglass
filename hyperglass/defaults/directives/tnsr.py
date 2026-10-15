@@ -1,6 +1,7 @@
 """Default TNSR Directives."""
 
 # Project
+from hyperglass.constants import PATTERN_AS_PATH, PATTERN_BGP_COMMUNITY
 from hyperglass.models.directive import (
     Text,
     RuleWithIPv4,
@@ -44,7 +45,7 @@ TNSR_BGPASPath = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 'dataplane shell sudo vtysh -c "show bgp ipv4 unicast regexp {target}"',
@@ -61,7 +62,7 @@ TNSR_BGPCommunity = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 'dataplane shell sudo vtysh -c "show bgp ipv4 unicast community {target}"',

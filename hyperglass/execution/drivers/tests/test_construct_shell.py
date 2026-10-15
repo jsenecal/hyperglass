@@ -169,8 +169,14 @@ def devices() -> t.Sequence[t.Dict[str, t.Any]]:
 
 @pytest.mark.parametrize("platform", ("frr", "bird", "openbgpd"))
 def test_construct_quotes_target_on_shell_platforms(state, platform: str):
-    """The constructor shell-quotes the target for shell-backed platforms."""
-    target = PAYLOADS[0]
+    """The constructor shell-quotes the target for shell-backed platforms.
+
+    A fully hostile target (quotes, ``;``, ``$(...)``) is now rejected by input
+    validation before construction, so this uses a *valid* AS-path regular
+    expression that still contains a shell-significant character (``|`` for
+    alternation) to prove the constructor keeps it inside a single shell word.
+    """
+    target = "(65000|65001)"
     query = Query(queryLocation=platform, queryTarget=target, queryType="aspath")
     constructor = Construct(device=state.devices[platform], query=query)
 

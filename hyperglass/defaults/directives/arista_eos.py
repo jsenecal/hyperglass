@@ -1,6 +1,7 @@
 """Default Arista Directives."""
 
 # Project
+from hyperglass.constants import PATTERN_AS_PATH, PATTERN_BGP_COMMUNITY
 from hyperglass.models.directive import (
     Text,
     RuleWithIPv4,
@@ -48,7 +49,7 @@ AristaBGPASPath = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 "show ip bgp regexp {target}",
@@ -66,7 +67,7 @@ AristaBGPCommunity = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 "show ip bgp community {target}",
@@ -144,7 +145,7 @@ AristaBGPASPathTable = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 "show ip bgp regexp {target} | json",
@@ -161,7 +162,7 @@ AristaBGPCommunityTable = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 "show ip bgp community {target} | json",

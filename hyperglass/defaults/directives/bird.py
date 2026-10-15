@@ -1,6 +1,7 @@
 """Default BIRD Directives."""
 
 # Project
+from hyperglass.constants import PATTERN_AS_PATH, PATTERN_BGP_COMMUNITY
 from hyperglass.models.directive import (
     Text,
     RuleWithIPv4,
@@ -44,7 +45,7 @@ BIRD_BGPASPath = BuiltinDirective(
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_AS_PATH,
             action="permit",
             commands=[
                 'birdc "show route all where bgp_path ~ {target}"',
@@ -60,7 +61,7 @@ BIRD_BGPCommunity = BuiltinDirective(
     name="BGP Community",
     rules=[
         RuleWithPattern(
-            condition="*",
+            condition=PATTERN_BGP_COMMUNITY,
             action="permit",
             commands=[
                 'birdc "show route all where {target} ~ bgp_community"',
