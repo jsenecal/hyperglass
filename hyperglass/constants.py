@@ -91,3 +91,18 @@ LINUX_PLATFORMS = (
 # Platforms whose commands are parsed by a POSIX shell: the linux platforms, and
 # TNSR, whose builtin directives run `dataplane shell sudo vtysh -c ...`.
 SHELL_PLATFORMS = (*LINUX_PLATFORMS, "tnsr")
+
+# AS path regular expression, e.g. `_65000_`, `^65000$`, or `.* 65000 .*`. Digits, spaces and
+# regular-expression operators only -- no quotes, which could break out of a quoted device command.
+PATTERN_AS_PATH = r"[0-9 _^$.*+?()\[\]{}|,-]{1,256}"
+
+# BGP community: decimal (`4259840001`), standard/extended (`65000:1`), large (`65000:1:2`),
+# IPv4-based (`192.0.2.1:100`), or extended with a type (`target:65000:1`). No spaces, pipes or
+# quotes, so it cannot break out of an unquoted `community {target}` command argument.
+PATTERN_BGP_COMMUNITY = (
+    r"\d{1,10}"
+    r"|\d{1,10}:\d{1,10}"
+    r"|\d{1,10}:\d{1,10}:\d{1,10}"
+    r"|\d{1,3}(?:\.\d{1,3}){3}:\d{1,5}"
+    r"|(?:target|origin):(?:\d{1,10}|\d{1,3}(?:\.\d{1,3}){3}):\d{1,10}"
+)
