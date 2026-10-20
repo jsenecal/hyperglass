@@ -31,7 +31,7 @@ import pytest
 
 # Project
 from hyperglass.models.api import Query
-from hyperglass.exceptions.public import AuthError
+from hyperglass.exceptions.public import AuthError, InputInvalid
 from hyperglass.execution.drivers import NetmikoConnection
 
 SSH_HOST = os.getenv("HYPERGLASS_TEST_SSH_HOST")
@@ -134,13 +134,30 @@ async def test_netmiko_bad_credentials_raise_autherror(state):
 
 
 @pytest.mark.asyncio
-async def test_netmiko_target_cannot_inject_shell_commands(state):
-    """A target that closes the quote does not run commands on the device (issue #383)."""
+async def test_netmiko_injection_target_is_rejected_before_sending(state):
+    """A target that would close the quoted argument is rejected at validation (issue #383).
+
+    The quote/`;`/`$()` breakout never reaches the device: input validation
+    rejects it while building the query, so it cannot be constructed into a
+    command at all.
+    """
     target = '_65000"; echo $((6*7))INJ; echo "'
+    with pytest.raises(InputInvalid):
+        Query(queryLocation="ssh_ok", queryTarget=target, queryType="echo_pattern")
+
+
+@pytest.mark.asyncio
+async def test_netmiko_shell_significant_target_stays_literal(state):
+    """A valid target with a shell-significant char (`|` alternation) is passed literally.
+
+    `|` is legitimate in an AS-path regular expression, so it passes validation;
+    the constructor must still keep it inside a single shell word so the device
+    echoes it back verbatim instead of treating it as a pipe.
+    """
+    target = "(65000|65001)"
     query = Query(queryLocation="ssh_ok", queryTarget=target, queryType="echo_pattern")
     conn = NetmikoConnection(device=state.devices["ssh_ok"], query_data=query)
 
     responses = await conn.collect()
 
-    assert not any("42INJ" in r for r in responses), responses
     assert any(f"{MARKER}_{target}" in r for r in responses), responses
