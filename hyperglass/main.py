@@ -1,10 +1,15 @@
 """Start hyperglass."""
 
 # Standard Library
+import os
 import sys
+import atexit
+import shutil
 import typing as t
 import asyncio
 import logging
+import tempfile
+from pathlib import Path
 
 # Third Party
 import uvicorn
@@ -86,10 +91,38 @@ def unregister_all_plugins() -> None:
         manager().reset()
 
 
+def prepare_metrics_dir() -> Path:
+    """Prepare prometheus_client's multiprocess directory.
+
+    Each uvicorn worker is a separate process with its own metric values, so
+    worker processes write them to a shared directory that the metrics
+    endpoint aggregates. prometheus_client selects this mode when it is first
+    imported, so this must run before any worker imports it (i.e. before the
+    app is imported), and the directory must be emptied between runs.
+    """
+    configured = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+
+    if configured is None:
+        path = Path(tempfile.mkdtemp(prefix="hyperglass-metrics-"))
+        atexit.register(shutil.rmtree, path, ignore_errors=True)
+        os.environ["PROMETHEUS_MULTIPROC_DIR"] = str(path)
+        return path
+
+    path = Path(configured)
+    path.mkdir(parents=True, exist_ok=True)
+    for stale in path.glob("*.db"):
+        stale.unlink()
+    return path
+
+
 def start(*, log_level: t.Union[str, int], workers: int) -> None:
     """Start hyperglass via ASGI server."""
 
     register_all_plugins()
+
+    if use_state("params").metrics.enable:
+        metrics_dir = prepare_metrics_dir()
+        log.bind(directory=str(metrics_dir)).debug("Prepared metrics directory")
 
     if not Settings.disable_ui:
         asyncio.run(build_ui())

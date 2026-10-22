@@ -31,4 +31,8 @@ WORKDIR /opt/hyperglass
 RUN pip3 install -e .
 
 EXPOSE ${HYPERGLASS_PORT}
+# The UI is built on first boot, before the server listens, which can take
+# several minutes; failures during the start period don't count as unhealthy.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10m --retries=3 \
+    CMD ["python3", "-m", "hyperglass.console", "healthcheck"]
 CMD ["python3", "-m", "hyperglass.console", "start"]

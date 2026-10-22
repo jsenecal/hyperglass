@@ -4,10 +4,12 @@
 import json
 import time
 import typing as t
+import asyncio
 import secrets
 from datetime import UTC, datetime, timedelta
 
 # Third Party
+from redis import Redis
 from litestar import Request, Response, get, post
 from litestar.di import Provide
 from litestar.params import FromPath
@@ -29,13 +31,26 @@ from hyperglass.models.config.devices import Devices, APIDevice
 # Local
 from .state import get_state, get_params, get_devices
 from .tasks import send_webhook
+from .metrics import (
+    QUERY_METRICS_OPT,
+    set_query_labels,
+    record_query_cache,
+    record_query_success,
+    record_query_duration,
+)
 from .fake_output import fake_output
+
+# Not user-configurable: an internal bound so an unreachable Redis reports
+# unhealthy promptly rather than hanging on DNS/TCP timeouts, kept well under
+# the container HEALTHCHECK timeout.
+HEALTH_REDIS_TIMEOUT = 3
 
 __all__ = (
     "device",
     "devices",
     "queries",
     "info",
+    "health",
     "query",
     "share_create",
     "share_get",
@@ -98,7 +113,60 @@ async def info(params: Params) -> APIParams:
     return params.export_api()
 
 
-@post("/api/query", dependencies={"_state": Provide(get_state)})
+def ping_redis(dsn: str) -> None:
+    """Ping Redis over a dedicated, short-timeout connection.
+
+    The shared connection pool has no timeouts, so a hung ping would hold one
+    of its connections and stall the health check indefinitely.
+    """
+    client = Redis.from_url(
+        dsn,
+        socket_connect_timeout=HEALTH_REDIS_TIMEOUT,
+        socket_timeout=HEALTH_REDIS_TIMEOUT,
+    )
+    try:
+        client.ping()
+    finally:
+        client.close()
+
+
+@get("/api/health", dependencies={"_state": Provide(get_state)}, include_in_schema=False)
+async def health(_state: HyperglassState) -> Response:
+    """Report whether hyperglass can serve queries.
+
+    Responds 200 when every check passes, else 503. Check details are logged
+    rather than returned, as this endpoint is unauthenticated.
+    """
+    checks = {}
+
+    try:
+        # In a thread, so a slow Redis doesn't block the worker's event loop.
+        await asyncio.to_thread(ping_redis, str(_state.settings.redis_dsn))
+        checks["redis"] = "ok"
+    except Exception as err:
+        log.bind(check="redis", error=str(err)).error("Health check failed")
+        checks["redis"] = "error"
+
+    if _state.settings.disable_ui:
+        checks["ui"] = "disabled"
+    elif (_state.settings.static_path / "ui" / "index.html").exists():
+        checks["ui"] = "ok"
+    else:
+        log.bind(check="ui").error("Health check failed: UI is not built")
+        checks["ui"] = "error"
+
+    healthy = all(value != "error" for value in checks.values())
+    return Response(
+        {"status": "ok" if healthy else "error", "checks": checks},
+        status_code=200 if healthy else 503,
+    )
+
+
+@post(
+    "/api/query",
+    dependencies={"_state": Provide(get_state)},
+    opt={QUERY_METRICS_OPT: True},
+)
 async def query(_state: HyperglassState, request: Request, data: Query) -> QueryResponse:
     """Ingest request data pass it to the backend application to perform the query."""
 
@@ -112,6 +180,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     cache_key = f"hyperglass.query.{data.digest()}"
 
     _log = log.bind(query=data.summary())
+    set_query_labels(request, data)
 
     _log.info("Starting query execution")
 
@@ -122,6 +191,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
     if cache_response:
         _log.bind(cache_key=cache_key).debug("Cache hit")
+        record_query_cache("hit")
 
         # If a cached response exists, reset the expiration time.
         cache.expire(cache_key, expire_in=_state.params.cache.timeout)
@@ -132,6 +202,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
     elif not cache_response:
         _log.bind(cache_key=cache_key).debug("Cache miss")
+        record_query_cache("bypass" if data.force else "miss")
 
         timestamp = data.timestamp
 
@@ -153,6 +224,8 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
 
         if output is None:
             raise HyperglassError(message=_state.params.messages.general, alert="danger")
+
+        record_query_duration(request, elapsedtime)
 
         json_output = is_type(output, OutputDataModel)
 
@@ -194,6 +267,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
             "application/json" if is_type(cache_response, t.Dict) else "text/plain"
         )
     _log.info("Execution completed")
+    record_query_success(request)
 
     response = {
         "output": cache_response,
