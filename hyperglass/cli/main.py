@@ -142,6 +142,39 @@ def _clear_cache():
         raise typer.Exit(1)
 
 
+@cli.command(name="healthcheck")
+def _healthcheck(
+    # Under the container HEALTHCHECK timeout (10s), so a slow but definite
+    # failure is reported with its reason rather than killed by Docker.
+    timeout: float = typer.Option(8.0, help="Seconds to wait for a response"),
+):
+    """Check the health of a running hyperglass server"""
+    # Standard Library
+    import urllib.error
+    import urllib.request
+    from ipaddress import ip_address
+
+    # Project
+    from hyperglass.settings import Settings
+
+    host = Settings.host
+    # A wildcard listen address isn't connectable; use loopback of the same family.
+    if host.is_unspecified:
+        host = ip_address("::1" if host.version == 6 else "127.0.0.1")
+    netloc = f"[{host!s}]" if host.version == 6 else str(host)
+    url = f"http://{netloc}:{Settings.port!s}/api/health"
+
+    try:
+        with urllib.request.urlopen(url, timeout=timeout):  # noqa: S310 (fixed http scheme)
+            echo.success("hyperglass is healthy")
+    except urllib.error.HTTPError as err:
+        echo.error("hyperglass is unhealthy: {!s}", err.read().decode(errors="replace"))
+        raise typer.Exit(1) from err
+    except OSError as err:
+        echo.error("Unable to reach hyperglass at {!s}: {!s}", url, err)
+        raise typer.Exit(1) from err
+
+
 @cli.command(name="devices")
 def _devices(
     search: t.Annotated[

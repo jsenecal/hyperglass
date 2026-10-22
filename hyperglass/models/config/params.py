@@ -18,6 +18,7 @@ from .docs import Docs
 from ..main import HyperglassModel
 from .cache import Cache
 from .logging import Logging
+from .metrics import Metrics
 from .messages import Messages
 from .structured import Structured
 
@@ -91,6 +92,7 @@ class Params(ParamsPublic, HyperglassModel):
     cache: Cache = Cache()
     docs: Docs = Docs()
     logging: Logging = Logging()
+    metrics: Metrics = Metrics()
     messages: Messages = Messages()
     structured: Structured = Structured()
     web: Web = Web()

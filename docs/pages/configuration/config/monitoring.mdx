@@ -1,0 +1,90 @@
+import { Callout } from "nextra/components";
+
+## Monitoring
+
+hyperglass exposes a health check endpoint and, optionally, [Prometheus](https://prometheus.io) metrics.
+
+### Health Check
+
+`GET /api/health` reports whether hyperglass can serve queries. It is always enabled.
+
+| Check   | Passes when                                                              |
+| :------ | :----------------------------------------------------------------------- |
+| `redis` | Redis responds to a ping within 3 seconds.                               |
+| `ui`    | The web UI has been built, or is `disabled` by `HYPERGLASS_DISABLE_UI`.  |
+
+hyperglass responds `200` when every check passes and `503` otherwise. Failure details are logged, not returned.
+
+```json
+{ "status": "ok", "checks": { "redis": "ok", "ui": "ok" } }
+```
+
+The `hyperglass healthcheck` command queries this endpoint on the configured listen address and exits non-zero when hyperglass is unhealthy or unreachable. The container image uses it as its Docker `HEALTHCHECK`. The UI is built on first boot, before hyperglass starts listening, so the container has a 10 minute start period before failed checks count against it.
+
+### Metrics
+
+| Parameter        | Type    | Default Value | Description                                  |
+| :--------------- | :------ | :------------ | :------------------------------------------- |
+| `metrics.enable` | Boolean | `false`       | Expose Prometheus metrics.                   |
+| `metrics.path`   | String  | /metrics      | Path at which Prometheus metrics are exposed. |
+
+```yaml filename="config.yaml" copy
+metrics:
+    enable: true
+```
+
+<Callout type="warning">
+    The metrics endpoint is unauthenticated. Restrict access to it at your reverse proxy or firewall.
+</Callout>
+
+#### Query Metrics
+
+| Metric                              | Type      | Labels                           | Description                                                                         |
+| :---------------------------------- | :-------- | :------------------------------- | :---------------------------------------------------------------------------------- |
+| `hyperglass_queries_total`          | Counter   | `device`, `query_type`, `status` | Queries handled. `status` is `success` or `error`.                                  |
+| `hyperglass_query_errors_total`     | Counter   | `device`, `query_type`, `reason` | Failed queries, by failure reason.                                                  |
+| `hyperglass_query_duration_seconds` | Histogram | `device`, `query_type`           | Time spent executing successful queries against devices (cache misses only).        |
+| `hyperglass_query_cache_total`      | Counter   | `result`                         | Cache lookups. `result` is `hit`, `miss`, or `bypass` (the query forced a refresh). |
+| `hyperglass_build_info`             | Gauge     | `version`                        | Always `1`; carries the running hyperglass version.                                 |
+
+`device` is the device ID and `query_type` is the directive ID. When a query is rejected before it is validated (for example, an unknown location or a malformed request), both are `unknown`. Labels are never taken from raw request input.
+
+`reason` is the failure's error type in snake case. Common reasons:
+
+| Reason                     | Meaning                                                                    |
+| :------------------------- | :------------------------------------------------------------------------- |
+| `device_timeout`           | The device could not be reached, or did not respond in time.               |
+| `auth_error`               | The device rejected hyperglass's credentials.                              |
+| `rest_error`               | An HTTP-based device returned an error or could not be reached.            |
+| `scrape_error`             | hyperglass could not connect to the device through its SSH proxy.          |
+| `response_empty`           | The device returned no output.                                             |
+| `input_invalid`            | The query target is invalid.                                               |
+| `input_not_allowed`        | The query target is not allowed by the directive's rules.                  |
+| `query_location_not_found` | The requested location does not exist.                                     |
+| `query_type_not_found`     | The requested query type does not exist or isn't enabled for the location. |
+| `invalid_request`          | The request body is malformed or missing fields.                           |
+| `internal_error`           | An unexpected error; see the hyperglass logs.                              |
+
+#### HTTP Metrics
+
+`hyperglass_http_requests_total`, `hyperglass_http_request_duration_seconds`, `hyperglass_http_requests_in_progress`, and `hyperglass_http_requests_error_total` cover every HTTP request (except the health check and metrics endpoints), labeled by `method`, route `path` template, and `status_code`.
+
+#### Example Queries
+
+```promql
+# Fraction of queries failing, per device
+sum by (device) (rate(hyperglass_query_errors_total[5m]))
+  / sum by (device) (rate(hyperglass_queries_total[5m]))
+
+# Why queries are failing
+sum by (device, reason) (increase(hyperglass_query_errors_total[1h]))
+
+# 95th percentile device response time
+histogram_quantile(0.95, sum by (le, device) (rate(hyperglass_query_duration_seconds_bucket[5m])))
+```
+
+#### Multiple Workers
+
+hyperglass runs several worker processes, each with its own metric values. When metrics are enabled, `hyperglass start` aggregates them through a temporary directory that is emptied at every start. To use a specific directory, set the `PROMETHEUS_MULTIPROC_DIR` environment variable; hyperglass deletes the `*.db` files in it at startup.
+
+If you serve `hyperglass.api:app` with your own ASGI server and more than one worker, set `PROMETHEUS_MULTIPROC_DIR` to an empty directory yourself before starting it.

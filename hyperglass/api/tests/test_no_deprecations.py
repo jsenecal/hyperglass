@@ -15,7 +15,6 @@ import warnings
 
 # Third Party
 import pytest
-from litestar import Litestar
 from litestar.exceptions import LitestarDeprecationWarning
 from pydantic.warnings import PydanticDeprecatedSince20, PydanticDeprecatedSince212
 
@@ -24,14 +23,14 @@ def test_route_handlers_use_no_deprecated_parameter_style(state):
     """Building the app must not emit Litestar inferred-parameter warnings.
 
     `state` seeds Redis: hyperglass.api reads state at import (module-level
-    `STATE = use_state()` and the OpenAPI config).
+    `STATE = use_state()`) and `create_app()` reads params.
     """
     # Project
-    from hyperglass.api import HANDLERS, OPEN_API
+    from hyperglass.api import create_app
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", LitestarDeprecationWarning)
-        Litestar(route_handlers=HANDLERS, openapi_config=OPEN_API)
+        create_app()
 
 
 @pytest.mark.parametrize("category", [PydanticDeprecatedSince20, PydanticDeprecatedSince212])

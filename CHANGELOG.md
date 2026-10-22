@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Health check endpoint `GET /api/health`, returning `200` when Redis is reachable and the UI is built (or disabled) and `503` otherwise. A new `hyperglass healthcheck` command queries it on the configured listen address (IPv4 or IPv6), and the container image now uses it as its Docker `HEALTHCHECK`, with a 10 minute start period to cover the first-boot UI build.
+- Prometheus metrics, disabled by default (`metrics.enable`, served at `metrics.path`, default `/metrics`). Query metrics report successes and failures per device and query type, with the failure reason (e.g. `device_timeout`, `auth_error`, `input_not_allowed`), plus device response times and cache hit/miss counts. HTTP request metrics are labeled by route template. Values are aggregated across all worker processes. The endpoint is unauthenticated, so restrict it at your reverse proxy or firewall.
+
 ## [2.1.5] - 2026-10-07
 
 ### Security

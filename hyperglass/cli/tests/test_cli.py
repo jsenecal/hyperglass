@@ -22,6 +22,7 @@ ALL_COMMANDS = (
     "build-ui",
     "system-info",
     "clear-cache",
+    "healthcheck",
     "devices",
     "directives",
     "plugins",

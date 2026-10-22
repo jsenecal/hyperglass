@@ -20,11 +20,12 @@ from hyperglass.exceptions import HyperglassError
 
 # Local
 from .events import check_redis
-from .routes import info, query, device, devices, queries, share_get, share_create
+from .routes import info, query, device, health, devices, queries, share_get, share_create
+from .metrics import create_metrics
 from .middleware import COMPRESSION_CONFIG, create_cors_config
 from .error_handlers import app_handler, http_handler, default_handler, validation_handler
 
-__all__ = ("app",)
+__all__ = ("app", "create_app")
 
 _SHARE_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{11}$")
 
@@ -32,17 +33,6 @@ STATE = use_state()
 
 UI_DIR = STATE.settings.static_path / "ui"
 IMAGES_DIR = STATE.settings.static_path / "images"
-
-
-OPEN_API = OpenAPIConfig(
-    title=STATE.params.docs.title.format(site_title=STATE.params.site_title),
-    version=__version__,
-    description=STATE.params.docs.description,
-    path=STATE.params.docs.path,
-    # Stoplight Elements served at the OpenAPI root path (the first/only
-    # render plugin), replacing the deprecated root_schema_site="elements".
-    render_plugins=[StoplightRenderPlugin()],
-)
 
 
 @get("/result/{share_id:str}", include_in_schema=False)
@@ -74,6 +64,7 @@ HANDLERS = [
     devices,
     queries,
     info,
+    health,
     query,
     share_create,
     share_get,
@@ -92,17 +83,46 @@ if not STATE.settings.disable_ui:
     ]
 
 
-app = Litestar(
-    route_handlers=HANDLERS,
-    exception_handlers={
-        HTTPException: http_handler,
-        HyperglassError: app_handler,
-        ValidationException: validation_handler,
-        Exception: default_handler,
-    },
-    on_startup=[check_redis],
-    debug=STATE.settings.debug,
-    cors_config=create_cors_config(state=STATE),
-    compression_config=COMPRESSION_CONFIG,
-    openapi_config=OPEN_API if STATE.params.docs.enable else None,
-)
+def create_app() -> Litestar:
+    """Create the Litestar application from the current hyperglass state."""
+    state = use_state()
+    params = state.params
+
+    route_handlers = [*HANDLERS]
+    middleware = []
+
+    if params.metrics.enable:
+        prometheus_config, metrics_controller = create_metrics(
+            params.metrics, exclude=("/api/health",)
+        )
+        route_handlers.append(metrics_controller)
+        middleware.append(prometheus_config.middleware)
+
+    open_api = OpenAPIConfig(
+        title=params.docs.title.format(site_title=params.site_title),
+        version=__version__,
+        description=params.docs.description,
+        path=params.docs.path,
+        # Stoplight Elements served at the OpenAPI root path (the first/only
+        # render plugin), replacing the deprecated root_schema_site="elements".
+        render_plugins=[StoplightRenderPlugin()],
+    )
+
+    return Litestar(
+        route_handlers=route_handlers,
+        middleware=middleware,
+        exception_handlers={
+            HTTPException: http_handler,
+            HyperglassError: app_handler,
+            ValidationException: validation_handler,
+            Exception: default_handler,
+        },
+        on_startup=[check_redis],
+        debug=state.settings.debug,
+        cors_config=create_cors_config(state=state),
+        compression_config=COMPRESSION_CONFIG,
+        openapi_config=open_api if params.docs.enable else None,
+    )
+
+
+app = create_app()
