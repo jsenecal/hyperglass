@@ -6,10 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-23
+
+### Security
+
+- [#146](https://github.com/jsenecal/hyperglass/pull/146): **Command injection through AS-path and community targets on non-shell platforms.** The builtin BGP AS Path and BGP Community directives validated targets with `condition: "*"`, which accepted any string. On Juniper, Cisco, Arista, Nokia, Huawei and MikroTik, targets are inserted into the device command verbatim, so a quote could close a quoted argument (e.g. Junos `aspath-regex "{target}"` with `.*" | save /var/tmp/x`), and on unquoted community templates a bare `|` added a CLI pipe modifier. Such targets are now rejected before any command is built: AS-path targets must be AS numbers, spaces and regex operators (no quotes or letters), and community targets must be a concrete community value. This complements the shell quoting added in 2.1.5 ([#144](https://github.com/jsenecal/hyperglass/pull/144)), which covered FRR, BIRD and OpenBGPD.
+
 ### Added
 
-- Health check endpoint `GET /api/health`, returning `200` when Redis is reachable and the UI is built (or disabled) and `503` otherwise. A new `hyperglass healthcheck` command queries it on the configured listen address (IPv4 or IPv6), and the container image now uses it as its Docker `HEALTHCHECK`, with a 10 minute start period to cover the first-boot UI build.
-- Prometheus metrics, disabled by default (`metrics.enable`, served at `metrics.path`, default `/metrics`). Query metrics report successes and failures per device and query type, with the failure reason (e.g. `device_timeout`, `auth_error`, `input_not_allowed`), plus device response times and cache hit/miss counts. HTTP request metrics are labeled by route template. Values are aggregated across all worker processes. The endpoint is unauthenticated, so restrict it at your reverse proxy or firewall.
+- [#147](https://github.com/jsenecal/hyperglass/pull/147): Health check endpoint `GET /api/health`, returning `200` when Redis is reachable and the UI is built (or disabled) and `503` otherwise. A new `hyperglass healthcheck` command queries it on the configured listen address (IPv4 or IPv6), and the container image now uses it as its Docker `HEALTHCHECK`, with a 10 minute start period to cover the first-boot UI build.
+- [#147](https://github.com/jsenecal/hyperglass/pull/147): Prometheus metrics, disabled by default (`metrics.enable`, served at `metrics.path`, default `/metrics`). Query metrics report successes and failures per device and query type, with the failure reason (e.g. `device_timeout`, `auth_error`, `input_not_allowed`), plus device response times and cache hit/miss counts. HTTP request metrics are labeled by route template. Values are aggregated across all worker processes. The endpoint is unauthenticated, so restrict it at your reverse proxy or firewall.
+
+### Changed
+
+- [#146](https://github.com/jsenecal/hyperglass/pull/146): Stricter query target validation. Community regular expressions (e.g. `65000:.*`) and well-known community names (e.g. `no-export`) are no longer accepted by the builtin community directives; only concrete community values are. A custom directive **permit** rule's `condition` must now match the whole target rather than just its start, and `condition: "*"` in a permit rule now accepts only letters, digits, spaces and `_ . : ^ $ * + ? ( ) [ ] { } | , -` (anything else, such as quotes, `/`, `@` or `=`, is rejected). If a custom directive relies on `*` for other characters, give it an explicit pattern. Deny rules are unchanged.
+- [#97](https://github.com/jsenecal/hyperglass/pull/97): UI dependency update: react-icons 4 → 5.
 
 ## [2.1.5] - 2026-10-07
 
@@ -693,7 +704,8 @@ Version comparison links. Only the fork-era tags exist in this repository
 (v2.0.4-jsenecal.*); historical upstream versions below were never tagged
 here, so they are intentionally left unlinked.
 -->
-[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.1.5...HEAD
+[Unreleased]: https://github.com/jsenecal/hyperglass/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/jsenecal/hyperglass/compare/v2.1.5...v2.2.0
 [2.1.5]: https://github.com/jsenecal/hyperglass/compare/v2.1.4...v2.1.5
 [2.1.4]: https://github.com/jsenecal/hyperglass/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/jsenecal/hyperglass/compare/v2.1.2...v2.1.3
