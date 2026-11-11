@@ -126,10 +126,9 @@ def test_malformed_request_counted(metrics_client):
     labels = {"device": UNKNOWN, "query_type": UNKNOWN, "reason": "invalid_request"}
     before = sample("hyperglass_query_errors_total", **labels)
 
-    # Note: validation_handler currently responds 200 to validation failures,
-    # so only the metric is asserted here.
-    metrics_client.post("/api/query", json={"queryTarget": "192.0.2.0/24"})
+    response = metrics_client.post("/api/query", json={"queryTarget": "192.0.2.0/24"})
 
+    assert response.status_code == 400
     assert sample("hyperglass_query_errors_total", **labels) == before + 1
 
 
