@@ -25,24 +25,28 @@ __all__ = (
 def get_validation_exception_detail(exc: ValidationException) -> Response:
     data: dict[str, t.Any] = {
         "level": "error",
-        "status_code": 422,
+        "status_code": exc.status_code,
         "keywords": [],
         "output": repr(exc),
     }
     if isinstance(exc.extra, dict):
+        data["output"] = "\n".join(f"{k}: {v!r}" for k, v in exc.extra.items())
+        data["keywords"] = list(exc.extra)
+
+    if isinstance(exc.extra, list):
+        # Litestar reports each failed field as {"message": ..., "key": ...}.
         outputs = []
         kw = []
-        for k, v in exc.extra.values():
-            outputs = [*outputs, f"{k}: {v!r}"]
-            kw = [*kw, k]
+        for v in exc.extra:
+            if isinstance(v, dict) and "key" in v:
+                outputs = [*outputs, f"{v['key']}: {v.get('message', '')}"]
+                kw = [*kw, v["key"]]
+            else:
+                outputs = [*outputs, str(v)]
         data["output"] = "\n".join(outputs)
         data["keywords"] = kw
 
-    if isinstance(exc.extra, list):
-        data["output"] = "\n".join(str(v) for v in exc.extra)
-        data["keywords"] = []
-
-    return Response(data)
+    return Response(data, status_code=exc.status_code)
 
 
 def default_handler(request: Request, exc: BaseException) -> Response:
@@ -79,7 +83,7 @@ def app_handler(request: Request, exc: BaseException) -> Response:
 
 
 def validation_handler(request: Request, exc: ValidationException) -> Response:
-    """Handle Pydantic validation errors raised by FastAPI."""
+    """Handle request validation errors raised by Litestar."""
     log.bind(method=request.method, path=request.url.path, detail=exc).critical("Validation Error")
     record_query_error(request, exc)
     return get_validation_exception_detail(exc)
