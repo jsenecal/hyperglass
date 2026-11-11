@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- [#150](https://github.com/jsenecal/hyperglass/pull/150): Requests with missing or wrongly typed fields now get HTTP `400` instead of `200`. The error body's `status_code` is now `400` (was `422`), `output` lists each failed field as `field: message`, and `keywords` names the failed fields.
+
 ## [2.2.0] - 2026-10-23
 
 ### Security
