@@ -159,6 +159,13 @@ jobs:
       - name: Build wheel and source distribution
         run: uv build --wheel --sdist
 
+      # pycairo, a dependency of favicons, builds from source and needs the
+      # cairo headers.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev pkg-config python3-dev
+
       # Installs the wheel into a clean environment with freshly resolved
       # dependencies, which is what a user gets from `pip install hyperglass`.
       - name: Verify wheel installation
