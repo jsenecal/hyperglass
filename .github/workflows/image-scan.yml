@@ -1,0 +1,68 @@
+name: Published image scan
+
+# New CVEs are published after an image ships. This rescans the published image
+# every week, so a new finding is visible without waiting for the next release.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to scan
+        required: false
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  TRIVY_VERSION: 0.74.0
+  IMAGE: ghcr.io/${{ github.repository }}
+  TAG: ${{ inputs.tag || 'latest' }}
+
+jobs:
+  scan:
+    name: Scan published image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull published image
+        id: pull
+        run: |
+          pull_log="$RUNNER_TEMP/image-pull.log"
+          if docker pull "${IMAGE}:${TAG}" > "$pull_log" 2>&1; then
+            cat "$pull_log"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            cat "$pull_log"
+            if grep -Eq '(^|: )manifest unknown(:|$)' "$pull_log"; then
+              echo "::notice title=Published image scan::${IMAGE}:${TAG} is not published. Nothing to scan."
+              echo "found=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error title=Published image scan::Failed to pull ${IMAGE}:${TAG}."
+              exit "$status"
+            fi
+          fi
+
+      - name: Scan published image
+        if: ${{ steps.pull.outputs.found == 'true' }}
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            "aquasec/trivy:${TRIVY_VERSION}" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --timeout 20m \
+            "${IMAGE}:${TAG}"
