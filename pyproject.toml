@@ -22,6 +22,8 @@ dependencies = [
     "redis==4.5.4",
     "rich>=13.7.0",
     "typer>=0.9.0",
+    # Keep fresh installs compatible with Typer 0.9.x, as in the lockfiles.
+    "click>=8.1.7,<8.2",
     "uvicorn==0.21.1",
     "uvloop>=0.17.0",
     "xmltodict==0.13.0",
