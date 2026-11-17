@@ -1,8 +1,8 @@
 {
   "version": "2.0.4",
   "name": "ui",
-  "description": "UI for hyperglass, the modern network looking glass",
-  "author": "Matt Love",
+  "description": "UI for the Hyperglass network looking glass",
+  "author": "Hyperglass maintainers",
   "license": "BSD-3-Clause-Clear",
   "private": true,
   "scripts": {
@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "build": "export NODE_OPTIONS=--openssl-legacy-provider; next build && next export --no-lint -o ../hyperglass/static/ui",
+    "build": "next build && rm -rf ../hyperglass/static/ui && cp -r out ../hyperglass/static/ui",
     "test": "vitest --run"
   },
   "browserslist": "> 0.25%, not dead",
@@ -29,9 +29,9 @@
     "dagre": "^0.8.5",
     "dayjs": "^1.10.4",
     "framer-motion": "^11.2.10",
-    "lodash": "^4.17.21",
+    "lodash": "^4.18.0",
     "merge-anything": "^4.0.1",
-    "next": "13.5.6",
+    "next": "15.5.28",
     "palette-by-numbers": "^0.1.6",
     "plur": "^4.0.0",
     "react": "^18.2.0",
@@ -49,12 +49,14 @@
     "reactflow": "^11.10.4",
     "remark-gfm": "^1.0.0",
     "string-format": "^2.0.0",
+    "typescript": "^5.3.3",
     "vest": "^3.2.8",
     "zustand": "^3.7.2"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.13",
     "@biomejs/biome": "1.5.3",
-    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^14.2.1",
     "@testing-library/react-hooks": "^8.0.1",
     "@testing-library/user-event": "^14.5.2",
@@ -66,8 +68,8 @@
     "@types/string-format": "^2.0.0",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "@vitest/ui": "^1.3.1",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/ui": "^5.1.0",
     "babel-eslint": "^10.1.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
@@ -85,7 +87,7 @@
     "prettier-eslint": "^16.3.0",
     "react-test-renderer": "^18.2.0",
     "type-fest": "^4.10.3",
-    "typescript": "^5.3.3",
-    "vitest": "^1.3.1"
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
   }
 }

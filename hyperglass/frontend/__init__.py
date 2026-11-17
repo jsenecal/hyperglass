@@ -2,8 +2,10 @@
 
 # Standard Library
 import os
+import re
 import json
 import math
+import hashlib
 import shutil
 import typing as t
 import asyncio
@@ -16,6 +18,47 @@ from hyperglass.util import copyfiles, check_path, move_files, dotenv_to_dict
 if t.TYPE_CHECKING:
     # Project
     from hyperglass.models.ui import UIParameters
+
+
+PACKAGE_UI_DIR = Path(__file__).parent.parent / "ui"
+PACKAGE_PNPM_STORE = Path(__file__).parent.parent.parent / ".pnpm-store"
+UI_BUILD_DIR_NAME = ".ui"
+
+
+def _ui_subprocess_env() -> t.Dict[str, str]:
+    """Return environment variables for pnpm/Next.js UI subprocesses."""
+    env = os.environ.copy()
+    env["PNPM_CONFIG_STORE_DIR"] = str(PACKAGE_PNPM_STORE)
+    return env
+
+
+def _read_ui_export_version(app_path: Path) -> t.Optional[str]:
+    """Read the hyperglass-version meta tag from the exported UI, if present."""
+    index_html = app_path / "static" / "ui" / "index.html"
+    if not index_html.is_file():
+        return None
+
+    contents = index_html.read_text(encoding="utf-8", errors="ignore")
+    match = re.search(r'<meta name="hyperglass-version" content="([^"]+)"', contents)
+    return match.group(1) if match else None
+
+
+def _ui_export_matches_version(app_path: Path, expected_version: str) -> bool:
+    """Return whether the exported UI matches the running backend version."""
+    exported_version = _read_ui_export_version(app_path)
+    if exported_version is None:
+        log.warning("UI export version is missing; forcing rebuild")
+        return False
+
+    if exported_version != expected_version:
+        log.warning(
+            "UI export version {} does not match backend {}; forcing rebuild",
+            exported_version,
+            expected_version,
+        )
+        return False
+
+    return True
 
 
 FAVICON_FORMATS = (
@@ -93,6 +136,89 @@ FAVICON_FORMATS = (
 )
 
 
+def _prepare_ui_build_dir(app_path: Path) -> Path:
+    """Copy the packaged UI source into a writable application directory."""
+    ui_dir = app_path / UI_BUILD_DIR_NAME
+    shutil.copytree(
+        PACKAGE_UI_DIR,
+        ui_dir,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            "node_modules",
+            ".next",
+            "out",
+            ".env*",
+            "hyperglass.json",
+            "*.tsbuildinfo",
+        ),
+    )
+    package_node_modules = PACKAGE_UI_DIR / "node_modules"
+    ui_node_modules = ui_dir / "node_modules"
+    if package_node_modules.is_dir():
+        if ui_node_modules.is_symlink() or ui_node_modules.is_file():
+            ui_node_modules.unlink()
+        elif ui_node_modules.exists():
+            shutil.rmtree(ui_node_modules)
+        ui_node_modules.symlink_to(package_node_modules, target_is_directory=True)
+    (ui_dir / ".npmrc").write_text(f"store-dir={PACKAGE_PNPM_STORE}\n")
+    return ui_dir
+
+
+# Google serves woff2 files only to current browsers.
+_FONT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/130.0.0.0 Safari/537.36"
+)
+
+
+def google_font_url(family: str, weights: t.Sequence[int] = (300, 400, 700)) -> str:
+    """Build the Google Fonts stylesheet URL the UI used to load in the browser."""
+    name = family.split(", ")[0].strip().replace("'", "").replace('"', "")
+    return "https://fonts.googleapis.com/css?family={}:{}&display=swap".format(
+        "+".join(name.split(" ")), ",".join(str(w) for w in weights)
+    )
+
+
+def self_host_fonts(fonts: t.Dict[str, str], ui_dir: Path) -> bool:
+    """Download the configured Google fonts into the UI so browsers never contact Google.
+
+    Writes `public/fonts/<kind>.css` and the font files it references. Returns False, and
+    leaves no partial fonts behind, if the download fails; the UI then links Google Fonts.
+    """
+    # Third Party
+    import httpx
+
+    font_dir = ui_dir / "public" / "fonts"
+    shutil.rmtree(font_dir, ignore_errors=True)
+    font_dir.mkdir(parents=True)
+
+    try:
+        with httpx.Client(timeout=10, headers={"user-agent": _FONT_USER_AGENT}) as client:
+            for kind, family in fonts.items():
+                stylesheet = client.get(google_font_url(family))
+                stylesheet.raise_for_status()
+
+                def download(match: re.Match) -> str:
+                    url = match.group(1)
+                    name = hashlib.sha256(url.encode()).hexdigest()[:16] + Path(url).suffix
+                    response = client.get(url)
+                    response.raise_for_status()
+                    (font_dir / name).write_bytes(response.content)
+                    return f"url(/fonts/{name})"
+
+                css = re.sub(
+                    r"url\((https://fonts\.gstatic\.com/[^)]+)\)", download, stylesheet.text
+                )
+                (font_dir / f"{kind}.css").write_text(css)
+    except httpx.HTTPError as err:
+        log.bind(error=str(err)).warning("Unable to self-host fonts, the UI will use Google Fonts")
+        shutil.rmtree(font_dir, ignore_errors=True)
+        return False
+
+    log.bind(path=str(font_dir)).debug("Self-hosted UI fonts")
+    return True
+
+
 def get_ui_build_timeout() -> t.Optional[int]:
     """Read the UI build timeout from environment variables or set a default."""
     timeout = None
@@ -104,10 +230,10 @@ def get_ui_build_timeout() -> t.Optional[int]:
     return timeout
 
 
-async def check_node_modules() -> bool:
+async def check_node_modules(ui_path: t.Optional[Path] = None) -> bool:
     """Check if node_modules exists and has contents."""
 
-    ui_path = Path(__file__).parent.parent / "ui"
+    ui_path = ui_path or PACKAGE_UI_DIR
     node_modules = ui_path / "node_modules"
 
     exists = node_modules.exists()
@@ -119,10 +245,10 @@ async def check_node_modules() -> bool:
     return valid
 
 
-async def read_package_json() -> t.Dict[str, t.Any]:
+async def read_package_json(ui_path: t.Optional[Path] = None) -> t.Dict[str, t.Any]:
     """Import package.json as a python dict."""
 
-    package_json_file = Path(__file__).parent.parent / "ui" / "package.json"
+    package_json_file = (ui_path or PACKAGE_UI_DIR) / "package.json"
 
     try:
         with package_json_file.open("r") as file:
@@ -134,14 +260,16 @@ async def read_package_json() -> t.Dict[str, t.Any]:
     return package_json
 
 
-async def node_initial(timeout: int = 180, dev_mode: bool = False) -> str:
+async def node_initial(
+    timeout: int = 600, dev_mode: bool = False, ui_path: t.Optional[Path] = None
+) -> str:
     """Initialize node_modules."""
 
-    ui_path = Path(__file__).parent.parent / "ui"
+    ui_path = ui_path or PACKAGE_UI_DIR
 
     env_timeout = get_ui_build_timeout()
 
-    if env_timeout is not None and env_timeout > timeout:
+    if env_timeout is not None:
         timeout = env_timeout
 
     proc = await asyncio.create_subprocess_shell(
@@ -149,6 +277,7 @@ async def node_initial(timeout: int = 180, dev_mode: bool = False) -> str:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=ui_path,
+        env=_ui_subprocess_env(),
     )
 
     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -163,7 +292,7 @@ async def node_initial(timeout: int = 180, dev_mode: bool = False) -> str:
     return "\n".join(messages)
 
 
-async def build_ui(app_path: Path):
+async def build_ui(app_path: Path, ui_path: t.Optional[Path] = None):
     """Execute `next build` & `next export` from UI directory.
 
     ### Raises
@@ -172,7 +301,7 @@ async def build_ui(app_path: Path):
     """
     timeout = get_ui_build_timeout()
 
-    ui_dir = Path(__file__).parent.parent / "ui"
+    ui_dir = ui_path or PACKAGE_UI_DIR
     build_dir = app_path / "static" / "ui"
     out_dir = ui_dir / "out"
 
@@ -185,6 +314,7 @@ async def build_ui(app_path: Path):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=ui_dir,
+            env=_ui_subprocess_env(),
         )
 
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -286,7 +416,9 @@ def migrate_images(app_path: Path, params: "UIParameters"):
     return copyfiles(src_files, dst_files)
 
 
-def write_favicon_formats(formats: t.Tuple[t.Dict[str, t.Any]]) -> None:
+def write_favicon_formats(
+    formats: t.Tuple[t.Dict[str, t.Any]], ui_path: t.Optional[Path] = None
+) -> None:
     """Create a TypeScript file in the `ui` directory containing favicon formats.
 
     This file should stay the same, unless the favicons library updates
@@ -295,7 +427,7 @@ def write_favicon_formats(formats: t.Tuple[t.Dict[str, t.Any]]) -> None:
     # Standard Library
     from collections import OrderedDict
 
-    file = Path(__file__).parent.parent / "ui" / "favicon-formats.ts"
+    file = (ui_path or PACKAGE_UI_DIR) / "favicon-formats.ts"
 
     # Sort each favicon definition to ensure the result stays the same
     # time the UI build runs.
@@ -352,10 +484,11 @@ def generate_favicons(source: Path, output_directory: Path) -> t.Tuple[t.Dict[st
     return FAVICON_FORMATS
 
 
-def write_custom_files(params: "UIParameters") -> None:
+def write_custom_files(params: "UIParameters", ui_path: t.Optional[Path] = None) -> None:
     """Write custom files to the `ui` directory so they can be imported and rendered."""
-    js = Path(__file__).parent.parent / "ui" / "custom.js"
-    html = Path(__file__).parent.parent / "ui" / "custom.html"
+    ui_path = ui_path or PACKAGE_UI_DIR
+    js = ui_path / "custom.js"
+    html = ui_path / "custom.html"
 
     # Handle Custom JS.
     if params.web.custom_javascript is not None:
@@ -382,22 +515,20 @@ async def build_frontend(  # noqa: C901
     full: bool = False,
 ) -> bool:
     """Perform full frontend UI build process."""
-    # Standard Library
-    import hashlib
-
     # Project
     from hyperglass.constants import __version__
 
     # Create temporary file. json file extension is added for easy
     # webpack JSON parsing.
-    dot_env_file = Path(__file__).parent.parent / "ui" / ".env"
+    ui_dir = _prepare_ui_build_dir(app_path)
+    dot_env_file = ui_dir / ".env"
     env_config = {}
 
-    ui_config_file = Path(__file__).parent.parent / "ui" / "hyperglass.json"
+    ui_config_file = ui_dir / "hyperglass.json"
 
     ui_config_file.write_text(params.export_json(by_alias=True))
 
-    package_json = await read_package_json()
+    package_json = await read_package_json(ui_dir)
 
     # Set NextJS production/development mode and base URL based on
     # developer_mode setting.
@@ -407,18 +538,12 @@ async def build_frontend(  # noqa: C901
     else:
         env_config.update({"HYPERGLASS_URL": prod_url, "NODE_ENV": "production"})
 
-    # Check if hyperglass/ui/node_modules has been initialized. If not,
-    # initialize it.
-    initialized = await check_node_modules()
-
-    if initialized:
-        log.debug("node_modules is already initialized")
-
-    elif not initialized:
+    # Development mode does not run the production build below, so initialize
+    # its dependencies here when needed.
+    initialized = await check_node_modules(ui_dir)
+    if dev_mode and not initialized:
         log.debug("node_modules has not been initialized. Starting initialization...")
-
-        node_setup = await node_initial(timeout, dev_mode)
-
+        node_setup = await node_initial(timeout, dev_mode, ui_dir)
         if node_setup == "":
             log.debug("Re-initialized node_modules")
 
@@ -430,7 +555,7 @@ async def build_frontend(  # noqa: C901
 
     favicon_formats = generate_favicons(params.web.logo.favicon, favicon_dir)
     log.bind(count=len(favicon_formats)).debug("Generated favicons")
-    write_favicon_formats(favicon_formats)
+    write_favicon_formats(favicon_formats, ui_dir)
 
     build_data = {
         "params": params.export_dict(),
@@ -451,11 +576,13 @@ async def build_frontend(  # noqa: C901
         env_build_id = env_data.get("HYPERGLASS_BUILD_ID", "None")
         log.bind(id=env_build_id).debug("Previous build detected")
 
-        if env_build_id == build_id:
+        if (
+            env_build_id == build_id
+            and (app_path / "static" / "ui").is_dir()
+            and _ui_export_matches_version(app_path, __version__)
+        ):
             log.debug("UI parameters unchanged since last build, skipping UI build...")
             return True
-
-    env_config.update({"HYPERGLASS_BUILD_ID": build_id})
 
     dot_env_file.write_text("\n".join(f"{k}={v}" for k, v in env_config.items()))
     log.bind(path=str(dot_env_file)).debug("Wrote UI environment file")
@@ -463,8 +590,19 @@ async def build_frontend(  # noqa: C901
     # Initiate Next.JS export process.
     if any((not dev_mode, force, full)):
         log.info("Starting UI build")
-        initialize_result = await node_initial(timeout, dev_mode)
-        build_result = await build_ui(app_path=app_path)
+        initialize_result = ""
+        try:
+            if not (ui_dir / "node_modules").is_symlink():
+                initialize_result = await node_initial(timeout, dev_mode, ui_dir)
+            fonts = params.web.theme.fonts
+            self_host_fonts({"body": fonts.body, "mono": fonts.mono}, ui_dir)
+            build_result = await build_ui(app_path=app_path, ui_path=ui_dir)
+        except Exception as err:
+            dot_env_file.write_text("\n".join(f"{k}={v}" for k, v in env_config.items()))
+            log.error(
+                "UI build failed; HYPERGLASS_BUILD_ID was not updated and the next start will retry"
+            )
+            raise err
 
         if initialize_result:
             log.debug(initialize_result)
@@ -478,7 +616,7 @@ async def build_frontend(  # noqa: C901
 
     migrate_images(app_path, params)
 
-    write_custom_files(params)
+    write_custom_files(params, ui_dir)
 
     generate_opengraph(
         params.web.opengraph.image,
@@ -487,5 +625,9 @@ async def build_frontend(  # noqa: C901
         images_dir,
         params.web.theme.colors.black,
     )
+
+    env_config.update({"HYPERGLASS_BUILD_ID": build_id})
+    dot_env_file.write_text("\n".join(f"{k}={v}" for k, v in env_config.items()))
+    log.bind(path=str(dot_env_file)).debug("Recorded successful UI build")
 
     return True

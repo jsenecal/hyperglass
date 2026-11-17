@@ -1,11 +1,20 @@
 """Validate branding configuration variables."""
 
 # Standard Library
+import re
 import typing as t
 from pathlib import Path
 
 # Third Party
-from pydantic import Field, HttpUrl, FilePath, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    Field,
+    HttpUrl,
+    FilePath,
+    IPvAnyNetwork,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_extra_types.color import Color
 
 # Project
@@ -19,6 +28,7 @@ from .opengraph import OpenGraph
 DEFAULT_IMAGES = Path(__file__).parent.parent.parent / "images"
 DOH_PROVIDERS_PATTERN = "|".join(DNS_OVER_HTTPS.keys())
 PERCENTAGE_PATTERN = r"^([1-9][0-9]?|100)\%?$"
+HEADER_NAME_PATTERN = re.compile(r"[a-z0-9!#$%&'*+.^_`|~-]+")
 
 Percentage = Field(pattern=r"^([1-9][0-9]?|100)\%$")
 TitleMode = t.Literal["logo_only", "text_only", "logo_subtitle", "all"]
@@ -89,6 +99,20 @@ class Logo(HyperglassModel):
     width: str = Field(default="50%", pattern=PERCENTAGE_PATTERN)
     height: t.Optional[str] = Field(default=None, pattern=PERCENTAGE_PATTERN)
 
+    @field_validator("width", "height", mode="before")
+    def coerce_percentage(cls, value: t.Any) -> t.Any:
+        """Accept a bare integer, such as `50`, before pattern validation."""
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(value)
+        return value
+
+    @field_validator("width", "height")
+    def append_percent(cls, value: t.Optional[str]) -> t.Optional[str]:
+        """Append `%` when it is missing, so the UI receives a valid CSS width."""
+        if value is not None and not value.endswith("%"):
+            return f"{value}%"
+        return value
+
 
 class LogoPublic(Logo):
     """Public logo configuration."""
@@ -101,7 +125,7 @@ class Text(HyperglassModel):
     """Validation model for params.branding.text."""
 
     title_mode: TitleMode = "logo_only"
-    title: str = Field(default="hyperglass", max_length=32)
+    title: str = Field(default="Hyperglass", max_length=32)
     subtitle: str = Field(default="Network Looking Glass", max_length=32)
     query_location: str = "Location"
     query_type: str = "Query Type"
@@ -122,6 +146,9 @@ class Text(HyperglassModel):
     no_ip: str = "No {protocol} Address"
     ip_select: str = "Select an IP Address"
     ip_button: str = "My IP"
+    # Shown before the external lookup when `web.my_ip` is `external`.
+    ip_lookup_notice: str = "This sends your IP address to myip.wtf to look it up."
+    ip_lookup_confirm: str = "Look up my IP"
 
     @field_validator("cache_prefix")
     def validate_cache_prefix(cls: "Text", value: str) -> str:
@@ -137,6 +164,7 @@ class ThemeColors(HyperglassModel):
     dark: Color = "#010101"
     light: Color = "#f5f6f7"
     gray: Color = "#c1c7cc"
+    filtered: Color = "#c1c7cc"
     red: Color = "#d84b4b"
     orange: Color = "#ff6b35"
     yellow: Color = "#edae49"
@@ -197,6 +225,13 @@ class DnsOverHttps(HyperglassModel):
                 "name": "custom",
                 "url": url,
             }
+        if name not in DNS_OVER_HTTPS:
+            known = ", ".join(DNS_OVER_HTTPS)
+            raise ValueError(
+                f"web.dns_provider: {name!r} is not a known provider. "
+                f"Use one of: {known}, or set 'url' to a custom DNS over HTTPS URL "
+                "('url' is required with 'custom')."
+            )
         url = DNS_OVER_HTTPS[name]
         return {
             "name": name,
@@ -223,6 +258,29 @@ class HighlightPattern(HyperglassModel):
         return value
 
 
+class ClientIP(HyperglassModel):
+    """How Hyperglass identifies the visitor behind reverse proxies or a CDN."""
+
+    # Request header that carries the visitor's address, read before `X-Real-IP` and
+    # `X-Forwarded-For`. For example `CF-Connecting-IP`, `True-Client-IP` or
+    # `Fastly-Client-IP`.
+    header: t.Optional[str] = None
+    # Networks of the proxies that connect to Hyperglass. When set, client address
+    # headers are read only from these peers; any other peer is itself the client.
+    trusted_proxies: t.List[IPvAnyNetwork] = []
+
+    @field_validator("header")
+    @classmethod
+    def validate_header(cls, value: t.Optional[str]) -> t.Optional[str]:
+        """Normalise the header name, and reject a value that is not a header name."""
+        if value is None or not value.strip():
+            return None
+        value = value.strip().lower()
+        if not HEADER_NAME_PATTERN.fullmatch(value):
+            raise ValueError(f"'{value}' is not a valid HTTP header name")
+        return value
+
+
 class Web(HyperglassModel):
     """Validation model for all web/browser-related configuration."""
 
@@ -241,12 +299,26 @@ class Web(HyperglassModel):
     text: Text = Text()
     theme: Theme = Theme()
     location_display_mode: LocationDisplayMode = "auto"
+    # `external` looks up the visitor's address with myip.wtf, `server` reads it from the
+    # request to Hyperglass, and `off` hides the My IP button.
+    my_ip: t.Literal["external", "server", "off"] = "server"
+    client_ip: ClientIP = ClientIP()
     custom_javascript: t.Optional[FilePath] = None
     custom_html: t.Optional[FilePath] = None
     highlight: t.List[HighlightPattern] = []
+
+    @model_validator(mode="after")
+    def validate_fqdn_message(self) -> "Web":
+        """Describe server-side resolution, unless the message was customised."""
+        default = Text.model_fields["fqdn_message"].default
+        if self.dns_provider.name == "server" and self.text.fqdn_message == default:
+            self.text.fqdn_message = "Hyperglass has resolved {fqdn} to"
+        return self
 
 
 class WebPublic(Web):
     """Public web configuration."""
 
     logo: LogoPublic
+    # Proxy settings are used by the server only, so the UI never receives them.
+    client_ip: ClientIP = Field(default_factory=ClientIP, exclude=True)
