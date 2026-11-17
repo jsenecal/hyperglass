@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 # A new push to a pull request cancels the superseded run. Runs on main and on
-# tags are never cancelled, because they publish.
+# tags are never cancelled, because a tag run publishes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -194,9 +194,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # main publishes `main` and an immutable `sha-<commit>` tag. A version tag
-      # publishes its version. Only a stable version moves `latest`: a version
-      # with a hyphen, such as v2.1.0-rc.1, is a prerelease.
+      # Only a version tag publishes. It publishes its version. Only a stable
+      # version moves `latest`: a version with a hyphen, such as v2.1.0-rc.1, is
+      # a prerelease. Pull requests and main build and scan the image only.
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -205,8 +205,6 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=ref,event=branch
-            type=sha
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
 
@@ -248,13 +246,13 @@ jobs:
 
       - name: Export scanned image
         id: export
-        if: ${{ github.event_name == 'push' && steps.scan.outcome == 'success' }}
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && steps.scan.outcome == 'success' }}
         run: |
           echo "image-id=$(docker image inspect --format '{{.Id}}' hyperglass:scan)" >> "$GITHUB_OUTPUT"
           docker save --output "$RUNNER_TEMP/scanned-image.tar" hyperglass:scan
 
       - name: Upload scanned image
-        if: ${{ github.event_name == 'push' && steps.scan.outcome == 'success' }}
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && steps.scan.outcome == 'success' }}
         uses: actions/upload-artifact@v6
         with:
           name: scanned-image
@@ -289,7 +287,7 @@ jobs:
     needs:
       - gate
       - image
-    if: ${{ github.event_name == 'push' && needs.gate.result == 'success' && needs.image.outputs.scan == 'success' }}
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.gate.result == 'success' && needs.image.outputs.scan == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
