@@ -31,6 +31,10 @@ Each directive has the following options:
 
 A rule is a way of saying "if a query target matches the rule's conditions, run this command".
 
+Query targets cannot contain control characters, Unicode format characters or line separators, including when a custom directive has no validation rule. IPv6 zone identifiers accept letters, digits and hyphens, such as `fe80::1%eth0` or `fe80::1%br-lan`.
+
+Directives with IP rules normalise addresses and prefixes before validation and command construction. For example, `2001:DB8:0:0::1` becomes `2001:db8::1`, and `192.0.2.1/24` becomes `192.0.2.0/24`. Pattern-only directives retain their original target text.
+
 | Parameter   | Type            | Default Value | Description                                                                                    |
 | :---------- | :-------------- | :------------ | :--------------------------------------------------------------------------------------------- |
 | `condition` | String          |               | Regular expression to match or IP prefix in which the value being evaluated must be contained. |

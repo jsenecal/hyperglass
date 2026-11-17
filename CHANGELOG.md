@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- Reject control characters and line separators in query targets, including targets accepted by custom directives. Restrict IPv6 zone identifiers to letters, digits and hyphens before command construction. Part of [#383](https://github.com/hyperglass-community/hyperglass/issues/383).
 - [#280](https://github.com/thatmattlove/hyperglass/issues/280): Fix: `condition: None` caused error in directive @Jimmy01240397
 - [#306](https://github.com/thatmattlove/hyperglass/issues/306): Fix: allow integer values in ext_community_list_raw field for Arista BGP - @cooperwinser
 - [#311](https://github.com/thatmattlove/hyperglass/issues/311): Fix: device and directive errors.
@@ -16,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - [#332](https://github.com/thatmattlove/hyperglass/pull/332): Fix custom proxy port support in SSH proxy tunnels @jessiebryan 
 
 ### Updated
+
+- IP-based directives normalise addresses and prefixes before validation and command construction. For example, `192.0.2.1/24` becomes `192.0.2.0/24`.
 
 - [#245](https://github.com/thatmattlove/hyperglass/issues/245): v2.0.0 Vyos version platforms - Moved to latest LTS command set. - @ServerForge
 - [#292](https://github.com/thatmattlove/hyperglass/pull/292): Updates Mikrotik BGP route command so supernets are selected as well as exact matches. - @GrandArcher

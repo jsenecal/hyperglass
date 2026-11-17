@@ -3,7 +3,7 @@
 # Standard Library
 import re
 import typing as t
-from ipaddress import IPv4Network, IPv6Network, ip_network
+from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 
 # Third Party
 from pydantic import Field, FilePath, PrivateAttr, IPvAnyNetwork, field_validator
@@ -88,6 +88,9 @@ class Rule(HyperglassModel):
         )
 
 
+IPV6_ZONE_PATTERN = re.compile(r"[A-Za-z0-9-]+")
+
+
 class RuleWithIP(Rule):
     """Base IP-based rule."""
 
@@ -142,6 +145,15 @@ class RuleWithIP(Rule):
 
         except ValueError as err:
             raise InputValidationError(error=str(err), target=target) from err
+
+        # ipaddress accepts command separators in IPv6 zones. Restrict the zone
+        # before a validated target can be used in a device command.
+        zone = getattr(valid_target.network_address, "scope_id", None)
+        if zone is not None and not IPV6_ZONE_PATTERN.fullmatch(zone):
+            self._passed = False
+            raise InputValidationError(
+                error="IPv6 zone may contain only letters, digits and hyphens", target=target
+            )
 
         if valid_target.version != self.condition.version:
             log.bind(target=str(target), condition=str(self.condition)).debug(
@@ -304,6 +316,23 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
             continue
         raise InputValidationError(error="No matched validation rules", target=target)
 
+    def normalize_target(self, target: t.Union[t.List[str], str]) -> t.Union[t.List[str], str]:
+        """Canonicalize IP targets before validation and command construction."""
+        if not any(isinstance(rule, RuleWithIP) for rule in self.rules):
+            return target
+
+        def normalize(value: str) -> str:
+            try:
+                if "/" not in value:
+                    return str(ip_address(value))
+                return ip_network(value, strict=False).with_prefixlen
+            except ValueError:
+                return value
+
+        if isinstance(target, list):
+            return [normalize(value) for value in target]
+        return normalize(target)
+
     @property
     def field_type(self) -> t.Literal["text", "select", None]:
         """Get the linked field type."""
@@ -339,7 +368,7 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
             "name": self.name,
             "field_type": self.field_type,
             "groups": self.groups,
-            "description": self.field.description if self.field is not None else '',
+            "description": self.field.description if self.field is not None else "",
             "info": None,
         }
 
