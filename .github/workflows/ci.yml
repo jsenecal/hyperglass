@@ -1,0 +1,347 @@
+name: CI
+
+# One workflow for pull requests, main and release tags. The `CI gate` job is the
+# single status check that branch protection needs to require: it passes only when
+# every other job passes, so the required-check list does not change when a matrix
+# or a job does.
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  pull_request:
+  workflow_dispatch:
+
+# A new push to a pull request cancels the superseded run. Runs on main and on
+# tags are never cancelled, because they publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10"
+  TRIVY_VERSION: 0.74.0
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  backend:
+    name: Backend tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      HYPERGLASS_HOST: 127.0.0.1
+      HYPERGLASS_PORT: 8001
+      HYPERGLASS_REDIS_HOST: 127.0.0.1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev pkg-config python3-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements-dev.lock
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          uv venv --python "${{ matrix.python-version }}"
+          uv pip install -r requirements-dev.lock
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare application directory
+        run: |
+          mkdir -p "$HOME/hyperglass"
+          echo "HYPERGLASS_APP_PATH=$HOME/hyperglass" >> "$GITHUB_ENV"
+
+      - name: Lint Python
+        run: ruff check .
+
+      - name: Test Python
+        run: pytest hyperglass --ignore hyperglass/plugins/external
+
+      - name: Build the UI and start hyperglass
+        run: .tests/ga-backend-app.sh
+
+  frontend:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hyperglass/ui
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      # --frozen-lockfile installs the locked versions and fails when
+      # pnpm-lock.yaml does not match package.json.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create empty hyperglass.json
+        run: printf '{}\n' > hyperglass.json
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Lint TypeScript
+        run: pnpm run lint
+
+      - name: Check TypeScript types
+        run: pnpm run typecheck
+
+      - name: Test TypeScript
+        run: pnpm run test
+
+  package:
+    name: Build Python distributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Build wheel and source distribution
+        run: uv build --wheel --sdist
+
+      # Installs the wheel into a clean environment with freshly resolved
+      # dependencies, which is what a user gets from `pip install hyperglass`.
+      - name: Verify wheel installation
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-test"
+          uv pip install --python "$RUNNER_TEMP/wheel-test/bin/python" dist/*.whl
+          "$RUNNER_TEMP/wheel-test/bin/hyperglass" --help
+
+      - name: Upload Python distributions
+        uses: actions/upload-artifact@v6
+        with:
+          name: python-distributions
+          path: dist/*
+
+  image:
+    name: Build and scan Docker image
+    runs-on: ubuntu-latest
+    outputs:
+      scan: ${{ steps.scan.outcome }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: hyperglass:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Fails on HIGH or CRITICAL findings that have a fixed version. The step
+      # does not fail the job yet, so existing findings do not block every pull
+      # request, but the publish job refuses to push an image that fails the
+      # scan. Remove `continue-on-error` to make the scan a merge gate.
+      - name: Scan image for vulnerabilities
+        id: scan
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            "aquasec/trivy:${TRIVY_VERSION}" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --timeout 20m \
+            hyperglass:scan
+
+      - name: Report scan result
+        if: ${{ steps.scan.outcome != 'success' }}
+        run: |
+          echo "::warning title=Image vulnerability scan::The image has fixable HIGH or CRITICAL vulnerabilities. It is not published."
+          echo "The image has fixable HIGH or CRITICAL vulnerabilities. See the scan step log. The image is not published." >> "$GITHUB_STEP_SUMMARY"
+
+  gate:
+    name: CI gate
+    if: ${{ always() }}
+    needs:
+      - backend
+      - frontend
+      - package
+      - image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              exit 1
+            fi
+          done
+
+  publish:
+    name: Publish Docker image
+    needs:
+      - gate
+      - image
+    if: ${{ github.event_name == 'push' && needs.gate.result == 'success' && needs.image.outputs.scan == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # main publishes `main` and an immutable `sha-<commit>` tag. A version tag
+      # publishes its version. Only a stable version moves `latest`: a version
+      # with a hyphen, such as v2.1.0-rc.1, is a prerelease.
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: |
+            latest=false
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: Publish GitHub release
+    needs:
+      - gate
+      - package
+    if: ${{ startsWith(github.ref, 'refs/tags/v') && needs.gate.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Download Python distributions
+        uses: actions/download-artifact@v7
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Build release notes from CHANGELOG
+        id: notes
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          version="${VERSION#v}"
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          awk -v ver="$version" '
+            index($0, "## " ver " ") == 1 || $0 == "## " ver { flag=1; next }
+            flag && /^## / { flag=0 }
+            flag { print }
+          ' CHANGELOG.md > "$notes_file"
+          if [ ! -s "$notes_file" ]; then
+            printf 'hyperglass %s.\n' "$version" > "$notes_file"
+          fi
+          echo "file=$notes_file" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+          NOTES_FILE: ${{ steps.notes.outputs.file }}
+        run: |
+          case "$VERSION" in
+            *-*) release_type=--prerelease ;;
+            *) release_type=--latest ;;
+          esac
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$VERSION" \
+            --notes-file "$NOTES_FILE" \
+            "$release_type" \
+            --verify-tag \
+            dist/*
