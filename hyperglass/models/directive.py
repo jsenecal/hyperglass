@@ -388,6 +388,32 @@ class BuiltinDirective(Directive, unique_by=("id", "table_output", "platforms"))
     _hyperglass_builtin: bool = PrivateAttr(True)
     platforms: Series[str] = []
 
+    @property
+    def query_kind(self) -> str:
+        """Return the query kind independently of vendor and output variant."""
+        for kind in ("bgp_aspath", "bgp_community", "bgp_route", "traceroute", "ping"):
+            if self.id.endswith((f"_{kind}__", f"_{kind}_table__")):
+                return kind
+        return ""
+
+    def validate_target(self, target: str) -> bool:
+        """Check built-in BGP target syntax before evaluating configured rules."""
+        self.validate_target_syntax(target)
+        return super().validate_target(target)
+
+    def validate_target_syntax(self, target: t.Union[t.List[str], str]) -> None:
+        """Reject command syntax in built-in BGP targets."""
+        targets = target if isinstance(target, list) else [target]
+        for value in targets:
+            if self.query_kind == "bgp_aspath":
+                valid = re.fullmatch(r"[0-9_\^$.\[\]()+*?|{}, -]+", value)
+            elif self.query_kind == "bgp_community":
+                valid = re.fullmatch(r"(?:(?:target|origin):)?[0-9]+(?:[.:][0-9]+)*", value)
+            else:
+                continue
+            if not valid or len(value) > 256:
+                raise InputValidationError(error="Invalid BGP target syntax", target=value)
+
 
 DirectiveT = t.Union[BuiltinDirective, Directive]
 

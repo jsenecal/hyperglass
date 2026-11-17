@@ -53,6 +53,7 @@ class Query(BaseModel):
     # Directive `id` field
     query_type: QueryType
     _kwargs: t.Dict[str, t.Any]
+    _validated_target: t.Union[t.List[str], str, None] = None
 
     @field_validator("query_target")
     @classmethod
@@ -89,6 +90,7 @@ class Query(BaseModel):
         except InputValidationError as err:
             raise InputInvalid(**err.kwargs) from err
 
+        self._validated_target = self.query_target
         self.query_target = self.transform_query_target()
 
     def summary(self) -> SimpleQuery:

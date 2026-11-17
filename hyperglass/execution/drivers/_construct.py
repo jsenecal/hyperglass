@@ -7,6 +7,7 @@ hyperglass API modules.
 
 # Standard Library
 import re
+import shlex
 import json as _json
 import typing as t
 import ipaddress
@@ -48,6 +49,14 @@ class Construct:
         self.device = device
         self.target = self.query.query_target
         self.directive = query.directive
+
+        if self.directive._hyperglass_builtin:
+            validated = getattr(self.query, "_validated_target", None)
+            if validated is None:
+                validated = self.query.query_target
+            self.directive.validate_target(validated)
+            if self.query.query_target != validated:
+                self.directive.validate_target_syntax(self.query.query_target)
 
         # Set transport method based on NOS type
         self.transport = "scrape"
@@ -110,6 +119,16 @@ class Construct:
         except ValueError:
             pass
 
+        if self.directive._hyperglass_builtin and self.device.platform in (
+            "bird",
+            "frr",
+            "openbgpd",
+            "vyos",
+            "tnsr",
+        ):
+            return shlex.join(
+                arg.format(target=self.target, mask=mask, **attrs) for arg in shlex.split(command)
+            )
         return command.format(target=self.target, mask=mask, **attrs)
 
     def queries(self):
