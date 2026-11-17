@@ -38,11 +38,20 @@ jobs:
       - name: Pull published image
         id: pull
         run: |
-          if docker pull "${IMAGE}:${TAG}"; then
+          pull_log="$RUNNER_TEMP/image-pull.log"
+          if docker pull "${IMAGE}:${TAG}" > "$pull_log" 2>&1; then
+            cat "$pull_log"
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=Published image scan::${IMAGE}:${TAG} is not published. Nothing to scan."
-            echo "found=false" >> "$GITHUB_OUTPUT"
+            status=$?
+            cat "$pull_log"
+            if grep -Eq '(^|: )manifest unknown(:|$)' "$pull_log"; then
+              echo "::notice title=Published image scan::${IMAGE}:${TAG} is not published. Nothing to scan."
+              echo "found=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error title=Published image scan::Failed to pull ${IMAGE}:${TAG}."
+              exit "$status"
+            fi
           fi
 
       - name: Scan published image

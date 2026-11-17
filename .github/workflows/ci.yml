@@ -185,12 +185,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       scan: ${{ steps.scan.outcome }}
+      image-id: ${{ steps.export.outputs.image-id }}
+      tags: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      # main publishes `main` and an immutable `sha-<commit>` tag. A version tag
+      # publishes its version. Only a stable version moves `latest`: a version
+      # with a hyphen, such as v2.1.0-rc.1, is a prerelease.
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: |
+            latest=false
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
 
       - name: Build image
         uses: docker/build-push-action@v7
@@ -200,6 +218,7 @@ jobs:
           load: true
           push: false
           tags: hyperglass:scan
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -226,6 +245,23 @@ jobs:
         run: |
           echo "::warning title=Image vulnerability scan::The image has fixable HIGH or CRITICAL vulnerabilities. It is not published."
           echo "The image has fixable HIGH or CRITICAL vulnerabilities. See the scan step log. The image is not published." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Export scanned image
+        id: export
+        if: ${{ github.event_name == 'push' && steps.scan.outcome == 'success' }}
+        run: |
+          echo "image-id=$(docker image inspect --format '{{.Id}}' hyperglass:scan)" >> "$GITHUB_OUTPUT"
+          docker save --output "$RUNNER_TEMP/scanned-image.tar" hyperglass:scan
+
+      - name: Upload scanned image
+        if: ${{ github.event_name == 'push' && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: scanned-image
+          path: ${{ runner.temp }}/scanned-image.tar
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
 
   gate:
     name: CI gate
@@ -259,11 +295,22 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
+      - name: Download scanned image
+        uses: actions/download-artifact@v7
+        with:
+          name: scanned-image
+          path: ${{ runner.temp }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - name: Verify scanned image
+        env:
+          EXPECTED_IMAGE_ID: ${{ needs.image.outputs.image-id }}
+        run: |
+          docker load --input "$RUNNER_TEMP/scanned-image.tar"
+          actual_image_id=$(docker image inspect --format '{{.Id}}' hyperglass:scan)
+          if [ "$actual_image_id" != "$EXPECTED_IMAGE_ID" ]; then
+            echo "::error::Downloaded image does not match the scanned image."
+            exit 1
+          fi
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -272,39 +319,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # main publishes `main` and an immutable `sha-<commit>` tag. A version tag
-      # publishes its version. Only a stable version moves `latest`: a version
-      # with a hyphen, such as v2.1.0-rc.1, is a prerelease.
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE }}
-          flavor: |
-            latest=false
-          tags: |
-            type=ref,event=branch
-            type=sha
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
-
-      - name: Build and publish image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Publish scanned image
+        env:
+          IMAGE_TAGS: ${{ needs.image.outputs.tags }}
+          EXPECTED_IMAGE_ID: ${{ needs.image.outputs.image-id }}
+        run: |
+          while IFS= read -r tag; do
+            docker tag "$EXPECTED_IMAGE_ID" "$tag"
+            docker push "$tag"
+          done <<< "$IMAGE_TAGS"
 
   release:
     name: Publish GitHub release
     needs:
       - gate
       - package
-    if: ${{ startsWith(github.ref, 'refs/tags/v') && needs.gate.result == 'success' }}
+      - publish
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.gate.result == 'success' && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
