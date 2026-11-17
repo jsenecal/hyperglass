@@ -2,6 +2,7 @@
 hyperglass/hyperglass/static
 TODO*
 .env
+.pnpm-store/
 
 test.py
 .DS_Store

@@ -1,5 +1,6 @@
-onlyBuiltDependencies:
-  - '@biomejs/biome'
-  - esbuild
+# Approve only the build scripts required by the locked UI dependencies.
+allowBuilds:
+  '@biomejs/biome': true
+  esbuild: true
 packages:
   - .

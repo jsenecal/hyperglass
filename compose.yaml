@@ -11,7 +11,7 @@ services:
             - HYPERGLASS_DEBUG=${HYPERGLASS_DEBUG-false}
             - HYPERGLASS_DEV_MODE=${HYPERGLASS_DEV_MODE-false}
             - HYPERGLASS_REDIS_HOST=${HYPERGLASS_REDIS_HOST-redis}
-            - HYPEGLASS_DISABLE_UI=${HYPEGLASS_DISABLE_UI-false}
+            - HYPERGLASS_DISABLE_UI=${HYPERGLASS_DISABLE_UI-false}
             - HYPERGLASS_CONTAINER=${HYPERGLASS_CONTAINER-true}
             - HYPERGLASS_ORIGINAL_APP_PATH=${HYPERGLASS_APP_PATH}
         build: .
@@ -19,3 +19,16 @@ services:
             - "${HYPERGLASS_PORT-8001}:${HYPERGLASS_PORT-8001}"
         volumes:
             - ${HYPERGLASS_APP_PATH-/etc/hyperglass}:/etc/hyperglass
+        healthcheck:
+            # /api/info reads Redis-backed state. The UI root does not, so it keeps
+            # returning 200 through a total query outage.
+            test:
+                [
+                    "CMD-SHELL",
+                    "wget -qO- http://127.0.0.1:${HYPERGLASS_PORT-8001}/api/info >/dev/null || exit 1",
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            # The UI is built on boot, which takes a couple of minutes.
+            start_period: 180s

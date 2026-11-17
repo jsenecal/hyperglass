@@ -1,11 +1,18 @@
 hyperglass/hyperglass/static
-**/node_modules
-**/node_modules/.pnpm
+**/node_modules/
+**/node_modules/**
+**/.pnpm-store/
+**/.pnpm-store/**
+**/.next/
+**/.next/**
+**/out/
+**/out/**
+**/tsconfig.tsbuildinfo
 .DS_Store
 hyperglass/ui/.env*
 hyperglass.json
 custom.*[js, html]
-.next
+.next/
 out/
 fonts/
 __pycache__
@@ -42,3 +49,6 @@ coverage.xml
 *.rdb
 *.py[cod]
 .ipynb*
+
+# Local containerlab lab and its downloaded table dump
+lab/

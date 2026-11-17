@@ -18,6 +18,81 @@ if t.TYPE_CHECKING:
     from hyperglass.models.ui import UIParameters
 
 
+FAVICON_FORMATS = (
+    {"dimensions": (64, 64), "image_format": "ico", "prefix": "favicon", "rel": None},
+    {"dimensions": (16, 16), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (32, 32), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (64, 64), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (96, 96), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {"dimensions": (180, 180), "image_format": "png", "prefix": "favicon", "rel": "icon"},
+    {
+        "dimensions": (57, 57),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (60, 60),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (72, 72),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (76, 76),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (114, 114),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (120, 120),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (144, 144),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (152, 152),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (167, 167),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {
+        "dimensions": (180, 180),
+        "image_format": "png",
+        "prefix": "apple-touch-icon",
+        "rel": "apple-touch-icon",
+    },
+    {"dimensions": (70, 70), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (270, 270), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (310, 310), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (310, 150), "image_format": "png", "prefix": "mstile", "rel": None},
+    {"dimensions": (196, 196), "image_format": "png", "prefix": "favicon", "rel": "shortcut icon"},
+)
+
+
 def get_ui_build_timeout() -> t.Optional[int]:
     """Read the UI build timeout from environment variables or set a default."""
     timeout = None
@@ -231,6 +306,52 @@ def write_favicon_formats(formats: t.Tuple[t.Dict[str, t.Any]]) -> None:
     file.write_text(data)
 
 
+def generate_favicons(source: Path, output_directory: Path) -> t.Tuple[t.Dict[str, t.Any], ...]:
+    """Generate the favicon files used by the frontend."""
+    # Third Party
+    from PIL import Image
+
+    output_directory.mkdir(parents=True, exist_ok=True)
+    source_is_svg = source.suffix.lower() == ".svg"
+    source_image = None
+
+    if source_is_svg:
+        # Standard Library
+        from io import BytesIO
+
+        # Third Party
+        import cairosvg
+    else:
+        source_image = Image.open(source).convert("RGBA")
+
+    try:
+        for favicon in FAVICON_FORMATS:
+            width, height = favicon["dimensions"]
+            target = output_directory / (
+                f"{favicon['prefix']}-{width}x{height}.{favicon['image_format']}"
+            )
+
+            if source_is_svg:
+                rendered = cairosvg.svg2png(
+                    url=str(source), output_width=width, output_height=height
+                )
+                resized = Image.open(BytesIO(rendered)).convert("RGBA")
+            else:
+                resized = source_image.resize((width, height), Image.Resampling.LANCZOS)
+
+            if favicon["image_format"] == "ico":
+                resized.save(target, format="ICO", sizes=[(width, height)])
+            else:
+                resized.save(target, format="PNG")
+
+            resized.close()
+    finally:
+        if source_image is not None:
+            source_image.close()
+
+    return FAVICON_FORMATS
+
+
 def write_custom_files(params: "UIParameters") -> None:
     """Write custom files to the `ui` directory so they can be imported and rendered."""
     js = Path(__file__).parent.parent / "ui" / "custom.js"
@@ -263,9 +384,6 @@ async def build_frontend(  # noqa: C901
     """Perform full frontend UI build process."""
     # Standard Library
     import hashlib
-
-    # Third Party
-    from favicons import Favicons  # type:ignore
 
     # Project
     from hyperglass.constants import __version__
@@ -310,14 +428,9 @@ async def build_frontend(  # noqa: C901
     if not favicon_dir.exists():
         favicon_dir.mkdir()
 
-    async with Favicons(
-        source=params.web.logo.favicon,
-        output_directory=favicon_dir,
-        base_url="/images/favicons/",
-    ) as favicons:
-        await favicons.generate()
-        log.bind(count=favicons.completed).debug("Generated favicons")
-        write_favicon_formats(favicons.formats())
+    favicon_formats = generate_favicons(params.web.logo.favicon, favicon_dir)
+    log.bind(count=len(favicon_formats)).debug("Generated favicons")
+    write_favicon_formats(favicon_formats)
 
     build_data = {
         "params": params.export_dict(),
