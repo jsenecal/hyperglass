@@ -279,6 +279,8 @@ jobs:
         ports:
           - 2222:2222
     env:
+      HYPERGLASS_HOST: 127.0.0.1
+      HYPERGLASS_PORT: 8001
       HYPERGLASS_TEST_SSH_HOST: 127.0.0.1
       HYPERGLASS_TEST_SSH_PORT: 2222
       HYPERGLASS_TEST_SSH_USERNAME: hyperglass
@@ -313,6 +315,12 @@ jobs:
           uv venv --python 3.12
           uv pip install -r requirements-dev.lock
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      # Settings validation requires an existing application directory.
+      - name: Prepare application directory
+        run: |
+          mkdir -p "$HOME/hyperglass"
+          echo "HYPERGLASS_APP_PATH=$HOME/hyperglass" >> "$GITHUB_ENV"
 
       - name: Wait for the SSH server
         run: |
