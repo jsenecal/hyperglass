@@ -105,6 +105,8 @@ CiscoIOS_Traceroute = BuiltinDirective(
             condition="::/0",
             action="permit",
             command="traceroute ipv6 {target} timeout 1 probe 2 source {source6}",
+            fallback_command="traceroute ipv6 {target}",
+            fallback_os_version="<16",
         ),
     ],
     field=Text(description="IP Address, Prefix, or Hostname"),

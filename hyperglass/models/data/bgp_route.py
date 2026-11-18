@@ -42,6 +42,7 @@ class BGPRoute(HyperglassModel):
         Actions:
             permit: only permit matches
             deny: only deny matches
+            name: append configured names without dropping unmatched communities
         """
 
         (structured := use_state("params").structured)
@@ -63,6 +64,10 @@ class BGPRoute(HyperglassModel):
                     valid = False
                     break
             return valid
+
+        if structured.communities.mode == "name":
+            names = structured.communities.names
+            return [f"{comm},{names[comm]}" if comm in names else comm for comm in value]
 
         func_map = {"permit": _permit, "deny": _deny}
         func = func_map[structured.communities.mode]

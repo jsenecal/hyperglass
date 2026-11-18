@@ -7,7 +7,7 @@ from pathlib import Path
 from ipaddress import IPv4Address, IPv6Address
 
 # Third Party
-from pydantic import FilePath, ValidationInfo, field_validator
+from pydantic import Field, FilePath, ValidationInfo, field_validator
 from netmiko.ssh_dispatcher import CLASS_MAPPER  # type: ignore
 
 # Project
@@ -28,7 +28,7 @@ from ..main import MultiModel, HyperglassModel, HyperglassModelWithId
 from ..util import check_legacy_fields
 from .proxy import Proxy
 from ..fields import SupportedDriver
-from ..directive import Directives
+from ..directive import Directive, Directives, version_tuple
 from .credential import Credential
 from .http_client import HttpConfiguration
 
@@ -49,6 +49,27 @@ class DirectiveOptions(HyperglassModel, extra="ignore"):
     builtins: t.Union[bool, t.List[str]] = True
 
 
+def directive_attr_keys(directives: t.Iterable[Directive], *, vrf: bool) -> t.Set[str]:
+    """Return the device attributes the device's commands reference.
+
+    A VRF device runs a rule's VRF commands where the rule has them, as `Construct` does,
+    so only those commands count (#95). `target`, `mask`, `vrf` and directive variables are
+    filled in at query time, not from `attrs`.
+    """
+    return {
+        key
+        for directive in directives
+        for rule in directive.rules
+        for command in (
+            rule.vrf_commands
+            if vrf and rule.vrf_commands
+            else rule.commands + rule.fallback_commands
+        )
+        for key in get_fmt_keys(command)
+        if key not in ("target", "mask", "vrf") and key not in directive.variables
+    }
+
+
 class Device(HyperglassModelWithId, extra="allow"):
     """Validation model for per-router config in devices.yaml."""
 
@@ -62,12 +83,16 @@ class Device(HyperglassModelWithId, extra="allow"):
     proxy: t.Optional[Proxy] = None
     display_name: t.Optional[str] = None
     port: int = 22
+    vrf: t.Optional[str] = None
     http: HttpConfiguration = HttpConfiguration()
     platform: str
+    os_version: t.Optional[str] = None
     structured_output: t.Optional[bool] = None
     directives: Directives = Directives()
     driver: t.Optional[SupportedDriver] = None
     driver_config: t.Dict[str, t.Any] = {}
+    disable_paging: bool = True
+    connect_retries: t.Optional[int] = Field(None, ge=0, le=10)
     attrs: t.Dict[str, str] = {}
 
     def __init__(self, **kw) -> None:
@@ -149,13 +174,7 @@ class Device(HyperglassModelWithId, extra="allow"):
         return self.platform
 
     def _validate_directive_attrs(self) -> None:
-        # Set of all keys except for built-in key `target`.
-        keys = {
-            key
-            for group in [get_fmt_keys(command) for command in self.directive_commands]
-            for key in group
-            if key != "target"
-        }
+        keys = directive_attr_keys(self.directives, vrf=getattr(self, "vrf", None) is not None)
 
         attrs = {k: v for k, v in self.attrs.items() if k in keys}
 
@@ -240,6 +259,15 @@ class Device(HyperglassModelWithId, extra="allow"):
 
         return value
 
+    @field_validator("vrf", mode="before")
+    def validate_vrf(cls, value: t.Any) -> t.Optional[str]:
+        """Normalize numeric VRFs and reject command syntax in routing contexts."""
+        if value is None:
+            return None
+        if type(value) not in (str, int) or not re.fullmatch(r"[A-Za-z0-9_.:-]+", str(value)):
+            raise ValueError("vrf must be a non-empty routing-context name or number")
+        return str(value)
+
     @field_validator("structured_output", mode="before")
     def validate_structured_output(cls, value: bool, info: ValidationInfo) -> bool:
         """Validate structured output is supported on the device & set a default."""
@@ -247,10 +275,10 @@ class Device(HyperglassModelWithId, extra="allow"):
         if value is True:
             if info.data.get("platform") not in SUPPORTED_STRUCTURED_OUTPUT:
                 raise ConfigError(
-                    "The 'structured_output' field is set to 'true' on device '{}' with "
-                    + "platform '{}', which does not support structured output",
-                    info.data.get("name"),
-                    info.data.get("platform"),
+                    "The 'structured_output' field is set to 'true' on device '{device}' with "
+                    + "platform '{platform}', which does not support structured output",
+                    device=info.data.get("name"),
+                    platform=info.data.get("platform"),
                 )
             return value
         if value is None and info.data.get("platform") in SUPPORTED_STRUCTURED_OUTPUT:
@@ -289,7 +317,10 @@ class Device(HyperglassModelWithId, extra="allow"):
         # Directives matching provided IDs.
         device_directives = directives.filter(*directive_ids)
         # Matching built-in directives for this device's platform.
-        builtins = directives.device_builtins(platform=platform, table_output=structured_output)
+        vrf = info.data.get("vrf") is not None
+        builtins = directives.device_builtins(
+            platform=platform, table_output=structured_output, vrf=vrf
+        )
 
         if directive_options.builtins is True:
             # Add all builtins.
@@ -298,7 +329,25 @@ class Device(HyperglassModelWithId, extra="allow"):
             # If the user provides a list of builtin directives to include, add only those.
             device_directives += builtins.matching(*directive_options.builtins)
 
+        if vrf and not device_directives:
+            raise ConfigError(
+                "Device '{device}' has no VRF-capable directives.", device=info.data.get("name")
+            )
         return device_directives
+
+    @field_validator("os_version", mode="before")
+    def validate_os_version(cls, value: t.Any) -> t.Optional[str]:
+        """Require a leading version number, including unquoted YAML numbers."""
+        if value is None:
+            return None
+        value = str(value)
+        try:
+            version_tuple(value)
+        except ValueError as err:
+            raise ValueError(
+                f"os_version {value!r} must start with a version number, such as '15.9(3)M6'"
+            ) from err
+        return value
 
     @field_validator("driver")
     def validate_driver(cls: "Device", value: t.Optional[str], info: ValidationInfo) -> str:

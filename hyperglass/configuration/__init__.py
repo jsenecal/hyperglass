@@ -2,6 +2,7 @@
 
 # Standard Library
 import typing as t
+from uuid import uuid4
 
 # Project
 from hyperglass.state import use_state
@@ -26,6 +27,7 @@ def init_user_config(
 ) -> None:
     """Initialize all user configurations and add them to global state."""
     state = use_state()
+    state.redis.instance.delete(state.redis.key(("plugins", "ready")))
     init_files()
 
     _params = params or init_params()
@@ -43,3 +45,4 @@ def init_user_config(
     with state.cache.pipeline() as pipeline:
         pipeline.set("devices", _devices)
         pipeline.set("ui_params", ui_params)
+        pipeline.set("generation", str(uuid4()))

@@ -10,6 +10,7 @@ import pytest
 # Project
 from hyperglass.models.directive import BuiltinDirective, RuleWithPattern
 from hyperglass.exceptions.private import InputValidationError
+from hyperglass.exceptions.public import InputInvalid
 from hyperglass.execution.drivers._construct import Construct
 
 
@@ -53,5 +54,10 @@ def test_execution_boundary_rechecks_plugin_output():
 @pytest.mark.parametrize("target", ("_13335$", "^(13335|65001)$", "_13335(_.+_)65001$"))
 def test_regular_expression_is_one_shell_argument(platform, target):
     device, query = query_for(platform, target)
+    if platform in ("bird", "openbgpd") and target != "_13335$":
+        with pytest.raises(InputInvalid):
+            Construct(device, query)
+        return
     command = Construct(device, query).queries()[0]
-    assert shlex.split(command) == ["vtysh", "-c", f"show bgp regexp {target}"]
+    rendered = {"bird": "[= * 13335 =]", "openbgpd": "13335"}.get(platform, target)
+    assert shlex.split(command) == ["vtysh", "-c", f"show bgp regexp {rendered}"]

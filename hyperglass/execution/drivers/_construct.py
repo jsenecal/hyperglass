@@ -15,9 +15,10 @@ import ipaddress
 # Project
 from hyperglass.log import log
 from hyperglass.util import get_fmt_keys
-from hyperglass.constants import TRANSPORT_REST, TARGET_FORMAT_SPACE
+from hyperglass.constants import TRANSPORT_REST, LINUX_PLATFORMS, TARGET_FORMAT_SPACE
 from hyperglass.exceptions.public import InputInvalid
 from hyperglass.exceptions.private import ConfigError
+from hyperglass.models.directive import version_matches
 
 if t.TYPE_CHECKING:
     # Third Party
@@ -50,6 +51,10 @@ class Construct:
         self.target = self.query.query_target
         self.directive = query.directive
 
+        # Recheck built-ins at the execution boundary. Rules apply to the target as the
+        # user sent it, because input plugins may rewrite it into a vendor form that the
+        # rules reject (Huawei `a/b` to `a b`). The syntax check also applies to the
+        # transformed target, so a plugin cannot introduce command syntax.
         if self.directive._hyperglass_builtin:
             validated = getattr(self.query, "_validated_target", None)
             if validated is None:
@@ -99,8 +104,11 @@ class Construct:
     def format(self, command: str) -> str:
         """Return formatted command for 'Scrape' endpoints (SSH)."""
         keys = get_fmt_keys(command)
-        attrs = {k: v for k, v in self.device.attrs.items() if k in keys}
-        for key in [k for k in keys if k != "target" and k != "mask"]:
+        attrs = {
+            k: v for k, v in self.device.attrs.items() if k in keys and k not in ("target", "mask")
+        }
+        variables = self.directive.variables
+        for key in [k for k in keys if k not in ("target", "mask") and k not in variables]:
             if key not in attrs:
                 raise ConfigError(
                     ("Command '{c}' has attribute '{k}', which is missing from device '{d}'"),
@@ -119,21 +127,40 @@ class Construct:
         except ValueError:
             pass
 
+        # Values come only from the directive's configured choices. Quote them where a shell
+        # parses the command.
+        selected = getattr(self.query, "query_variables", None) or {}
+        shell = self.device.platform in (*LINUX_PLATFORMS, "vyos", "vyos_1_3", "cumulus_linux")
+        values = {
+            name: variable.render(selected.get(name), quote=shell)
+            for name, variable in variables.items()
+            if name in keys
+        }
+
         if self.directive._hyperglass_builtin and self.device.platform in (
             "bird",
             "frr",
             "openbgpd",
+            "sonic",
+            "cumulus_linux",
             "vyos",
+            "vyos_1_3",
+            # `dataplane shell` runs the command through a shell.
             "tnsr",
         ):
+            # Split the trusted template first. Quote complete arguments after substitution.
             return shlex.join(
                 arg.format(target=self.target, mask=mask, **attrs) for arg in shlex.split(command)
             )
-        return command.format(target=self.target, mask=mask, **attrs)
+        return command.format(target=self.target, mask=mask, **attrs, **values)
 
     def queries(self):
-        """Return queries for each enabled AFI."""
+        """Return queries for each enabled AFI.
+
+        Also sets `fallbacks`: for each query, the command to run if the device rejects it.
+        """
         query = []
+        self.fallbacks: t.List[t.Optional[str]] = []
 
         rules = [r for r in self.directive.rules if r._passed is True]
         if len(rules) < 1:
@@ -142,9 +169,24 @@ class Construct:
                 target=self.query.query_target,
             )
 
+        vrf = getattr(self.device, "vrf", None)
+        os_version = getattr(self.device, "os_version", None)
         for rule in [r for r in self.directive.rules if r._passed is True]:
-            for command in rule.commands:
+            fallbacks = []
+            if vrf is not None and rule.vrf_commands:
+                # The VRF name is validated on the device, so it is safe to insert as text.
+                commands = [command.replace("{vrf}", vrf) for command in rule.vrf_commands]
+            elif rule.fallback_os_version and version_matches(os_version, rule.fallback_os_version):
+                # The device's version is known to reject the primary commands.
+                commands = rule.fallback_commands
+            else:
+                commands = rule.commands
+                fallbacks = rule.fallback_commands
+            for index, command in enumerate(commands):
                 query.append(self.format(command))
+                self.fallbacks.append(
+                    self.format(fallbacks[index]) if index < len(fallbacks) else None
+                )
         self._log.bind(constructed_query=query).debug("Constructed query")
         return query
 
@@ -156,7 +198,7 @@ class Formatter:
         """Initialize target formatting."""
         self.query = query
         self.platform = query.device.platform
-        self.query_type = query.query_type
+        self.query_type = getattr(query.directive, "query_kind", query.query_type)
 
     def __enter__(self):
         """Get the relevant formatter."""
@@ -177,16 +219,39 @@ class Formatter:
                 return self._with_formatter(self._bird_bgp_aspath)
             if self.query_type == "bgp_community":
                 return self._with_formatter(self._bird_bgp_community)
+        if self.platform in ("mikrotik_routeros", "mikrotik_switchos"):
+            if self.query_type in ("bgp_aspath", "bgp_community"):
+                return self._with_formatter(self._mikrotik_bgp_pattern)
+        if self.platform == "openbgpd" and self.query_type == "bgp_aspath":
+            return self._with_formatter(self._openbgpd_bgp_aspath)
+        if self.platform == "extreme_exos" and self.query_type == "bgp_community":
+            return self._with_formatter(self._exos_bgp_community)
         return self._with_formatter(self._default)
 
     def _default(self, target: str) -> str:
         """Don't format targets by default."""
+        if self.platform == "hp_comware" and self.query_type == "bgp_route":
+            return self._comware_bgp_route(target)
+        exact_prefix = (
+            "aruba_aoscx",
+            "dell_os10",
+            "dell_force10",
+            "paloalto_panos",
+            "arrcus_arcos",
+        )
+        if self.platform in exact_prefix and self.query_type == "bgp_route":
+            return str(ipaddress.ip_network(target, strict=False))
         return target
+
+    def _comware_bgp_route(self, target: str) -> str:
+        """Request exact-prefix detail instead of an ambiguous summary table."""
+        network = ipaddress.ip_network(target, strict=False)
+        return f"{network.network_address} {network.prefixlen}"
 
     def _with_formatter(self, formatter: t.Callable[[str], str]) -> FormatterCallback:
         result: FormatterCallback
         if isinstance(self.query.query_target, t.List):
-            result = lambda s: [formatter(i) for i in s]
+            return lambda s: [formatter(i) for i in s] if isinstance(s, list) else formatter(s)
         result = lambda s: formatter(s)
         return result
 
@@ -214,33 +279,54 @@ class Formatter:
         return query
 
     def _bird_bgp_aspath(self, target: str) -> str:
-        """Convert from Cisco AS_PATH format to BIRD format."""
-
-        # Extract ASNs from query target string
-        asns = re.findall(r"\d+", target)
-        was_modified = False
-
-        if bool(re.match(r"^\_", target)):
-            # Replace `_65000` with `.* 65000`
+        """Translate common Cisco ASN sequences without silently changing other regexes."""
+        if not re.fullmatch(r"[\^_]?[0-9]+(?:_[0-9]+)*[_$]?", target):
+            raise InputInvalid(target=target, error="BIRD supports ASN sequences with ^, $, and _")
+        asns = re.findall(r"[0-9]+", target)
+        if any(int(asn) > 0xFFFFFFFF for asn in asns):
+            raise InputInvalid(target=target, error="ASN exceeds 32 bits")
+        if not target.startswith("^"):
             asns.insert(0, "*")
-            was_modified = True
-
-        if bool(re.match(r".*(\_)$", target)):
-            # Replace `65000_` with `65000 .*`
+        if not target.endswith("$"):
             asns.append("*")
-            was_modified = True
-
-        asns.insert(0, "[=")
-        asns.append("=]")
-
-        result = " ".join(asns)
-
-        if was_modified:
-            log.bind(original=target, modified=result).debug("Modified target")
-
-        return result
+        return "[= " + " ".join(asns) + " =]"
 
     def _bird_bgp_community(self, target: str) -> str:
         """Convert from standard community format to BIRD format."""
+        if not re.fullmatch(r"[0-9]+:[0-9]+", target):
+            raise InputInvalid(target=target, error="BIRD requires a standard ASN:value community")
         parts = target.split(":")
         return f"({','.join(parts)})"
+
+    def _mikrotik_bgp_pattern(self, target: str) -> str:
+        r"""Build a RouterOS ``where ~`` regex for an AS-path or community query.
+
+        AS-path uses ``_`` as an element boundary; community is anchored between
+        list separators or the ends of the community list. Each ``$`` anchor must reach
+        the RouterOS console as ``\$`` so the console passes a literal ``$`` to
+        the regex engine, which reads it as the end anchor. A bare ``$`` is taken
+        as console variable interpolation and a doubled ``\\$`` as an escaped
+        backslash; both fail the command with a syntax error. Do not double
+        backslashes here. The target is already constrained to a safe charset by
+        ``BuiltinDirective.validate_target``.
+        """
+        if self.query_type == "bgp_aspath":
+            target = target.replace("_", "(^|[ ,]|$)")
+        else:
+            # For regex matching RouterOS 6 and 7 both join a community list with
+            # `;`. The pattern also accepts `,` as a separator.
+            target = "(^|[,;])" + target.replace(".", r"\.") + "([,;]|$)"
+        return target.replace("$", r"\$")
+
+    def _exos_bgp_community(self, target: str) -> str:
+        """EXOS reads a standard community only as separate `AS : value` tokens."""
+        if not re.fullmatch(r"[0-9]+:[0-9]+", target):
+            raise InputInvalid(target=target, error="EXOS requires a standard ASN:value community")
+        return target.replace(":", " : ")
+
+    def _openbgpd_bgp_aspath(self, target: str) -> str:
+        """Extract the ASN after a directive rule selects the matching AS operator."""
+        asn = target.strip("_^$")
+        if not asn.isdecimal() or int(asn) > 0xFFFFFFFF:
+            raise InputInvalid(target=target, error="OpenBGPD requires a 32-bit ASN")
+        return asn

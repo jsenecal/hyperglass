@@ -5,7 +5,7 @@ import typing as t
 from pathlib import Path
 
 # Third Party
-from pydantic import ByteSize, SecretStr, AnyHttpUrl, DirectoryPath, field_validator
+from pydantic import Field, ByteSize, SecretStr, AnyHttpUrl, DirectoryPath, field_validator
 
 # Project
 from hyperglass.constants import __version__
@@ -37,7 +37,7 @@ class HttpAuth(HyperglassModel):
 
     def basic(self):
         """Represent HTTP basic authentication."""
-        return (self.username, self.password.get_secret_value())
+        return (self.username or "", self.password.get_secret_value())
 
 
 class Http(HyperglassModel, extra="allow"):
@@ -60,22 +60,40 @@ class Http(HyperglassModel, extra="allow"):
                 value[k] = str(v)
         return value
 
-    def __init__(self, **kwargs):
-        """Initialize model, add obfuscated connection details as attribute."""
-        super().__init__(**kwargs)
-        dumped = {
-            "headers": self.headers,
-            "params": self.params,
-            "verify": self.verify_ssl,
-            "timeout": self.timeout,
-        }
-        dumped["headers"].update({"user-agent": f"hyperglass/{__version__}"})
+    def request_headers(self) -> t.Dict[str, str]:
+        """Build the headers for a webhook request, including an API key header."""
+        headers = {"user-agent": f"hyperglass/{__version__}", **self.headers}
+        if self.authentication is not None and self.authentication.mode == "api_key":
+            headers.update(self.authentication.api_key())
+        return headers
 
-        if self.authentication is not None:
-            if self.authentication.mode == "api_key":
-                dumped["headers"].update(self.authentication.api_key())
-            else:
-                dumped["auth"] = self.authentication.basic()
+    def request_auth(self) -> t.Optional[t.Tuple[str, str]]:
+        """Build the HTTP basic authentication credentials for a webhook request."""
+        if self.authentication is not None and self.authentication.mode == "basic":
+            return self.authentication.basic()
+        return None
+
+
+class QuerySamples(HyperglassModel):
+    """Structured request/response capture (raw + parsed) as JSON lines.
+
+    When enabled, every query appends one JSON object to a JSONL file capturing
+    the request, the raw device output, and the parsed result (and failures).
+    Intended for shipping to Loki via Grafana Alloy and for building parser
+    regression fixtures. Disabled by default.
+
+    Note: raw output can contain internal addresses/communities/interface names.
+    """
+
+    enable: bool = False
+    # Output file. Defaults to "<logging.directory>/hyperglass_query_log.jsonl".
+    path: t.Optional[Path] = None
+    include_raw: bool = True
+    include_parsed: bool = True
+    # Size-based rotation threshold.
+    max_size: ByteSize = "50MB"
+    # Rotated files kept as "<name>.1" (newest) to "<name>.<backup_count>".
+    backup_count: int = Field(1, ge=1)
 
 
 class Logging(HyperglassModel):
@@ -86,3 +104,7 @@ class Logging(HyperglassModel):
     max_size: ByteSize = "50MB"
     syslog: t.Optional[Syslog] = None
     http: t.Optional[Http] = None
+    samples: QuerySamples = Field(default_factory=QuerySamples)
+    # Write each SSH session to "<directory>/<device id>-<YYYYMMDD>.log". Netmiko
+    # redacts the device password and secret. Disabled by default.
+    session_log: bool = False

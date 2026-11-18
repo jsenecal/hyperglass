@@ -2,11 +2,19 @@
 
 # Standard Library
 import re
+import shlex
 import typing as t
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 
 # Third Party
-from pydantic import Field, FilePath, PrivateAttr, IPvAnyNetwork, field_validator
+from pydantic import (
+    Field,
+    FilePath,
+    PrivateAttr,
+    IPvAnyNetwork,
+    field_validator,
+    model_validator,
+)
 
 # Project
 from hyperglass.log import log
@@ -65,6 +73,80 @@ class Select(Input):
     options: t.List[Option]
 
 
+class VariableItem(HyperglassModel):
+    """One allowed value of a directive variable."""
+
+    name: t.Optional[str] = None
+    value: t.Optional[str] = None
+    description: t.Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_value(self) -> "VariableItem":
+        """Use the name as the value when no value is set."""
+        if self.value is None:
+            self.value = self.name
+        if not self.value:
+            raise ValueError("A variable item needs a 'name' or a 'value'")
+        if self.name is None:
+            self.name = self.value
+        return self
+
+
+class Variable(HyperglassModel):
+    """An optional command variable with a fixed set of allowed values."""
+
+    name: t.Optional[str] = None
+    command: str = ""
+    required: bool = False
+    items: t.List[VariableItem] = Field(min_length=1)
+
+    def render(self, value: t.Optional[str], *, quote: bool) -> str:
+        """Render the command fragment for a selected value, or nothing."""
+        if value is None:
+            return ""
+        return self.command + (shlex.quote(value) if quote else value)
+
+
+_VERSION_CLAUSE = re.compile(r"^\s*(<=|>=|==|<|>)\s*(\d+(?:\.\d+)*)\s*$")
+_VERSION_OPERATORS: t.Dict[str, t.Callable[[t.Tuple[int, ...], t.Tuple[int, ...]], bool]] = {
+    "<": lambda a, b: a < b,
+    "<=": lambda a, b: a <= b,
+    ">": lambda a, b: a > b,
+    ">=": lambda a, b: a >= b,
+    "==": lambda a, b: a == b,
+}
+
+
+def version_tuple(version: str) -> t.Tuple[int, ...]:
+    """Read the leading dotted numbers of a vendor version, so `15.9(3)M6` is `(15, 9)`."""
+    match = re.match(r"\s*(\d+(?:\.\d+)*)", version)
+    if match is None:
+        raise ValueError(f"'{version}' does not start with a version number")
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def validate_version_spec(spec: str) -> str:
+    """Check a comma-separated version filter such as `<16` or `>=12,<16`."""
+    for clause in spec.split(","):
+        if _VERSION_CLAUSE.match(clause) is None:
+            raise ValueError(f"Invalid version filter '{spec}'")
+    return spec
+
+
+def version_matches(version: t.Optional[str], spec: str) -> bool:
+    """Return whether a device's software version meets every clause of a filter."""
+    if not version:
+        return False
+    actual = version_tuple(version)
+    for clause in spec.split(","):
+        operator, value = _VERSION_CLAUSE.match(clause).groups()
+        wanted = tuple(int(part) for part in value.split("."))
+        # Compare only as many parts as the filter names, so `15.9` equals `==15`.
+        if not _VERSION_OPERATORS[operator](actual[: len(wanted)], wanted):
+            return False
+    return True
+
+
 class Rule(HyperglassModel):
     """Base rule."""
 
@@ -73,8 +155,27 @@ class Rule(HyperglassModel):
     condition: Condition
     action: Action = "permit"
     commands: t.List[str] = Field([], alias="command")
+    # Commands for a device with a `vrf`, where `{vrf}` is the VRF name.
+    vrf_commands: t.List[str] = Field([], alias="vrf_command")
+    # Commands for older software that rejects `commands`. A device whose `os_version` meets
+    # `fallback_os_version` runs them directly. Otherwise they run when the device rejects
+    # the matching command.
+    fallback_commands: t.List[str] = Field([], alias="fallback_command")
+    fallback_os_version: t.Optional[str] = None
 
-    @field_validator("commands", mode="before")
+    @field_validator("fallback_os_version")
+    def validate_fallback_os_version(cls, value: t.Optional[str]) -> t.Optional[str]:
+        """Check the version filter syntax."""
+        return value if value is None else validate_version_spec(value)
+
+    @model_validator(mode="after")
+    def validate_fallback(self) -> "Rule":
+        """Require fallback commands when a version filter selects them."""
+        if self.fallback_os_version and not self.fallback_commands:
+            raise ValueError("'fallback_os_version' needs 'fallback_command'")
+        return self
+
+    @field_validator("commands", "vrf_commands", "fallback_commands", mode="before")
     def validate_commands(cls, value: t.Union[str, t.List[str]]) -> t.List[str]:
         """Ensure commands is a list."""
         if isinstance(value, str):
@@ -130,6 +231,22 @@ class RuleWithIP(Rule):
 
         return False
 
+    def refused_class(self, target: IPvAnyNetwork) -> t.Optional[str]:
+        """Return the address class that refuses the target, or `None` (#173).
+
+        The classes follow Python's `ipaddress` flags, which hold for a prefix only when the
+        whole prefix is in the class. Loopback and unspecified are checked first, so `::1` and
+        `::` need only `allow_loopback` or `allow_unspecified`, although IPv6 `::/8` is also
+        reserved. Documentation ranges, such as 192.0.2.0/24, are not reserved.
+        """
+        if target.is_loopback:
+            return None if self.allow_loopback else "Loopback"
+        if target.is_unspecified:
+            return None if self.allow_unspecified else "Unspecified"
+        if target.is_reserved and not self.allow_reserved:
+            return "Reserved"
+        return None
+
     def validate_target(self, target: str, *, multiple: bool) -> bool:
         """Validate an IP address target against this rule's conditions."""
 
@@ -146,8 +263,8 @@ class RuleWithIP(Rule):
         except ValueError as err:
             raise InputValidationError(error=str(err), target=target) from err
 
-        # ipaddress accepts command separators in IPv6 zones. Restrict the zone
-        # before a validated target can be used in a device command.
+        # `ipaddress` accepts any character in an IPv6 zone, including a line break
+        # that would start a second command on the device (#243).
         zone = getattr(valid_target.network_address, "scope_id", None)
         if zone is not None and not IPV6_ZONE_PATTERN.fullmatch(zone):
             self._passed = False
@@ -165,6 +282,12 @@ class RuleWithIP(Rule):
         in_range = self.in_range(valid_target)
 
         if all((is_member, in_range, self.action == "permit")):
+            refused = self.refused_class(valid_target)
+            if refused is not None:
+                self._passed = False
+                raise InputValidationError(
+                    error="{kind} targets are not allowed", target=target, kind=refused
+                )
             self._passed = True
             return True
 
@@ -283,6 +406,36 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
     groups: t.List[str] = []
     multiple: bool = False
     multiple_separator: str = " "
+    variables: t.Dict[str, Variable] = {}
+
+    @field_validator("variables")
+    @classmethod
+    def validate_variable_names(cls, variables: t.Dict[str, Variable]) -> t.Dict[str, Variable]:
+        """Variable names must be template identifiers and must not shadow built-in keys."""
+        for name in variables:
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or name in ("target", "mask"):
+                raise ValueError(f"Invalid variable name '{name}'")
+        return variables
+
+    def validate_variables(self, values: t.Dict[str, str]) -> t.Dict[str, str]:
+        """Accept only configured variables and configured values."""
+        for name, value in values.items():
+            variable = self.variables.get(name)
+            if variable is None:
+                raise InputValidationError(
+                    error="Unknown variable '{name}'", target=name, name=name
+                )
+            if value not in (item.value for item in variable.items):
+                raise InputValidationError(
+                    error="'{value}' is not an allowed value for '{name}'",
+                    target=value,
+                    value=value,
+                    name=name,
+                )
+        for name, variable in self.variables.items():
+            if variable.required and name not in values:
+                raise InputValidationError(error="'{name}' is required", target=name, name=name)
+        return values
 
     @field_validator("rules", mode="before")
     @classmethod
@@ -317,11 +470,13 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
         raise InputValidationError(error="No matched validation rules", target=target)
 
     def normalize_target(self, target: t.Union[t.List[str], str]) -> t.Union[t.List[str], str]:
-        """Canonicalize IP targets before validation and command construction."""
+        """Canonicalize explicit IP prefixes before validation and execution."""
         if not any(isinstance(rule, RuleWithIP) for rule in self.rules):
             return target
 
         def normalize(value: str) -> str:
+            # Return the parsed address, so the command is built from it and not from
+            # the text the client sent (#243).
             try:
                 if "/" not in value:
                     return str(ip_address(value))
@@ -379,6 +534,16 @@ class Directive(HyperglassUniqueModel, unique_by=("id", "table_output")):
         if self.field is not None and self.field.is_select:
             value["options"] = [o.export_dict() for o in self.field.options if o is not None]
 
+        value["variables"] = [
+            {
+                "id": name,
+                "name": variable.name or name,
+                "required": variable.required,
+                "options": [item.export_dict() for item in variable.items],
+            }
+            for name, variable in self.variables.items()
+        ]
+
         return value
 
 
@@ -390,19 +555,19 @@ class BuiltinDirective(Directive, unique_by=("id", "table_output", "platforms"))
 
     @property
     def query_kind(self) -> str:
-        """Return the query kind independently of vendor and output variant."""
+        """Return the query kind independently of the vendor and output variant."""
         for kind in ("bgp_aspath", "bgp_community", "bgp_route", "traceroute", "ping"):
             if self.id.endswith((f"_{kind}__", f"_{kind}_table__")):
                 return kind
         return ""
 
     def validate_target(self, target: str) -> bool:
-        """Check built-in BGP target syntax before evaluating configured rules."""
+        """Reject command syntax in built-in BGP targets before rule validation."""
         self.validate_target_syntax(target)
         return super().validate_target(target)
 
     def validate_target_syntax(self, target: t.Union[t.List[str], str]) -> None:
-        """Reject command syntax in built-in BGP targets."""
+        """Reject command syntax in built-in BGP targets, without rule validation."""
         targets = target if isinstance(target, list) else [target]
         for value in targets:
             if self.query_kind == "bgp_aspath":
@@ -421,15 +586,26 @@ DirectiveT = t.Union[BuiltinDirective, Directive]
 class Directives(MultiModel[Directive], model=Directive, unique_by="id"):
     """Collection of directives."""
 
-    def device_builtins(self, *, platform: str, table_output: bool):
-        """Get builtin directives for a device."""
+    def device_builtins(self, *, platform: str, table_output: bool, vrf: bool = False):
+        """Get builtin directives for a device.
 
+        A device with a VRF only gets the built-ins that have a VRF form for every rule.
+        Table-output variants are never offered on their own: a structured device gets
+        each one in place of its plain directive, a text device gets none of them.
+        """
+        table_ids = {directive.table_output for directive in self if directive.table_output}
+        selected = (
+            self.table_if_available(directive) if table_output else directive  # noqa: IF100 GFY
+            for directive in self
+            if directive._hyperglass_builtin is True
+            and platform in getattr(directive, "platforms", ())
+            and directive.id not in table_ids
+        )
         return Directives(
             *(
-                self.table_if_available(directive) if table_output else directive  # noqa: IF100 GFY
-                for directive in self
-                if directive._hyperglass_builtin is True
-                and platform in getattr(directive, "platforms", ())
+                directive
+                for directive in selected
+                if not vrf or all(rule.vrf_commands for rule in directive.rules)
             )
         )
 

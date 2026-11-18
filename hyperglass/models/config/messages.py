@@ -70,6 +70,11 @@ class Messages(HyperglassModel):
         title="Authentication Error",
         description="Displayed when hyperglass is unable to authenticate to a configured device. Usually, this indicates a configuration error.",
     )
+    device_command_error: str = Field(
+        "The device rejected the query command.",
+        title="Device Command Error",
+        description="Displayed when the device rejects a command or its syntax.",
+    )
     no_response: str = Field(
         "No response.",
         title="No Response",
