@@ -1,8 +1,20 @@
-![Hyperglass logo](hyperglass/images/hyperglass-light.svg)
+<div align="center">
+  <br/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="hyperglass/images/hyperglass-dark.svg">
+    <img src="hyperglass/images/hyperglass-light.svg" alt="Hyperglass logo" width="300">
+  </picture>
+  <br/>
+  <h3>The network looking glass that tries to make the internet better.</h3>
+  <br/>
 
-[Documentation](docs/content/index.mdx) · [Upstream live demo](https://demo.hyperglass.dev/)
+[**Documentation**](docs/content/index.mdx)&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[**Upstream live demo**](https://demo.hyperglass.dev/)
 
 [![CI](https://github.com/hyperglass-community/hyperglass/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hyperglass-community/hyperglass/actions/workflows/ci.yml)
+
+</div>
+
+<hr/>
 
 Hyperglass is a network looking glass. It lets customers, peers and other engineers run BGP route, BGP community, BGP AS path, ping and traceroute queries from the routers you choose, through a web interface and a REST API, without touching the routers themselves. You decide which devices, commands, targets and result formats are public.
 
