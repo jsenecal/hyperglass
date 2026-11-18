@@ -16,6 +16,8 @@ __all__ = (
     "FRRouting_Ping",
     "FRRouting_Traceroute",
     "FRRouting_BGPRouteTable",
+    "FRRouting_BGPASPathTable",
+    "FRRouting_BGPCommunityTable",
 )
 
 NAME = "FRRouting"
@@ -29,11 +31,13 @@ FRRouting_BGPRoute = BuiltinDirective(
             condition="0.0.0.0/0",
             action="permit",
             command='vtysh -c "show bgp ipv4 unicast {target}"',
+            vrf_command='vtysh -c "show bgp vrf {vrf} ipv4 unicast {target}"',
         ),
         RuleWithIPv6(
             condition="::/0",
             action="permit",
             command='vtysh -c "show bgp ipv6 unicast {target}"',
+            vrf_command='vtysh -c "show bgp vrf {vrf} ipv6 unicast {target}"',
         ),
     ],
     field=Text(description="IP Address, Prefix, or Hostname"),
@@ -52,9 +56,14 @@ FRRouting_BGPASPath = BuiltinDirective(
                 'vtysh -c "show bgp ipv4 unicast regexp {target}"',
                 'vtysh -c "show bgp ipv6 unicast regexp {target}"',
             ],
+            vrf_commands=[
+                'vtysh -c "show bgp vrf {vrf} ipv4 unicast regexp {target}"',
+                'vtysh -c "show bgp vrf {vrf} ipv6 unicast regexp {target}"',
+            ],
         )
     ],
     field=Text(description="AS Path Regular Expression"),
+    table_output="__hyperglass_frr_bgp_aspath_table__",
     platforms=PLATFORMS,
 )
 
@@ -69,9 +78,14 @@ FRRouting_BGPCommunity = BuiltinDirective(
                 'vtysh -c "show bgp ipv4 unicast community {target}"',
                 'vtysh -c "show bgp ipv6 unicast community {target}"',
             ],
+            vrf_commands=[
+                'vtysh -c "show bgp vrf {vrf} ipv4 unicast community {target}"',
+                'vtysh -c "show bgp vrf {vrf} ipv6 unicast community {target}"',
+            ],
         )
     ],
     field=Text(description="BGP Community String"),
+    table_output="__hyperglass_frr_bgp_community_table__",
     platforms=PLATFORMS,
 )
 
@@ -101,12 +115,12 @@ FRRouting_Traceroute = BuiltinDirective(
         RuleWithIPv4(
             condition="0.0.0.0/0",
             action="permit",
-            command="traceroute -4 -w 1 -q 1 -s {source4} {target}",
+            command="traceroute -4 -n -q 1 -w 1 -s {source4} {target}",
         ),
         RuleWithIPv6(
             condition="::/0",
             action="permit",
-            command="traceroute -6 -w 1 -q 1 -s {source6} {target}",
+            command="traceroute -6 -n -q 1 -w 1 -s {source6} {target}",
         ),
     ],
     field=Text(description="IP Address, Prefix, or Hostname"),
@@ -123,13 +137,58 @@ FRRouting_BGPRouteTable = BuiltinDirective(
             condition="0.0.0.0/0",
             action="permit",
             command='vtysh -c "show bgp ipv4 unicast {target} json"',
+            vrf_command='vtysh -c "show bgp vrf {vrf} ipv4 unicast {target} json"',
         ),
         RuleWithIPv6(
             condition="::/0",
             action="permit",
             command='vtysh -c "show bgp ipv6 unicast {target} json"',
+            vrf_command='vtysh -c "show bgp vrf {vrf} ipv6 unicast {target} json"',
         ),
     ],
     field=Text(description="IP Address, Prefix, or Hostname"),
+    platforms=PLATFORMS,
+)
+
+FRRouting_BGPASPathTable = BuiltinDirective(
+    id="__hyperglass_frr_bgp_aspath_table__",
+    name="BGP AS Path",
+    rules=[
+        RuleWithPattern(
+            condition="*",
+            action="permit",
+            # `regexp` has no `json detail` form, so these routes carry no communities.
+            commands=[
+                'vtysh -c "show bgp ipv4 unicast regexp {target} json"',
+                'vtysh -c "show bgp ipv6 unicast regexp {target} json"',
+            ],
+            vrf_commands=[
+                'vtysh -c "show bgp vrf {vrf} ipv4 unicast regexp {target} json"',
+                'vtysh -c "show bgp vrf {vrf} ipv6 unicast regexp {target} json"',
+            ],
+        )
+    ],
+    field=Text(description="AS Path Regular Expression"),
+    platforms=PLATFORMS,
+)
+
+FRRouting_BGPCommunityTable = BuiltinDirective(
+    id="__hyperglass_frr_bgp_community_table__",
+    name="BGP Community",
+    rules=[
+        RuleWithPattern(
+            condition="*",
+            action="permit",
+            commands=[
+                'vtysh -c "show bgp ipv4 unicast community {target} json detail"',
+                'vtysh -c "show bgp ipv6 unicast community {target} json detail"',
+            ],
+            vrf_commands=[
+                'vtysh -c "show bgp vrf {vrf} ipv4 unicast community {target} json detail"',
+                'vtysh -c "show bgp vrf {vrf} ipv6 unicast community {target} json detail"',
+            ],
+        )
+    ],
+    field=Text(description="BGP Community String"),
     platforms=PLATFORMS,
 )

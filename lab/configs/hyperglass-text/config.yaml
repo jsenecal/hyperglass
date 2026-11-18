@@ -1,0 +1,13 @@
+org_name: Hyperglass Lab (text)
+site_title: Hyperglass Lab (text)
+request_timeout: 300
+logging:
+  directory: /etc/hyperglass/logs
+  samples:
+    enable: true
+web:
+  # Cloudflare DNS over HTTPS (the default) and the opt-in external "My IP" lookup with
+  # visitor confirmation (#48, #49, #90). The structured instance uses server for both.
+  dns_provider:
+    name: cloudflare
+  my_ip: external

@@ -10,7 +10,7 @@ from pydantic import PrivateAttr, ValidationError
 # Project
 from hyperglass.log import log
 from hyperglass.exceptions.private import ParsingError
-from hyperglass.models.parsing.frr import FRRBGPTable
+from hyperglass.models.parsing.frr import FRRBGPTable, frr_bgp_table
 
 # Local
 from .._output import OutputPlugin
@@ -24,21 +24,64 @@ if t.TYPE_CHECKING:
     from .._output import OutputType
 
 
-def parse_frr(output: t.Sequence[str]) -> "OutputDataModel":
-    """Parse a FRR BGP JSON response."""
+def _prefix_paths(prefix: str, paths: t.Union[t.Dict, t.List]) -> t.List:
+    """Separate a matching Cumulus FRR 7.5 prefix header from its detail paths."""
+    if isinstance(paths, dict):
+        return paths["paths"]
+    if (
+        paths
+        and isinstance(paths[0], dict)
+        and set(paths[0]) == {"prefix", "advertisedTo"}
+        and paths[0]["prefix"] == prefix
+        and isinstance(paths[0]["advertisedTo"], dict)
+    ):
+        return paths[1:]
+    return paths
+
+
+def _load_response(response: str) -> t.Dict:
+    """Require an object before accessing FRR response fields."""
+    parsed = json.loads(response)
+    if not isinstance(parsed, dict):
+        raise ParsingError("Expected a JSON object in response data")
+    return parsed
+
+
+def parse_frr(output: t.Sequence[str], vrf: t.Optional[str] = None) -> "OutputDataModel":
+    """Parse a FRR BGP JSON response.
+
+    The VRF comes from the response's `vrfName` where FRR reports it (AS path and
+    community queries). A single-prefix lookup does not report it, so the device's
+    configured VRF is used, then `default`.
+    """
     result = None
 
     _log = log.bind(plugin=BGPRoutePluginFrr.__name__)
 
     for response in output:
         try:
-            parsed: t.Dict = json.loads(response)
+            parsed = _load_response(response)
 
             _log.debug("Pre-parsed data", data=parsed)
 
-            validated = FRRBGPTable(**parsed)
-            bgp_table = validated.bgp_table()
+            # A target that is not in the RIB returns an empty object.
+            if not parsed:
+                continue
 
+            # AS path and community queries return routes keyed by prefix: a list of
+            # summary paths, or with `json detail`, an object holding detail paths.
+            if "routes" in parsed:
+                tables = [
+                    FRRBGPTable(prefix=prefix, paths=_prefix_paths(prefix, paths))
+                    for prefix, paths in parsed["routes"].items()
+                ]
+            else:
+                tables = [FRRBGPTable(**parsed)]
+
+            if not tables:
+                continue
+
+            bgp_table = frr_bgp_table(tables, vrf=parsed.get("vrfName") or vrf or "default")
             if result is None:
                 result = bgp_table
             else:
@@ -58,7 +101,7 @@ def parse_frr(output: t.Sequence[str]) -> "OutputDataModel":
 
         except ValidationError as err:
             _log.critical(err)
-            raise ParsingError(err.errors()) from err
+            raise ParsingError("Error parsing response data") from err
 
     return result
 
@@ -67,8 +110,21 @@ class BGPRoutePluginFrr(OutputPlugin):
     """Coerce a FRR route table in JSON format to a standard BGP Table structure."""
 
     _hyperglass_builtin: bool = PrivateAttr(True)
-    platforms: t.Sequence[str] = ("frr",)
-    directives: t.Sequence[str] = ("__hyperglass_frr_bgp_route_table__",)
+    platforms: t.Sequence[str] = ("frr", "vyos", "sonic", "cumulus_linux")
+    directives: t.Sequence[str] = (
+        "__hyperglass_frr_bgp_route_table__",
+        "__hyperglass_frr_bgp_aspath_table__",
+        "__hyperglass_frr_bgp_community_table__",
+        "__hyperglass_vyos_bgp_route_table__",
+        "__hyperglass_vyos_bgp_aspath_table__",
+        "__hyperglass_vyos_bgp_community_table__",
+        "__hyperglass_sonic_bgp_route_table__",
+        "__hyperglass_sonic_bgp_aspath_table__",
+        "__hyperglass_sonic_bgp_community_table__",
+        "__hyperglass_cumulus_linux_bgp_route_table__",
+        "__hyperglass_cumulus_linux_bgp_aspath_table__",
+        "__hyperglass_cumulus_linux_bgp_community_table__",
+    )
 
     def process(self, *, output: "OutputType", query: "Query") -> "OutputType":
         """Parse FRR response if data is a string (and is therefore unparsed)."""
@@ -81,5 +137,5 @@ class BGPRoutePluginFrr(OutputPlugin):
             )
         )
         if should_process:
-            return parse_frr(output)
+            return parse_frr(output, vrf=getattr(query.device, "vrf", None))
         return output

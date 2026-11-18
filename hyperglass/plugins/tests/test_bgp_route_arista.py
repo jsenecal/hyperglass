@@ -14,6 +14,7 @@ from hyperglass.models.data.bgp_route import BGPRouteTable
 # Local
 from ._fixtures import MockDevice
 from .._builtin.bgp_route_arista import BGPRoutePluginArista
+from .._builtin.bgp_route_arista import parse_arista
 
 DEPENDS_KWARGS = {
     "depends": [
@@ -53,3 +54,56 @@ def test_arista_route_sample():
     with SAMPLE.open("r") as file:
         sample = file.read()
     return _tester(sample)
+
+
+def test_captured_aspath_without_route_detail():
+    sample = (Path(__file__).parent / "fixtures" / "arista_aspath.json").read_text()
+    result = parse_arista((sample,))
+    assert result.count == 1
+    assert result.routes[0].as_path == [65000, 37239, 13335]
+    assert result.routes[0].communities == []
+
+
+def test_arista_merges_multiple_json_responses():
+    # The second document represents an empty address family.
+    sample = (Path(__file__).parent / "fixtures" / "arista_aspath.json").read_text()
+    empty = '{"vrfs":{"default":{"vrf":"default","routerId":"10.250.7.1","asn":"65007","bgpRouteEntries":{}}}}'
+    result = parse_arista((sample, empty))
+    assert result.count == 1
+    assert len(result.routes) == 1
+
+
+def test_asdot_as_path_keeps_origin():
+    sample = SAMPLE.read_text().replace('"65002 65003"', '"65000 65000.100"')
+    sample = sample.replace('"asn": "65001"', '"asn": "0.65001"')
+    result = parse_arista((sample,))
+
+    assert result.routes[0].as_path == [65000, 4259840100]
+
+
+def test_captured_large_community():
+    sample = (Path(__file__).parent / "fixtures" / "arista_large_community.json").read_text()
+    result = parse_arista((sample,))
+
+    assert result.routes[0].communities == ["65000:100", "65000:1:1"]
+
+
+def test_captured_vrf_local_route():
+    sample = (Path(__file__).parent / "fixtures" / "arista_vrf_local_route.json").read_text()
+    result = parse_arista((sample,))
+
+    assert result.vrf == "LAB"
+    assert result.routes[0].prefix == "198.51.100.0/24"
+    assert result.routes[0].local_preference == 100
+    # A locally originated route has an empty AS path; the source AS is the local AS.
+    assert result.routes[0].as_path == []
+    assert result.routes[0].source_as == 65007
+
+
+def test_arista_no_matching_routes_returns_none():
+    """No matching routes gives no table, so the query reports no results (#196)."""
+    empty = (
+        '{"vrfs":{"LAB":{"vrf":"LAB","routerId":"10.250.7.1","asn":"65007","bgpRouteEntries":{}}}}'
+    )
+    assert parse_arista((empty,)) is None
+    assert parse_arista((empty, empty)) is None

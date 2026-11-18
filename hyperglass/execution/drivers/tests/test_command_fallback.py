@@ -1,4 +1,4 @@
-"""Version-filtered and on-error fallback commands (#109)."""
+"""Version-filtered and on-error fallback commands."""
 
 # Standard Library
 from unittest.mock import Mock
@@ -98,7 +98,7 @@ def test_version_filter_needs_fallback_commands():
 
 @pytest.mark.parametrize("version", ["Version 15.9", "IOS-XE 17.3", "v16.1", ""])
 def test_os_version_without_leading_number_is_rejected(state, version):
-    """A bad value fails at config load, not on every query (#109)."""
+    """A bad value fails at config load, not on every query."""
     with pytest.raises(ValidationError, match="must start with a version number"):
         Devices(_device("bad", version))
 

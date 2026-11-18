@@ -15,6 +15,9 @@ __all__ = (
     "CiscoIOS_BGPRoute",
     "CiscoIOS_Ping",
     "CiscoIOS_Traceroute",
+    "CiscoIOS_BGPRouteTable",
+    "CiscoIOS_BGPASPathTable",
+    "CiscoIOS_BGPCommunityTable",
 )
 
 NAME = "Cisco IOS"
@@ -22,6 +25,7 @@ PLATFORMS = ["cisco_ios"]
 
 CiscoIOS_BGPRoute = BuiltinDirective(
     id="__hyperglass_cisco_ios_bgp_route__",
+    table_output="__hyperglass_cisco_ios_bgp_route_table__",
     name="BGP Route",
     rules=[
         RuleWithIPv4(
@@ -32,6 +36,8 @@ CiscoIOS_BGPRoute = BuiltinDirective(
         RuleWithIPv6(
             condition="::/0",
             action="permit",
+            # IOS has no longest-match BGP lookup for an IPv6 address; it needs the prefix.
+            le=127,
             command="show bgp ipv6 unicast {target} | exclude pathid:|Epoch",
         ),
     ],
@@ -41,6 +47,7 @@ CiscoIOS_BGPRoute = BuiltinDirective(
 
 CiscoIOS_BGPASPath = BuiltinDirective(
     id="__hyperglass_cisco_ios_bgp_aspath__",
+    table_output="__hyperglass_cisco_ios_bgp_aspath_table__",
     name="BGP AS Path",
     rules=[
         RuleWithPattern(
@@ -58,6 +65,7 @@ CiscoIOS_BGPASPath = BuiltinDirective(
 
 CiscoIOS_BGPCommunity = BuiltinDirective(
     id="__hyperglass_cisco_ios_bgp_community__",
+    table_output="__hyperglass_cisco_ios_bgp_community_table__",
     name="BGP Community",
     rules=[
         RuleWithPattern(
@@ -105,10 +113,70 @@ CiscoIOS_Traceroute = BuiltinDirective(
             condition="::/0",
             action="permit",
             command="traceroute ipv6 {target} timeout 1 probe 2 source {source6}",
+            # Classic IOS (before IOS XE 16) accepts no options after an IPv6 destination
+            # and traces from its routed source address.
             fallback_command="traceroute ipv6 {target}",
             fallback_os_version="<16",
         ),
     ],
     field=Text(description="IP Address, Prefix, or Hostname"),
+    platforms=PLATFORMS,
+)
+
+# Table Output Directives
+
+CiscoIOS_BGPRouteTable = BuiltinDirective(
+    id="__hyperglass_cisco_ios_bgp_route_table__",
+    name="BGP Route",
+    rules=[
+        RuleWithIPv4(
+            condition="0.0.0.0/0",
+            action="permit",
+            command="show bgp ipv4 unicast {target} | exclude pathid:|Epoch",
+        ),
+        RuleWithIPv6(
+            condition="::/0",
+            action="permit",
+            # IOS has no longest-match BGP lookup for an IPv6 address; it needs the prefix.
+            le=127,
+            command="show bgp ipv6 unicast {target} | exclude pathid:|Epoch",
+        ),
+    ],
+    field=Text(description="IP Address, Prefix, or Hostname"),
+    platforms=PLATFORMS,
+)
+
+# IOS has no detail form of these commands, so the summary table carries no communities.
+CiscoIOS_BGPASPathTable = BuiltinDirective(
+    id="__hyperglass_cisco_ios_bgp_aspath_table__",
+    name="BGP AS Path",
+    rules=[
+        RuleWithPattern(
+            condition="*",
+            action="permit",
+            commands=[
+                'show bgp ipv4 unicast quote-regexp "{target}"',
+                'show bgp ipv6 unicast quote-regexp "{target}"',
+            ],
+        )
+    ],
+    field=Text(description="AS Path Regular Expression"),
+    platforms=PLATFORMS,
+)
+
+CiscoIOS_BGPCommunityTable = BuiltinDirective(
+    id="__hyperglass_cisco_ios_bgp_community_table__",
+    name="BGP Community",
+    rules=[
+        RuleWithPattern(
+            condition="*",
+            action="permit",
+            commands=[
+                "show bgp ipv4 unicast community {target}",
+                "show bgp ipv6 unicast community {target}",
+            ],
+        )
+    ],
+    field=Text(description="BGP Community String"),
     platforms=PLATFORMS,
 )

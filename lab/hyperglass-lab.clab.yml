@@ -1,0 +1,208 @@
+# Hyperglass multi-vendor lab. A GoBGP core sends a real full table (RIPE RIS
+# rrc19, NAPAfrica Johannesburg) to every device under test. Hyperglass queries
+# each device over the management network.
+name: hyperglass
+
+mgmt:
+  network: hyperglass-mgmt
+  ipv4-subnet: 192.168.250.0/24
+  ipv6-subnet: fd00:250:ffff::/64
+
+topology:
+  defaults:
+    privileged: false
+  nodes:
+    core:
+      kind: linux
+      image: hyperglass-lab/core:latest
+      mgmt-ipv4: 192.168.250.10
+      mgmt-ipv6: fd00:250:ffff::10
+      binds:
+        - configs/core/gobgpd.toml:/etc/gobgp/gobgpd.toml:ro
+        - data:/data:ro
+      exec:
+        - ip addr add 10.250.1.0/31 dev eth1
+        - ip addr add fd00:250:1::/127 dev eth1
+        - ip addr add 10.250.2.0/31 dev eth2
+        - ip addr add fd00:250:2::/127 dev eth2
+        - ip addr add 10.250.3.0/31 dev eth3
+        - ip addr add fd00:250:3::/127 dev eth3
+        - ip addr add 10.250.4.0/31 dev eth4
+        - ip addr add fd00:250:4::/127 dev eth4
+        - ip addr add 10.250.5.0/31 dev eth5
+        - ip addr add fd00:250:5::/127 dev eth5
+        - ip addr add 10.250.6.0/31 dev eth6
+        - ip addr add fd00:250:6::/127 dev eth6
+        - ip addr add 10.250.7.0/31 dev eth7
+        - ip addr add fd00:250:7::/127 dev eth7
+        - ip addr add 10.250.8.0/31 dev eth8
+        - ip addr add fd00:250:8::/127 dev eth8
+
+    frr:
+      kind: linux
+      image: hyperglass-lab/frr:latest
+      mgmt-ipv4: 192.168.250.11
+      mgmt-ipv6: fd00:250:ffff::11
+      binds:
+        - configs/frr/frr.conf:/etc/frr/frr.conf
+        - configs/frr/vtysh.conf:/etc/frr/vtysh.conf
+      exec:
+        - ip addr add 10.250.1.1/31 dev eth1
+        - ip addr add fd00:250:1::1/127 dev eth1
+        # Kernel VRF for the VRF LAB lab location (#50); frr.conf holds its routes.
+        - ip link add LAB type vrf table 100
+        - ip link set LAB up
+        # All non-management traffic goes to the core; eth0 keeps the management subnet.
+        - ip route replace default via 10.250.1.0 dev eth1
+        - "ip -6 route replace default via fd00:250:1:: dev eth1"
+
+    bird:
+      kind: linux
+      image: hyperglass-lab/bird:latest
+      mgmt-ipv4: 192.168.250.12
+      mgmt-ipv6: fd00:250:ffff::12
+      binds:
+        - configs/bird/bird.conf:/etc/bird.conf:ro
+      exec:
+        - ip addr add 10.250.2.1/31 dev eth1
+        - ip addr add fd00:250:2::1/127 dev eth1
+        # All non-management traffic goes to the core; eth0 keeps the management subnet.
+        - ip route replace default via 10.250.2.0 dev eth1
+        - "ip -6 route replace default via fd00:250:2:: dev eth1"
+
+    openbgpd:
+      kind: linux
+      image: hyperglass-lab/openbgpd:latest
+      mgmt-ipv4: 192.168.250.13
+      mgmt-ipv6: fd00:250:ffff::13
+      binds:
+        - configs/openbgpd/bgpd.conf:/etc/bgpd.conf:ro
+      exec:
+        - ip addr add 10.250.3.1/31 dev eth1
+        - ip addr add fd00:250:3::1/127 dev eth1
+        # All non-management traffic goes to the core; eth0 keeps the management subnet.
+        - ip route replace default via 10.250.3.0 dev eth1
+        - "ip -6 route replace default via fd00:250:3:: dev eth1"
+
+    mikrotik:
+      kind: mikrotik_ros
+      image: hyperglass-lab/mikrotik_routeros:7.16.2
+      mgmt-ipv4: 192.168.250.14
+      mgmt-ipv6: fd00:250:ffff::14
+      startup-config: configs/mikrotik/config.auto.rsc
+
+    vyos:
+      kind: vyosnetworks_vyos
+      image: vyos:latest
+      mgmt-ipv4: 192.168.250.31
+      mgmt-ipv6: fd00:250:ffff::31
+      startup-config: configs/vyos/config.boot
+
+    junos:
+      kind: juniper_vjunosrouter
+      image: hyperglass-lab/juniper_vjunos-router:26.2R1.7
+      mgmt-ipv4: 192.168.250.16
+      mgmt-ipv6: fd00:250:ffff::16
+      startup-config: configs/vjunos/config.conf
+
+    arista:
+      kind: arista_ceos
+      image: ceos:4.36.3M
+      mgmt-ipv4: 192.168.250.17
+      mgmt-ipv6: fd00:250:ffff::17
+      startup-config: configs/arista/ceos.cfg
+
+    # CE12800 V200R005C10SPC607B607 runs VRP 8.180: Hyperglass platform huawei_vrpv8,
+    # locations lab-huawei-vrpv8 and lab-huawei-vrpv8-vrf (#103).
+    huawei:
+      kind: huawei_vrp
+      image: hyperglass-lab/huawei_vrp:ce12800-V200R005C10SPC607B607
+      mgmt-ipv4: 192.168.250.18
+      mgmt-ipv6: fd00:250:ffff::18
+
+    # NE40E V800R011C00SPC607B607, also VRP 8.180: platform huawei_vrpv8, locations
+    # lab-huawei-ne40 and lab-huawei-ne40-vrf (#103). Build: scripts/build-huawei.sh ne40e.
+    huawei-ne40:
+      kind: huawei_vrp
+      image: hyperglass-lab/huawei_vrp:ne40e-eveng
+      mgmt-ipv4: 192.168.250.32
+      mgmt-ipv6: fd00:250:ffff::32
+
+    iol:
+      kind: cisco_iol
+      image: hyperglass-lab/cisco_iol:17.18.02
+      mgmt-ipv4: 192.168.250.19
+      mgmt-ipv6: fd00:250:ffff::19
+      env:
+        IOL_MEMORY: "4096"
+      startup-config: configs/iol/config.partial.cfg
+
+    ioll2:
+      kind: cisco_iol
+      type: l2
+      image: hyperglass-lab/cisco_iol:L2-17.18.02
+      mgmt-ipv4: 192.168.250.20
+      mgmt-ipv6: fd00:250:ffff::20
+      env:
+        IOL_MEMORY: "4096"
+      startup-config: configs/ioll2/config.partial.cfg
+
+    redis:
+      kind: linux
+      image: redis:7-alpine
+      mgmt-ipv4: 192.168.250.3
+      mgmt-ipv6: fd00:250:ffff::3
+      cmd: redis-server --save "" --appendonly no
+
+    hyperglass:
+      kind: linux
+      # lab-up.sh --image sets HYPERGLASS_IMAGE; the default is the local dev build.
+      image: ${HYPERGLASS_IMAGE:=hyperglass-lab/hyperglass:dev}
+      mgmt-ipv4: 192.168.250.2
+      mgmt-ipv6: fd00:250:ffff::2
+      env:
+        HYPERGLASS_APP_PATH: /etc/hyperglass
+        HYPERGLASS_HOST: 0.0.0.0
+        HYPERGLASS_PORT: "8001"
+        HYPERGLASS_REDIS_HOST: 192.168.250.3
+        HYPERGLASS_DISABLE_UI: "false"
+        HYPERGLASS_CONTAINER: "true"
+      binds:
+        - configs/hyperglass:/etc/hyperglass
+      ports:
+        - 127.0.0.1:8001:8001
+
+    # Same image and devices with structured output off everywhere, so every
+    # query can be cross-checked against plain device text. Own Redis DB so
+    # neither instance can serve the other's cached result.
+    hyperglass-text:
+      kind: linux
+      # lab-up.sh --image sets HYPERGLASS_IMAGE; the default is the local dev build.
+      image: ${HYPERGLASS_IMAGE:=hyperglass-lab/hyperglass:dev}
+      mgmt-ipv4: 192.168.250.4
+      mgmt-ipv6: fd00:250:ffff::4
+      env:
+        HYPERGLASS_APP_PATH: /etc/hyperglass
+        HYPERGLASS_HOST: 0.0.0.0
+        HYPERGLASS_PORT: "8002"
+        HYPERGLASS_REDIS_HOST: 192.168.250.3
+        HYPERGLASS_REDIS_DB: "2"
+        HYPERGLASS_DISABLE_UI: "false"
+        HYPERGLASS_CONTAINER: "true"
+      binds:
+        - configs/hyperglass-text:/etc/hyperglass
+      ports:
+        - 127.0.0.1:8002:8002
+
+  links:
+    - endpoints: ["core:eth1", "frr:eth1"]
+    - endpoints: ["core:eth2", "bird:eth1"]
+    - endpoints: ["core:eth3", "openbgpd:eth1"]
+    - endpoints: ["core:eth4", "mikrotik:eth1"]
+    - endpoints: ["core:eth5", "vyos:eth1"]
+    - endpoints: ["core:eth6", "junos:eth1"]
+    - endpoints: ["core:eth7", "arista:eth1"]
+    - endpoints: ["core:eth8", "huawei:eth1"]
+    - endpoints: ["core:eth9", "iol:eth1"]
+    - endpoints: ["core:eth10", "ioll2:eth1"]
+    - endpoints: ["core:eth11", "huawei-ne40:eth1"]

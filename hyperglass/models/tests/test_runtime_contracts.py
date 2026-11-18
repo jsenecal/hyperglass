@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from hyperglass.state import use_state
-from hyperglass.constants import DNS_OVER_HTTPS
+from hyperglass.constants import DNS_OVER_HTTPS, SUPPORTED_STRUCTURED_OUTPUT
 from hyperglass.defaults._strings import CREDIT, DEFAULT_HELP, DEFAULT_DETAILS
 from hyperglass.models.api import Query
 from hyperglass.exceptions.private import ConfigError
@@ -38,10 +38,10 @@ def test_original_platforms_keep_structured_output_default(platform):
 
 
 @pytest.mark.parametrize("platform", ["cisco_ios", "huawei", "mikrotik_routeros"])
-def test_platforms_without_table_directives_default_to_text(platform):
+def test_additional_platforms_require_structured_output_opt_in(platform):
     assert Device(**device_config(platform)).structured_output is False
-    with pytest.raises(ConfigError):
-        Device(**device_config(platform, structured_output=True))
+    assert Device(**device_config(platform, structured_output=True)).structured_output is True
+    assert platform in SUPPORTED_STRUCTURED_OUTPUT
 
 
 @pytest.mark.parametrize(
@@ -58,7 +58,7 @@ def test_mikrotik_templates_match_formatted_regex(kind, target, pattern):
         queryLocation="test", queryType=f"__hyperglass_mikrotik_{kind}__", queryTarget=target
     )
     commands = Construct(query.device, query).queries()
-    assert len(commands) == 2
+    assert len(commands) == 1
     assert all(f'~"{pattern}"' in command for command in commands)
 
 
@@ -107,7 +107,7 @@ def test_custom_vrf_directive_normalizes_routing_context(vrf):
     state.cache.set("directives", state.directives + Directives(custom))
     device = Device(**device_config("cisco_ios", vrf=vrf, directives=["custom"]))
     assert device.vrf == str(vrf)
-    assert device.directive_ids == ["custom"]
+    assert "custom" in device.directive_ids
     state.cache.set("devices", Devices(device_config("cisco_ios", vrf=vrf, directives=["custom"])))
     query = Query(queryLocation="test", queryType="custom", queryTarget="192.0.2.2")
     assert Construct(device, query).queries() == [f"show route vrf {vrf} 192.0.2.2"]
@@ -121,7 +121,7 @@ def test_vrf_rejects_invalid_routing_context(vrf):
 
 def test_vrf_without_usable_directives_is_a_configuration_error():
     with pytest.raises(ConfigError, match="no VRF-capable directives"):
-        Device(**device_config("cisco_ios", vrf=100))
+        Device(**device_config("cisco_ios", vrf=100, directives=[{"builtins": False}]))
 
 
 def test_dns_choices_only_advertise_implemented_providers():

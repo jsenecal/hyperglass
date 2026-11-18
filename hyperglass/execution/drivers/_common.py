@@ -22,7 +22,7 @@ COMMAND_ERROR = re.compile(
     r"|sudo:\s[^\n]*(?:password is required|not allowed|not in the sudoers|command not found)"
     r"|(?:[\w/.-]+:\s*)?(?:Permission denied|Operation not permitted)\s*$"
     r"|(?:traceroute|ping|bgpctl|birdc):[^\n]*(?:not permitted|Permission denied|invalid|unknown)"
-    # Huawei VRP: `Error: Too many parameters ...`, `Error[4]: ...` on the NE40E (#155).
+    # Huawei VRP: `Error: Too many parameters ...`, `Error[4]: ...` on the NE40E.
     r"|Error(?:\[\d+\])?:\s*(?:Wrong parameter|Unrecognized command|Incomplete command"
     r"|Too many parameters)"
     r"|unknown argument:|failure:\s|bad command name\b"

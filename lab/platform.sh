@@ -1,0 +1,163 @@
+#!/bin/sh
+# Run one additional platform at a time without loading the core's full table.
+set -eu
+cd "$(dirname "$0")"
+ACTION=${1:-status}
+NODE=${2:-}
+PREFIX=clab-hyperglass-platforms
+
+case "$ACTION" in
+    status)
+        docker ps -a --filter label=containerlab=hyperglass-platforms \
+            --format 'table {{.Names}}\t{{.Status}}'
+        exit 0 ;;
+    stop)
+        for N in sonic exos voss xrd iosv nexus timos routeros6 os9 probe; do
+            if [ "$(docker inspect -f '{{.State.Running}}' "$PREFIX-$N" 2>/dev/null || true)" = true ]; then
+                docker stop "$PREFIX-$N"
+            fi
+        done
+        exit 0 ;;
+    start) ;;
+    *) echo "Usage: sh platform.sh start sonic|exos|voss|xrd|iosv|nexus|timos|routeros6|os9 | stop | status" >&2; exit 1 ;;
+esac
+PYTHON=${LAB_PYTHON:-../.venv/bin/python3}
+[ -x "$PYTHON" ] || PYTHON=python3
+"$PYTHON" -c 'import yaml, netmiko'
+
+case "$NODE" in
+    sonic) IMAGE=hyperglass-lab/sonic_sonic-vs:202505.1238524; LIMIT_MB=5120 ;;
+    exos) IMAGE=hyperglass-lab/extreme_exos:32.7.2.19; LIMIT_MB=2048 ;;
+    voss) IMAGE=hyperglass-lab/extreme_voss:9.4.0.0; LIMIT_MB=3072 ;;
+    xrd) IMAGE=hyperglass-lab/cisco_xrd:24.2.11; LIMIT_MB=4096 ;;
+    iosv) IMAGE=hyperglass-lab/cisco_vios:15.9.3M6; LIMIT_MB=2048 ;;
+    nexus) IMAGE=hyperglass-lab/cisco_n9kv:9300-lite-10.4.8.M; LIMIT_MB=10240 ;;
+    timos) IMAGE=hyperglass-lab/nokia_sros:15.0.R3; LIMIT_MB=10240 ;;
+    routeros6) IMAGE=hyperglass-lab/mikrotik_routeros:6.49.19; LIMIT_MB=2048 ;;
+    os9) IMAGE=hyperglass-lab/dell_os9:9.13.0.0; LIMIT_MB=2048 ;;
+    *) echo "Pick sonic, exos, voss, xrd, iosv, nexus, timos, routeros6 or os9" >&2; exit 1 ;;
+esac
+docker image inspect "$IMAGE" >/dev/null 2>&1 || {
+    if [ "$NODE" = xrd ]; then
+        echo "Import the image first: sh scripts/import-xrd.sh /path/to/image.tgz" >&2
+    elif [ "$NODE" = iosv ]; then
+        echo "Build the image first: sh scripts/build-iosv.sh /path/to/iosv.qcow2" >&2
+    elif [ "$NODE" = nexus ]; then
+        echo "Build the image first: sh scripts/build-nexus.sh /path/to/nexus.qcow2" >&2
+    elif [ "$NODE" = os9 ]; then
+        echo "Build the image first: sh scripts/build-os9.sh /path/to/ftos.iso" >&2
+    elif [ "$NODE" = routeros6 ]; then
+        echo "Build the image first: sh scripts/build-routeros6.sh /path/to/chr.vmdk" >&2
+    elif [ "$NODE" = timos ]; then
+        echo "Build the image first: sh scripts/build-timos.sh /path/to/timos.qcow2" >&2
+    else
+        echo "Build the image first: sh scripts/build-platform.sh $NODE" >&2
+    fi
+    exit 1
+}
+if [ "$NODE" = xrd ]; then
+    EXPECTED=sha256:f160dc83ee7e6ef3c9e66254d32237c8d62052f91539da0defc38ddfcc2f36af
+    [ "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$EXPECTED" ] || {
+        echo "XRd image does not match the configured image ID." >&2
+        exit 1
+    }
+fi
+case "$NODE" in
+    sonic|exos|voss|xrd|iosv|nexus|timos|routeros6|os9) docker image inspect hyperglass-lab/core:latest >/dev/null ;;
+esac
+if [ "$NODE" = timos ] && [ ! -s data/platforms/timos.license ]; then
+    echo "Place the TiMOS license at lab/data/platforms/timos.license first." >&2
+    exit 1
+fi
+
+# Stop only the optional platforms. Keep the existing full-table lab untouched.
+for N in sonic exos voss xrd iosv nexus timos routeros6 os9; do
+    if [ "$N" != "$NODE" ] && [ "$(docker inspect -f '{{.State.Running}}' "$PREFIX-$N" 2>/dev/null || true)" = true ]; then
+        docker stop "$PREFIX-$N"
+    fi
+done
+if [ "$(docker inspect -f '{{.State.Running}}' "$PREFIX-$NODE" 2>/dev/null || true)" = true ]; then
+    "$PYTHON" scripts/start-platform.py "$NODE"
+    "$PYTHON" scripts/check-platform.py "$NODE"
+    exit 0
+fi
+# Reserve 12 GiB for the host, existing lab and other applications.
+AVAILABLE_MB=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+REQUIRED_MB=$((LIMIT_MB + 256 + 12288))
+if [ "$AVAILABLE_MB" -lt "$REQUIRED_MB" ]; then
+    echo "Need $REQUIRED_MB MiB available; have $AVAILABLE_MB MiB. Leave $NODE stopped." >&2
+    exit 1
+fi
+
+# Reuse the current appliance and its disk after a stop/start cycle.
+if docker inspect "$PREFIX-$NODE" >/dev/null 2>&1; then
+    "$PYTHON" scripts/start-platform.py "$NODE"
+    "$PYTHON" scripts/check-platform.py "$NODE"
+    exit 0
+fi
+
+# Destroy the previous two-node topology before replacing its file. Destroy uses
+# the file's node list, so overwriting it first could leave the previous VM behind.
+if [ -f data/platforms/active.clab.yml ]; then
+    sudo -n containerlab destroy --keep-mgmt-net -t data/platforms/active.clab.yml
+fi
+# Remove containers left by a run whose rendered topology is gone, for example a run
+# from another checkout. Deploy cannot reconcile a stopped appliance and fails.
+STALE=$(docker ps -aq --filter label=containerlab=hyperglass-platforms)
+if [ -n "$STALE" ]; then
+    # shellcheck disable=SC2086
+    docker rm -f $STALE >/dev/null
+fi
+# Containerlab 0.82 rejects --node-filter on an existing lab. Render a two-node
+# topology instead, preserving the management network shared with the main lab.
+mkdir -p data/platforms
+"$PYTHON" - "$NODE" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+node = sys.argv[1]
+topology = yaml.safe_load(Path('hyperglass-platforms.clab.yml').read_text())
+nodes = topology['topology']['nodes']
+topology['topology']['nodes'] = {name: nodes[name] for name in ('probe', node)}
+if node in ('sonic', 'exos', 'voss', 'xrd', 'iosv', 'nexus', 'timos', 'routeros6', 'os9'):
+    nodes['probe'].update(
+        image='hyperglass-lab/core:latest', memory='256MiB',
+        entrypoint='gobgpd', cmd='-f /etc/gobgp/gobgpd.toml -t toml',
+        binds=[f'configs/{node}/gobgpd.toml:/etc/gobgp/gobgpd.toml:ro'],
+    )
+for definition in topology['topology']['nodes'].values():
+    definition['mgmt-ipv6'] = 'fd00:250:ffff::' + definition['mgmt-ipv4'].rsplit('.', 1)[1]
+    if 'startup-config' in definition:
+        definition['startup-config'] = str(Path(definition['startup-config']).resolve())
+    if 'license' in definition:
+        definition['license'] = str(Path(definition['license']).resolve())
+    definition['binds'] = [
+        str(Path(bind.split(':', 1)[0]).resolve()) + ':' + bind.split(':', 1)[1]
+        for bind in definition.get('binds', [])
+    ]
+topology['topology']['links'] = [
+    link for link in topology['topology']['links']
+    if any(endpoint.startswith(node + ':') for endpoint in link['endpoints'])
+]
+number = {'sonic': 1, 'exos': 2, 'voss': 3, 'xrd': 4, 'iosv': 5, 'nexus': 6, 'timos': 7, 'routeros6': 8, 'os9': 9}[node]
+address = f'10.251.{number}.2/30' if node in ('voss', 'routeros6', 'os9') else f'10.251.{number}.0/31'
+# VOSS takes no IPv6 prefix longer than /64 without a boot flag, and ::0 of a /64 is
+# the subnet-router anycast address.
+address6 = f'fd00:251:{number}::2/64' if node in ('voss', 'routeros6', 'os9') else f'fd00:251:{number}::/127'
+nodes['probe']['exec'] = [f'ip address replace {address} dev eth{number}']
+if node in ('sonic', 'exos', 'voss', 'xrd', 'iosv', 'nexus', 'timos', 'routeros6', 'os9'):
+    nodes['probe']['exec'] += [
+        f'ip address replace {address6} dev eth{number}',
+        'ip address replace 1.1.1.1/32 dev lo',
+        'ip address replace 2606:4700::1111/128 dev lo',
+        f'gobgp global rib add 1.1.1.0/24 nexthop {address.split("/")[0]} aspath 13335 community 37195:302',
+        f'gobgp global rib add -a ipv6 2606:4700::/44 nexthop {address6.split("/")[0]} aspath 13335 community 37195:302',
+        f'gobgp neighbor 10.251.{number}.1 disable',
+        f'gobgp neighbor fd00:251:{number}::1 disable',
+    ]
+Path('data/platforms/active.clab.yml').write_text(yaml.safe_dump(topology, sort_keys=False))
+PY
+sudo -n containerlab deploy -t data/platforms/active.clab.yml
+"$PYTHON" scripts/check-platform.py "$NODE"
+echo "Started $NODE. Fixture BGP peers start disabled. Stop with: sh platform.sh stop"

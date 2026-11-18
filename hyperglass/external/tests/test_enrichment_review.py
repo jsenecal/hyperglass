@@ -129,6 +129,6 @@ async def test_whois_responses_have_a_byte_limit(monkeypatch, bulk):
 def test_parsers_wait_for_directives_and_traceroute_ui():
     from hyperglass.plugins import _builtin
 
-    assert not hasattr(_builtin, "BGPSTRRoutePluginHuawei")
-    assert not hasattr(_builtin, "BGPSTRRoutePluginMikrotik")
+    assert hasattr(_builtin, "BGPSTRRoutePluginHuawei")
+    assert hasattr(_builtin, "BGPSTRRoutePluginMikrotik")
     assert hasattr(_builtin, "TraceroutePluginFrr")

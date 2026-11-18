@@ -1,0 +1,11 @@
+data/
+clab-*/
+configs/hyperglass/logs/
+configs/hyperglass/static/
+configs/hyperglass/.ui/
+configs/hyperglass-text/logs/
+configs/hyperglass-text/static/
+configs/hyperglass-text/.ui/
+configs/hyperglass-text/plugins/
+*.vmdk
+*.zip

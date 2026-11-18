@@ -31,7 +31,11 @@ DEFAULT_STRUCTURED_OUTPUT = (
     "arista_eos",
 )
 # Additional parsers become supported with their directives and tests.
-SUPPORTED_STRUCTURED_OUTPUT = DEFAULT_STRUCTURED_OUTPUT
+SUPPORTED_STRUCTURED_OUTPUT = (
+    *DEFAULT_STRUCTURED_OUTPUT,
+    "juniper_junos", "huawei", "huawei_vrpv8", "mikrotik_routeros", "mikrotik_switchos",
+    "cisco_ios", "cisco_xr", "cisco_nxos", "bird", "openbgpd", "vyos",
+)
 
 CONFIG_EXTENSIONS = ("py", "yaml", "yml", "json", "toml")
 

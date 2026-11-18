@@ -1,0 +1,155 @@
+# On-demand platform appliances. Start one with: sh platform.sh start <node>
+# Separate from the full-table topology so lab-up.sh cannot start these VMs.
+name: hyperglass-platforms
+
+mgmt:
+  network: hyperglass-mgmt
+  ipv4-subnet: 192.168.250.0/24
+  ipv6-subnet: fd00:250:ffff::/64
+
+topology:
+  defaults:
+    privileged: false
+  nodes:
+    probe:
+      kind: linux
+      image: alpine:3.23
+      mgmt-ipv4: 192.168.250.30
+      cmd: sleep infinity
+      memory: 128MiB
+      exec:
+        - ip address add 10.251.1.0/31 dev eth1
+        - ip address add 10.251.2.0/31 dev eth2
+        - ip address add 10.251.3.2/30 dev eth3
+        - ip address add 10.251.4.0/31 dev eth4
+
+    sonic:
+      kind: sonic-vm
+      image: hyperglass-lab/sonic_sonic-vs:202505.1238524
+      mgmt-ipv4: 192.168.250.21
+      memory: 5GiB
+      cpu: 2
+      env:
+        QEMU_MEMORY: "4096"
+
+    exos:
+      kind: generic_vm
+      image: hyperglass-lab/extreme_exos:32.7.2.19
+      mgmt-ipv4: 192.168.250.22
+      memory: 2GiB
+      cpu: 2
+      binds:
+        - configs/exos/startup-config.xsf:/config/startup-config.xsf:ro
+      credentials:
+        username: admin
+        password: admin
+      env:
+        QEMU_CPU: core2duo
+        QEMU_MEMORY: "1024"
+
+    voss:
+      kind: generic_vm
+      image: hyperglass-lab/extreme_voss:9.4.0.0
+      mgmt-ipv4: 192.168.250.23
+      memory: 3GiB
+      cpu: 2
+      binds:
+        - configs/voss/startup-config.xsf:/config/startup-config.xsf:ro
+      credentials:
+        username: admin
+        password: Lab-Router9
+      env:
+        QEMU_CPU: core2duo
+        QEMU_MEMORY: "2048"
+
+    xrd:
+      kind: cisco_xrd
+      image: hyperglass-lab/cisco_xrd:24.2.11
+      mgmt-ipv4: 192.168.250.24
+      memory: 4GiB
+      cpu: 2
+      startup-config: configs/xrd/startup.cfg
+
+    iosv:
+      kind: cisco_vios
+      image: hyperglass-lab/cisco_vios:15.9.3M6
+      mgmt-ipv4: 192.168.250.25
+      memory: 2GiB
+      cpu: 2
+      startup-config: configs/iosv/startup.cfg
+      credentials:
+        username: admin
+        password: Lab-Router9
+      env:
+        QEMU_CPU: core2duo
+        QEMU_MEMORY: "1024"
+
+    nexus:
+      kind: cisco_n9kv
+      image: hyperglass-lab/cisco_n9kv:9300-lite-10.4.8.M
+      mgmt-ipv4: 192.168.250.26
+      memory: 10GiB
+      cpu: 4
+      startup-config: configs/nexus/startup.cfg
+      credentials:
+        username: admin
+        password: Lab-Router9
+      env:
+        QEMU_MEMORY: "8192"
+
+    timos:
+      kind: nokia_sros
+      type: vsr-i
+      config-mode: classic
+      inject-ssh-keys: false
+      image: hyperglass-lab/nokia_sros:15.0.R3
+      mgmt-ipv4: 192.168.250.27
+      memory: 10GiB
+      cpu: 2
+      startup-config: configs/timos/startup.cfg
+      license: data/platforms/timos.license
+      credentials:
+        username: admin
+        password: Lab-Router9
+      env:
+        QEMU_CPU: core2duo
+        QEMU_MEMORY: "8192"
+
+    routeros6:
+      kind: mikrotik_ros
+      image: hyperglass-lab/mikrotik_routeros:6.49.19
+      mgmt-ipv4: 192.168.250.28
+      memory: 2GiB
+      cpu: 1
+      startup-config: configs/routeros6/startup.rsc
+      enforce-startup-config: true
+      credentials:
+        username: admin
+        password: Lab-Router9
+      env:
+        QEMU_MEMORY: "1024"
+
+    os9:
+      kind: generic_vm
+      image: hyperglass-lab/dell_os9:9.13.0.0
+      mgmt-ipv4: 192.168.250.29
+      memory: 2GiB
+      cpu: 1
+      binds:
+        - configs/os9/startup.cfg:/config/startup.cfg:ro
+      credentials:
+        username: admin
+        password: Lab-Router9
+      env:
+        QEMU_MEMORY: "1024"
+
+  links:
+    - endpoints: ["probe:eth1", "sonic:eth1"]
+    - endpoints: ["probe:eth2", "exos:eth1"]
+    - endpoints: ["probe:eth3", "voss:eth1"]
+    - endpoints: ["probe:eth4", "xrd:Gi0-0-0-0"]
+    - endpoints: ["probe:eth5", "iosv:eth1"]
+    - endpoints: ["probe:eth6", "nexus:eth1"]
+    - endpoints: ["probe:eth7", "timos:eth1"]
+    - endpoints: ["probe:eth8", "routeros6:eth1"]
+    - endpoints: ["probe:eth9", "os9:eth1"]

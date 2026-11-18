@@ -2,13 +2,14 @@
 
 # Standard Library
 import typing as t
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Third Party
-from pydantic import ConfigDict
+from pydantic import Field, ConfigDict, field_validator
 
 # Project
 from hyperglass.log import log
+from hyperglass.util import parse_asn, parse_as_path
 from hyperglass.models.data import BGPRouteTable
 
 # Local
@@ -75,14 +76,15 @@ class AristaRoutePath(_AristaBase):
 
     as_path_entry: AristaAsPathEntry
     med: int = 0
-    local_preference: int
+    # Locally originated routes have no local preference; 100 is the BGP default.
+    local_preference: int = 100
     weight: int
     peer_entry: AristaPeerEntry
     reason_not_bestpath: str
-    timestamp: int = int(datetime.utcnow().timestamp())
+    timestamp: int = Field(default_factory=lambda: int(datetime.now(UTC).timestamp()))
     next_hop: str
     route_type: AristaRouteType
-    route_detail: t.Optional[AristaRouteDetail]
+    route_detail: t.Optional[AristaRouteDetail] = None
 
 
 class AristaRouteEntry(_AristaBase):
@@ -100,20 +102,26 @@ class AristaBGPTable(_AristaBase):
     router_id: str
     vrf: str
     bgp_route_entries: t.Dict[str, AristaRouteEntry]
-    # The raw value is really a string, but `int` will convert it.
+    # The raw value is a string, in asplain or asdot notation.
     asn: int
+
+    @field_validator("asn", mode="before")
+    def validate_asn(cls, value):
+        """Convert asplain or asdot local ASN to an integer."""
+        asn = parse_asn(value)
+        if asn is None:
+            raise ValueError(f"Invalid ASN: {value}")
+        return asn
 
     @staticmethod
     def _get_route_age(timestamp: int) -> int:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         now_timestamp = int(now.timestamp())
         return now_timestamp - timestamp
 
     @staticmethod
-    def _get_as_path(as_path: str) -> t.List[str]:
-        if as_path == "":
-            return []
-        return [int(p) for p in as_path.split() if p.isdecimal()]
+    def _get_as_path(as_path: str) -> t.List[int]:
+        return parse_as_path(as_path)
 
     def bgp_table(self: "AristaBGPTable") -> "BGPRouteTable":
         """Convert the Arista-formatted fields to standard parsed data model."""
@@ -130,7 +138,10 @@ class AristaBGPTable(_AristaBase):
                 # block. Therefore, we must verify it exists before including its data.
                 communities = []
                 if route.route_detail is not None:
-                    communities = route.route_detail.community_list
+                    communities = [
+                        *route.route_detail.community_list,
+                        *route.route_detail.large_community_list,
+                    ]
 
                 # iBGP paths contain an empty AS_PATH array. If the AS_PATH is empty, we
                 # set the source_as to the router's local-as.

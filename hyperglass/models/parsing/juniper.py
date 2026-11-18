@@ -8,7 +8,7 @@ from pydantic import ConfigDict, field_validator, model_validator
 
 # Project
 from hyperglass.log import log
-from hyperglass.util import deep_convert_keys
+from hyperglass.util import parse_asn, parse_as_path, deep_convert_keys
 from hyperglass.models.data.bgp_route import BGPRouteTable
 
 # Local
@@ -20,6 +20,23 @@ RPKI_STATE_MAP = {
     "unknown": 2,
     "unverified": 3,
 }
+
+
+def _merge_blocks(value: t.Any) -> t.Dict[str, t.Any]:
+    """Merge an element that Junos may repeat into one dict.
+
+    Junos emits a second `<bgp-path-attributes>` block for attributes such as
+    Only-to-Customer (RFC 9234, `<attr-otc>`), so xmltodict yields a list.
+    Each block carries different child elements, so merge them in order.
+    """
+    if isinstance(value, t.Dict):
+        return value
+    merged: t.Dict[str, t.Any] = {}
+    if isinstance(value, t.List):
+        for block in value:
+            if isinstance(block, t.Dict):
+                merged.update(block)
+    return merged
 
 
 class JuniperBase(HyperglassModel, extra="ignore"):
@@ -86,7 +103,7 @@ class JuniperRouteTableEntry(JuniperBase):
 
         values["next_hop"] = selected_next_hop
 
-        _path_attr = values.get("bgp_path_attributes", {})
+        _path_attr = _merge_blocks(values.get("bgp_path_attributes"))
         _path_attr_agg = _path_attr.get("attr_aggregator", {}).get("attr_value", {})
         values["as_path"] = _path_attr.get("attr_as_path_effective", {}).get("attr_value", "")
         values["source_as"] = _path_attr_agg.get("aggr_as_number", 0)
@@ -123,18 +140,30 @@ class JuniperRouteTableEntry(JuniperBase):
 
     @field_validator("as_path", mode="before")
     def validate_as_path(cls, value):
-        """Remove origin flags from AS_PATH."""
-        disallowed = ("E", "I", "?")
-        return [int(a) for a in value.split() if a not in disallowed]
+        """Remove origin flags from AS_PATH and convert asdot ASNs."""
+        return parse_as_path(value)
+
+    @field_validator("peer_as", "source_as", mode="before")
+    def validate_asn(cls, value):
+        """Convert asplain or asdot ASNs to integers."""
+        asn = parse_asn(value)
+        if asn is None:
+            raise ValueError(f"Invalid ASN: {value}")
+        return asn
 
     @field_validator("communities", mode="before")
     def validate_communities(cls, value):
-        """Flatten community list."""
-        if value is not None:
-            flat = value.get("community", [])
-        else:
-            flat = []
-        return flat
+        """Flatten community list and drop Junos' `large:` prefix."""
+        flat = []
+        blocks = value if isinstance(value, t.List) else [value]
+        for block in blocks:
+            if not isinstance(block, t.Dict):
+                continue
+            community = block.get("community", [])
+            if isinstance(community, str):
+                community = [community]
+            flat.extend(community)
+        return [c.removeprefix("large:") for c in flat]
 
 
 class JuniperRouteTable(JuniperBase):

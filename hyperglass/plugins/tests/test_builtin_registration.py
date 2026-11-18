@@ -11,13 +11,6 @@ from hyperglass.plugins import _builtin
 from hyperglass.plugins._input import InputPlugin
 from hyperglass.plugins._output import OutputPlugin
 
-# These parsers require the traceroute UI or directives introduced by later steps.
-DEFERRED_MODULES = {
-    "bgp_routestr_huawei",
-    "bgp_routestr_mikrotik",
-}
-
-
 def test_every_builtin_plugin_is_exported():
     """`init_builtin_plugins` reads the classes imported into `_builtin/__init__.py`.
 
@@ -26,8 +19,6 @@ def test_every_builtin_plugin_is_exported():
     """
     missing = []
     for _, module_name, _ in pkgutil.iter_modules([str(Path(_builtin.__file__).parent)]):
-        if module_name in DEFERRED_MODULES:
-            continue
         module = importlib.import_module(f"hyperglass.plugins._builtin.{module_name}")
         for class_name, obj in getmembers(module, isclass):
             if obj.__module__ != module.__name__:

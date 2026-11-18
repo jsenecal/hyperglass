@@ -15,6 +15,7 @@ def test_structured_output_opt_in(platform):
         "credential": {"username": "lg", "password": ""},
         "attrs": {"source4": "192.0.2.1", "source6": "2001:db8::1"},
     }
-    assert Device(**config).structured_output is (platform in DEFAULT_STRUCTURED_OUTPUT)
+    device = Device(**config)
+    assert device.structured_output is (device.platform in DEFAULT_STRUCTURED_OUTPUT)
     assert Device(**config, structured_output=False).structured_output is False
     assert Device(**config, structured_output=True).structured_output is True

@@ -1,0 +1,24 @@
+org_name: Hyperglass Lab
+site_title: Hyperglass Lab
+request_timeout: 300
+logging:
+  directory: /etc/hyperglass/logs
+  samples:
+    enable: true
+  # SSH session logs (#45): one file per device and day in the logs directory.
+  session_log: true
+structured:
+  communities:
+    mode: deny
+    items: []
+  rpki:
+    mode: external
+  ip_enrichment:
+    enrich_traceroute: true
+    enrich_bgproute: true
+web:
+  # Resolve hostnames on the server (#48). "My IP" uses the default, server detection
+  # (#49, #90). The text instance uses Cloudflare DNS and the external lookup, so both
+  # paths stay testable.
+  dns_provider:
+    name: server
