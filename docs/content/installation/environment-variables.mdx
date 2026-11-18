@@ -38,7 +38,7 @@ services:
 | `HYPERGLASS_REDIS_DSN`      | string  | —                 | Redis DSN. If supplied, overrides `HYPERGLASS_REDIS_HOST`, `HYPERGLASS_REDIS_DB`, and `HYPERGLASS_REDIS_PASSWORD`. |
 | `HYPERGLASS_HOST`           | string  | `::1`             | Address on which Hyperglass listens for requests. The default is `::` when `HYPERGLASS_DEBUG` is `true`. The Docker image sets `0.0.0.0`. |
 | `HYPERGLASS_PORT`           | number  | `8001`            | TCP port on which Hyperglass listens for requests.                                                                 |
-| `HYPERGLASS_WORKERS`        | number  | —                 | Number of web server workers. If not supplied, Hyperglass uses 1 worker in debug mode, else 2 workers per CPU core. |
+| `HYPERGLASS_WORKERS`        | number  | —                 | Number of web server workers. If not supplied, Hyperglass uses 1 worker in debug mode, else 2 workers per CPU available to the process (CPU affinity and cgroup CPU quota are respected), capped at 8. |
 | `HYPERGLASS_CA_CERT`        | string  | —                 | Path to a CA certificate file. Hyperglass uses it to validate HTTPS certificates on outbound requests. If not supplied, system CAs are used.               |
 
 ### Docker Compose port binding
