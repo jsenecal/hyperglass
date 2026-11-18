@@ -35,7 +35,7 @@ _FMT_DEBUG = (
 
 _FMT = "<lvl><b>[{level}]</b> {time:YYYYMMDD} {time:HH:mm:ss} <lw>|</lw></lvl> {message} {extra}"
 
-_FMT_FILE = "[{time:YYYYMMDD} {time:HH:mm:ss}] {message} {extra}"
+_FMT_FILE = "[{level}] [{time:YYYYMMDD} {time:HH:mm:ss}] {message} {extra}"
 _FMT_BASIC = "{message} {extra}"
 _LOG_LEVELS = [
     {"name": "TRACE", "color": "<m>"},

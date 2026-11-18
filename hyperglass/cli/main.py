@@ -4,12 +4,14 @@
 import re
 import sys
 import typing as t
+from pathlib import Path
 
 # Third Party
 import typer
 
 # Local
 from .echo import echo
+from .onboard import onboard
 
 
 def _version(value: bool) -> None:
@@ -21,21 +23,22 @@ def _version(value: bool) -> None:
         raise typer.Exit()
 
 
-cli = typer.Typer(name="hyperglass", help="hyperglass Command Line Interface", no_args_is_help=True)
+cli = typer.Typer(name="Hyperglass", help="Hyperglass command line interface", no_args_is_help=True)
+cli.add_typer(onboard, name="onboard")
 
 
 def run():
-    """Run the hyperglass CLI."""
+    """Run the Hyperglass CLI."""
     return typer.run(cli())
 
 
-@cli.callback(name="version")
+@cli.callback()
 def _version(
     version: t.Optional[bool] = typer.Option(
-        None, "--version", help="hyperglass version", callback=_version
+        None, "--version", help="Hyperglass version", callback=_version
     ),
 ) -> None:
-    """hyperglass"""
+    """Hyperglass"""
     pass
 
 
@@ -114,6 +117,35 @@ def _system_info():
         )
     )
     echo.plain(table)
+
+
+@cli.command(name="support-bundle")
+def _support_bundle(
+    output: Path = typer.Option(
+        Path("hyperglass-support-bundle.json"), "--output", "-o", help="Output JSON file"
+    ),
+    log_directory: t.Optional[Path] = typer.Option(
+        None, "--log-directory", help="Directory containing Hyperglass log files"
+    ),
+    log_lines: int = typer.Option(
+        200, "--log-lines", min=1, max=5000, help="Maximum recent lines to inspect per log"
+    ),
+) -> None:
+    """Create a metadata-only bundle; omit log messages, identifiers and credentials."""
+    # Standard Library
+    from tempfile import gettempdir
+
+    # Project
+    from hyperglass.settings import Settings
+    from hyperglass.util.support_bundle import write_support_bundle
+
+    directories = (
+        [log_directory]
+        if log_directory is not None
+        else [Path(gettempdir()), Path(Settings.app_path)]
+    )
+    bundle_path = write_support_bundle(output, directories, log_lines=log_lines)
+    echo.success("Wrote metadata-only support bundle to {!s}", bundle_path)
 
 
 @cli.command(name="clear-cache")
