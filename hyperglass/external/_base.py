@@ -1,12 +1,11 @@
 """Session handler for external http data sources."""
 
 # Standard Library
-import re
 import json as _json
 import socket
 import typing as t
 from json import JSONDecodeError
-from socket import gaierror
+from urllib.parse import urlsplit
 
 # Third Party
 import httpx
@@ -44,8 +43,9 @@ class BaseExternal:
         uri_prefix: str = "",
         uri_suffix: str = "",
         verify_ssl: bool = True,
-        timeout: int = 10,
+        timeout: t.Union[float, int] = 10,
         parse: bool = True,
+        auth: t.Optional[t.Tuple[str, str]] = None,
     ) -> None:
         """Initialize connection instance."""
         self.__name__ = getattr(self, "name", "BaseExternal")
@@ -68,6 +68,8 @@ class BaseExternal:
             "timeout": self.timeout,
             "verify": context,
         }
+        if auth is not None:
+            client_kwargs["auth"] = auth
 
         self._session = httpx.Client(**client_kwargs)
         self._asession = httpx.AsyncClient(**client_kwargs)
@@ -165,22 +167,17 @@ class BaseExternal:
         log.bind(url=self.base_url).debug("Testing connection")
 
         try:
-            # Parse out just the hostname from a URL string.
-            # E.g. `https://www.example.com` becomes `www.example.com`
-            test_host = re.sub(r"http(s)?\:\/\/", "", self.base_url)
-
-            # Create a generic socket object
-            test_socket = socket.socket()
+            # Parse the hostname and port from the URL, defaulting the port by scheme.
+            # E.g. `http://192.0.2.1:9000/hook` becomes `192.0.2.1` and `9000`.
+            url = urlsplit(self.base_url)
+            test_port = url.port or (80 if url.scheme == "http" else 443)
 
             # Try opening a low-level socket to make sure it's even
             # listening on the port prior to trying to use it.
-            test_socket.connect((test_host, 443))
+            with socket.create_connection((url.hostname, test_port), timeout=self.timeout):
+                pass
 
-            # Properly shutdown & close the socket.
-            test_socket.shutdown(1)
-            test_socket.close()
-
-        except gaierror as err:
+        except OSError as err:
             # Raised if the target isn't listening on the port
             raise self._exception(
                 f"{self.name!r} appears to be unreachable at {self.base_url!r}", err
@@ -234,7 +231,7 @@ class BaseExternal:
         }
 
         if headers is not None:
-            request.update({"headers": headers})
+            request["headers"].update(headers)
 
         if params is not None:
             params = {str(k): str(v) for k, v in params.items() if v is not None}
@@ -270,7 +267,7 @@ class BaseExternal:
             method=method,
             endpoint=endpoint,
             item=item,
-            headers=None,
+            headers=headers,
             params=params,
             data=data,
             timeout=timeout,
@@ -326,7 +323,7 @@ class BaseExternal:
             method=method,
             endpoint=endpoint,
             item=item,
-            headers=None,
+            headers=headers,
             params=params,
             data=data,
             timeout=timeout,

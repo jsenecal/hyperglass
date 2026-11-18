@@ -7,6 +7,8 @@ from .bgp_route_arista import BGPRoutePluginArista
 from .bgp_route_huawei import BGPRoutePluginHuawei
 from .bgp_route_juniper import BGPRoutePluginJuniper
 from .mikrotik_garbage_output import MikrotikGarbageOutput
+from .traceroute_ip_enrichment import ZTracerouteIpEnrichment
+from .bgp_route_enrichment import ZBgpRouteEnrichment
 
 __all__ = (
     "BGPRoutePluginArista",
@@ -14,5 +16,7 @@ __all__ = (
     "BGPRoutePluginJuniper",
     "BGPRoutePluginHuawei",
     "MikrotikGarbageOutput",
+    "ZTracerouteIpEnrichment",
+    "ZBgpRouteEnrichment",
     "RemoveCommand",
 )

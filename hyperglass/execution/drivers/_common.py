@@ -3,6 +3,7 @@
 # Standard Library
 import typing as t
 import re
+import asyncio
 from abc import ABC, abstractmethod
 
 # Project
@@ -69,7 +70,9 @@ class Connection(ABC):
         if command_error(output):
             raise DeviceCommandError(device_name=self.device.name)
 
-        response = self.plugin_manager.execute(output=output, query=self.query_data)
+        response = await asyncio.to_thread(
+            self.plugin_manager.execute, output=output, query=self.query_data
+        )
 
         if response is None:
             response = ()
