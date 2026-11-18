@@ -8,8 +8,8 @@ http client API calls, returns the output back to the front end.
 
 # Standard Library
 import time
-import signal
-from typing import TYPE_CHECKING, Any, Dict, Union, Callable
+import asyncio
+from typing import TYPE_CHECKING, Dict, Union
 
 # Project
 from hyperglass.log import log
@@ -36,13 +36,30 @@ def map_driver(driver_name: str) -> "Connection":
     return NetmikoConnection
 
 
-def handle_timeout(**exc_args: Any) -> Callable:
-    """Return a function signal can use to raise a timeout exception."""
+async def _collect(driver: "Connection", query: "Query", timeout: int) -> tuple:
+    """Run the device session and parse its response within the request timeout.
 
-    def handler(*args: Any, **kwargs: Any) -> None:
-        raise DeviceTimeout(**exc_args)
-
-    return handler
+    The timeout cancels the query inside its own task. A SIGALRM handler fires in
+    whichever frame the main thread is in; while the device session runs in an
+    executor thread, that is the event loop, so the timeout escaped the request
+    and the client received a bare HTTP 500.
+    """
+    deadline = asyncio.timeout(timeout)
+    try:
+        async with deadline:
+            if query.device.proxy:
+                proxy = driver.setup_proxy()
+                with proxy() as tunnel:
+                    response = await driver.collect(tunnel.local_bind_host, tunnel.local_bind_port)
+            else:
+                response = await driver.collect()
+            return response, await driver.response(response)
+    except TimeoutError as error:
+        if not deadline.expired():
+            raise
+        raise DeviceTimeout(
+            error=TimeoutError("Connection timed out"), device=query.device
+        ) from error
 
 
 async def execute(query: "Query") -> Union["OutputDataModel", str]:
@@ -55,12 +72,6 @@ async def execute(query: "Query") -> Union["OutputDataModel", str]:
     mapped_driver = map_driver(query.device.driver)
     driver: "Connection" = mapped_driver(query.device, query)
 
-    signal.signal(
-        signal.SIGALRM,
-        handle_timeout(error=TimeoutError("Connection timed out"), device=query.device),
-    )
-    signal.alarm(params.request_timeout - 1)
-
     # Capture the raw device output and parsed result (and failures) as JSONL
     # samples when logging.samples is enabled. Best-effort; never affects the query.
     samples = params.logging.samples
@@ -69,14 +80,7 @@ async def execute(query: "Query") -> Union["OutputDataModel", str]:
     output = None
 
     try:
-        if query.device.proxy:
-            proxy = driver.setup_proxy()
-            with proxy() as tunnel:
-                response = await driver.collect(tunnel.local_bind_host, tunnel.local_bind_port)
-        else:
-            response = await driver.collect()
-
-        output = await driver.response(response)
+        response, output = await _collect(driver, query, params.request_timeout - 1)
 
         if is_series(output):
             # Text responses can be whitespace only, such as an FRR filter with no match.
@@ -107,8 +111,6 @@ async def execute(query: "Query") -> Union["OutputDataModel", str]:
                 structured=output is not None and not isinstance(output, str),
             )
         raise
-    finally:
-        signal.alarm(0)
 
     if samples.enable:
         log_query_sample(
