@@ -20,6 +20,61 @@ hyperglass provides extensive customization options for the look and feel of the
 | `dns_provider.name` | String | cloudflare                             | If `cloudflare` or `google` are provided, no URL is necessary.              |
 | `dns_provider.url`  | String | `https://cloudflare-dns.com/dns-query` | Provide a custom DNS over HTTPS URL if you'd like to use your own resolver. |
 
+### Optional server lookups
+
+The DNS and AS-path enrichment endpoints are disabled by default. Enable them explicitly in `config.yaml`, then restart Hyperglass:
+
+```yaml
+web:
+    dns_provider:
+        name: server
+    aspath_enrichment: true
+    client_ip:
+        trusted_proxies: ["192.0.2.10/32"]
+        # Set this only when the proxy overwrites this single-address header.
+        # header: X-Real-IP
+```
+
+Replace the example proxy address with the address that actually connects to Hyperglass. An empty `trusted_proxies` list ignores all forwarding headers. Without a custom `header`, Hyperglass reads `X-Forwarded-For` from right to left, stopping at the first untrusted address. A custom header has no fallback to other headers. Configure the proxy to overwrite that header and prevent direct access to the application port.
+
+The normal Hyperglass launcher disables Uvicorn's proxy-header rewriting so the application can verify the socket peer. When running Uvicorn directly, pass `--no-proxy-headers`. Otherwise, upstream rewriting can replace the peer before Hyperglass checks it.
+
+Server DNS uses Cloudflare's public HTTPS resolver at `https://1.1.1.1/dns-query`. It does not use operating-system DNS, search domains, environment proxies, or redirects. Only public A and AAAA answers are returned. Internal DNS resolution is not supported by this public endpoint. Browser DNS providers keep the server endpoint disabled.
+
+DNS permits 120 requests per client and 600 requests globally per 60-second window. AS-path enrichment permits 30 requests per client and 120 requests globally per window. Redis shares these limits across workers. Storage failures deny lookups. Both endpoints share eight outbound lookup slots and a five-second lookup deadline. The endpoints return HTTP 429 when request limits are reached and HTTP 503 when outbound capacity or required storage is unavailable.
+
+AS-path requests accept at most 64 ASNs and an 8 KiB body. ASNs must be decimal integers between 1 and 4294967295. Duplicate ASNs are removed before lookup. Results use shared caches: DNS answers for up to 60 seconds, negative DNS responses for 15 seconds, and ASN names for one hour. Disabling `web.aspath_enrichment` also stops the AS-path modal from requesting enrichment.
+
+### My IP and reverse-proxy upgrades
+
+`web.my_ip: server` uses the request address for the My IP button. Non-public addresses return `null`, leaving the input unchanged. This mode does not fall back to a public IP service. Set `web.my_ip: external` explicitly to use a public IP service from the browser. That setting does not change webhook attribution.
+
+**Upgrade requirement:** forwarding headers now require an explicitly trusted proxy. Existing nginx installations must configure `web.client_ip` to retain visitor addresses for My IP, webhook `source`, and per-client limits. An empty `trusted_proxies` list uses the socket peer, so webhooks report the proxy address until configured.
+
+For nginx on the same host, connecting to Hyperglass over loopback, add this to `config.yaml`:
+
+```yaml
+web:
+    my_ip: server
+    client_ip:
+        trusted_proxies: ["127.0.0.1/32", "::1/128"]
+        header: X-Real-IP
+```
+
+In the nginx location that proxies requests to Hyperglass, overwrite the forwarding headers:
+
+```nginx
+location / {
+    proxy_pass http://[::1]:8001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Hyperglass listens on `[::1]` by default. Use the configured `HYPERGLASS_HOST` address and port in `proxy_pass`, for example `http://127.0.0.1:8001` when `HYPERGLASS_HOST=127.0.0.1`. Keep Hyperglass bound to loopback for this setup. Restart Hyperglass and reload nginx after updating both configurations. For a container or remote proxy, trust its actual connecting address instead of loopback. Do not trust all networks. This example assumes visitors connect directly to nginx; a CDN or additional proxy requires its own explicit trust configuration in nginx.
+
 ### Logo
 
 | Parameter          | Type             | Default Value | Description                                        |

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useConfig } from '~/context';
 import { fetchWithTimeout } from '~/util';
 
 import type {
@@ -34,7 +35,14 @@ interface WtfIsMyIP {
 const URL_IP4 = 'https://ipv4.json.myip.wtf';
 const URL_IP6 = 'https://ipv6.json.myip.wtf';
 
-function transform(wtf: WtfIsMyIP): WtfIndividual {
+// In `server` mode, Hyperglass returns the address it received the request from.
+const SERVER_IP4 = '/api/myip?family=4';
+const SERVER_IP6 = '/api/myip?family=6';
+
+function transform(wtf: WtfIsMyIP | { ip: string }): WtfIndividual {
+  if ('ip' in wtf) {
+    return { ip: wtf.ip, isp: '', location: '', country: '' };
+  }
   const { YourFuckingIPAddress, YourFuckingISP, YourFuckingLocation, YourFuckingCountryCode } = wtf;
   return {
     ip: YourFuckingIPAddress,
@@ -44,12 +52,7 @@ function transform(wtf: WtfIsMyIP): WtfIndividual {
   };
 }
 
-const query: QueryFunction<WtfIndividual, string[]> = async (
-  ctx: QueryFunctionContext<string[]>,
-) => {
-  const controller = new AbortController();
-  const [url] = ctx.queryKey;
-
+async function lookup(url: string): Promise<WtfIndividual> {
   const res = await fetchWithTimeout(
     url,
     {
@@ -57,10 +60,36 @@ const query: QueryFunction<WtfIndividual, string[]> = async (
       mode: 'cors',
     },
     5000,
-    controller,
+    new AbortController(),
   );
-  const data = await res.json();
-  return transform(data);
+  if (!res.ok) {
+    throw new Error(`${url} returned ${res.status}`);
+  }
+  return transform(await res.json());
+}
+
+/**
+ * Look up the address at `url`. If that fails and a fallback is given, ask the fallback.
+ *
+ * In `external` mode the fallback is the server endpoint for the same family, so a blocked
+ * or failed myip.wtf lookup still returns the address Hyperglass sees.
+ */
+export async function lookupAddress(url: string, fallback?: string): Promise<WtfIndividual> {
+  try {
+    return await lookup(url);
+  } catch (error) {
+    if (fallback === undefined) {
+      throw error;
+    }
+    return await lookup(fallback);
+  }
+}
+
+const query: QueryFunction<WtfIndividual, string[]> = async (
+  ctx: QueryFunctionContext<string[]>,
+) => {
+  const [url, fallback] = ctx.queryKey;
+  return await lookupAddress(url, fallback);
 };
 
 const common: UseQueryOptions<WtfIndividual, unknown, WtfIndividual, string[]> = {
@@ -74,12 +103,15 @@ const common: UseQueryOptions<WtfIndividual, unknown, WtfIndividual, string[]> =
 };
 
 export function useWtf(): Wtf {
+  const { web } = useConfig();
+  const server = web.myIp === 'server';
+  // `external` falls back to the server endpoint when myip.wtf fails.
   const ipv4 = useQuery<WtfIndividual, unknown, WtfIndividual, string[]>({
-    queryKey: [URL_IP4],
+    queryKey: server ? [SERVER_IP4] : [URL_IP4, SERVER_IP4],
     ...common,
   });
   const ipv6 = useQuery<WtfIndividual, unknown, WtfIndividual, string[]>({
-    queryKey: [URL_IP6],
+    queryKey: server ? [SERVER_IP6] : [URL_IP6, SERVER_IP6],
     ...common,
   });
 

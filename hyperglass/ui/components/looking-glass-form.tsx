@@ -10,6 +10,7 @@ import {
   QueryLocation,
   QueryTarget,
   QueryType,
+  QueryVariable,
   SubmitButton,
 } from '~/components';
 import { useConfig } from '~/context';
@@ -57,6 +58,13 @@ export const LookingGlassForm = (): JSX.Element => {
     test('queryType', noQueryType, () => {
       enforce(data.queryType).inside(queryTypes);
     });
+    for (const variable of directive?.variables ?? []) {
+      if (variable.required) {
+        test(variable.id, strF(messages.noInput, { field: variable.name }), () => {
+          enforce(data.queryVariables?.[variable.id]).isNotEmpty();
+        });
+      }
+    }
   });
 
   const formInstance = useForm<FormData>({
@@ -87,7 +95,7 @@ export const LookingGlassForm = (): JSX.Element => {
     return tmp;
   }, [form.queryType, form.queryLocation, getDirective]);
 
-  function submitHandler(): void {
+  async function submitHandler(): Promise<void> {
     if (process.env.NODE_ENV === 'development') {
       console.table({
         'Query Location': form.queryLocation.toString(),
@@ -96,6 +104,11 @@ export const LookingGlassForm = (): JSX.Element => {
         'Selected Directive': directive?.name ?? null,
       });
     }
+
+    // Note: IP enrichment refresh is now handled server-side on query
+    // submission when enabled. Removing client-side best-effort refresh
+    // to centralize refresh logic and avoid redundant requests from many
+    // clients.
 
     // Before submitting a query, make sure the greeting is acknowledged if required. This should
     // be handled before loading the app, but people be sneaky.
@@ -145,6 +158,8 @@ export const LookingGlassForm = (): JSX.Element => {
     } else if (e.field === 'queryType' && isString(e.value)) {
       setValue('queryType', e.value);
       setFormValue('queryType', e.value);
+      setFormValue('queryVariables', {});
+      setValue('queryVariables', {});
       if (form.queryTarget.length !== 0) {
         // Reset queryTarget as well, so that, for example, selecting BGP Community, and selecting
         // a community, then changing the queryType to BGP Route doesn't preserve the selected
@@ -164,10 +179,25 @@ export const LookingGlassForm = (): JSX.Element => {
     }
   }
 
+  function handleVariableChange(id: string, value: string | null): void {
+    const { queryVariables } = useFormState.getState().form;
+    const { [id]: _, ...rest } = queryVariables;
+    const updated = value === null ? rest : { ...rest, [id]: value };
+    setFormValue('queryVariables', updated);
+    setValue('queryVariables', updated);
+    clearErrors(id as keyof FormData);
+  }
+
   useEffect(() => {
     register('queryLocation', { required: true });
     register('queryType', { required: true });
-  }, [register]);
+    // Restore the previous query after returning from results.
+    const { form } = useFormState.getState();
+    setValue('queryLocation', form.queryLocation);
+    setValue('queryType', form.queryType);
+    setValue('queryTarget', form.queryTarget);
+    setValue('queryVariables', form.queryVariables);
+  }, [register, setValue]);
 
   return (
     <FormProvider {...formInstance}>
@@ -221,6 +251,15 @@ export const LookingGlassForm = (): JSX.Element => {
             )}
           </SlideFade>
         </FormRow>
+        {directive !== null && (directive.variables ?? []).length > 0 && (
+          <FormRow>
+            {(directive.variables ?? []).map(variable => (
+              <FormField key={variable.id} name={variable.id} label={variable.name}>
+                <QueryVariable variable={variable} onChange={handleVariableChange} />
+              </FormField>
+            ))}
+          </FormRow>
+        )}
         <FormRow mt={0} justifyContent="flex-end">
           <Flex
             my={2}

@@ -1,9 +1,12 @@
 """API Routes."""
 
 # Standard Library
+import re
 import json
 import time
+import ipaddress
 import typing as t
+from uuid import uuid4
 from datetime import UTC, datetime
 
 # Third Party
@@ -25,8 +28,10 @@ from hyperglass.models.config.devices import Devices, APIDevice
 
 # Local
 from .state import get_state, get_params, get_devices
-from .tasks import send_webhook
+from .tasks import enrich_query_output, send_webhook
+from .client_address import client_address
 from .fake_output import fake_output
+from .auxiliary import ASPathRequest, lookup_guard, resolve_public_dns, enrich_public_asns
 
 __all__ = (
     "device",
@@ -34,7 +39,60 @@ __all__ = (
     "queries",
     "info",
     "query",
+    "aspath_enrich",
+    "query_enrichment",
+    "dns",
+    "myip",
 )
+
+
+async def _execute_query(data: "Query") -> t.Any:
+    """Execute once; a valid empty route table is a completed query."""
+    return await execute(data)
+
+
+@post("/api/aspath/enrich", guards=[lookup_guard], request_max_body_size=8192)
+async def aspath_enrich(data: ASPathRequest) -> dict:
+    """Enrich a bounded list of validated ASNs when explicitly enabled."""
+    return await enrich_public_asns(data.as_path)
+
+
+@get("/api/dns", guards=[lookup_guard], include_in_schema=False)
+async def dns(name: str, type: str = "A") -> dict:
+    """Resolve public hostnames through the fixed public DNS resolver."""
+    return await resolve_public_dns(name, type)
+
+
+@get("/api/myip", include_in_schema=False)
+async def myip(request: Request, family: int = 4) -> dict:
+    """Return the requesting client's address, for the My IP button in `server` mode."""
+    try:
+        address = ipaddress.ip_address(client_address(request))
+    except ValueError:
+        return {"ip": None}
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    if not address.is_global or address.is_multicast or address.is_reserved:
+        return {"ip": None}
+    return {"ip": str(address) if address.version == family else None}
+
+
+@get("/api/query/{query_id:str}/enrichment")
+async def query_enrichment(query_id: str) -> dict:
+    """Return the current output and enrichment status for a cached query."""
+    if not re.fullmatch(r"hyperglass\.query\.[0-9a-f]{64}", query_id):
+        return {"status": "not_found"}
+    from hyperglass.state import use_state
+
+    cache = use_state("redis")
+    output = cache.get_map(query_id, "output")
+    if output is None:
+        return {"status": "not_found"}
+
+    return {
+        "status": cache.get_map(query_id, "enrichment_status") or "complete",
+        "output": output,
+    }
 
 
 @get("/api/devices/{id:str}", dependencies={"devices": Provide(get_devices)})
@@ -79,9 +137,24 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     _log.info("Starting query execution")
 
     cache_response = cache.get_map(cache_key, "output")
+    cached_enrichment_status = cache.get_map(cache_key, "enrichment_status")
+    if (
+        cache_response
+        and cached_enrichment_status is None
+        and _state.params.structured.is_async_enrichment_enabled(cache_response)
+    ):
+        _log.bind(cache_key=cache_key).debug(
+            "Discarding legacy cache entry without enrichment state"
+        )
+        cache.delete(cache_key)
+        cache_response = None
+
     json_output = False
     cached = False
     runtime = 65535
+    enrichment_status = "complete"
+    enrichment_output = None
+    enrichment_generation = None
 
     if cache_response:
         _log.bind(cache_key=cache_key).debug("Cache hit")
@@ -92,6 +165,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         cached = True
         runtime = 0
         timestamp = cache.get_map(cache_key, "timestamp")
+        enrichment_status = cached_enrichment_status or "complete"
 
     elif not cache_response:
         _log.bind(cache_key=cache_key).debug("Cache miss")
@@ -107,8 +181,8 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
                 structured=data.device.structured_output or False,
             )
         else:
-            # Pass request to execution module
-            output = await execute(data)
+            # Pass the request to the execution module once.
+            output = await _execute_query(data)
 
         endtime = time.time()
         elapsedtime = round(endtime - starttime, 4)
@@ -127,9 +201,18 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         else:
             raw_output = str(output)
 
-        cache.set_map_item(cache_key, "output", raw_output)
-        cache.set_map_item(cache_key, "timestamp", timestamp)
-        cache.expire(cache_key, expire_in=_state.params.cache.timeout)
+        if _state.params.structured.is_async_enrichment_enabled(output):
+            enrichment_status = "pending"
+            enrichment_output = output
+            enrichment_generation = uuid4().hex
+
+        with cache.pipeline() as pipeline:
+            pipeline.set_map_item(cache_key, "output", raw_output)
+            pipeline.set_map_item(cache_key, "timestamp", timestamp)
+            pipeline.set_map_item(cache_key, "enrichment_status", enrichment_status)
+            if enrichment_generation is not None:
+                pipeline.set_map_item(cache_key, "enrichment_generation", enrichment_generation)
+            pipeline.expire(cache_key, expire_in=_state.params.cache.timeout)
 
         _log.bind(cache_timeout=_state.params.cache.timeout).debug("Response cached")
 
@@ -152,6 +235,7 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
         "runtime": runtime,
         "timestamp": timestamp,
         "format": response_format,
+        "enrichment": enrichment_status,
         "random": data.random(),
         "level": "success",
         "keywords": [],
@@ -160,10 +244,30 @@ async def query(_state: HyperglassState, request: Request, data: Query) -> Query
     return Response(
         response,
         background=BackgroundTask(
-            send_webhook,
+            _run_query_background_tasks,
+            enrichment_output=enrichment_output,
+            enrichment_generation=enrichment_generation,
+            cache=cache,
+            cache_key=cache_key,
             params=_state.params,
             data=data,
             request=request,
             timestamp=timestamp,
         ),
     )
+
+
+async def _run_query_background_tasks(
+    enrichment_output: t.Any,
+    enrichment_generation: t.Optional[str],
+    cache: t.Any,
+    cache_key: str,
+    params: Params,
+    data: Query,
+    request: Request,
+    timestamp: datetime,
+) -> None:
+    """Run optional enrichment and webhook work after sending the response."""
+    if enrichment_output is not None and enrichment_generation is not None:
+        await enrich_query_output(enrichment_output, cache, cache_key, enrichment_generation)
+    await send_webhook(params=params, data=data, request=request, timestamp=timestamp)

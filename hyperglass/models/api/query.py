@@ -5,7 +5,7 @@ import typing as t
 import hashlib
 import secrets
 import unicodedata
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Third Party
 from pydantic import BaseModel, ConfigDict, field_validator, StringConstraints
@@ -20,12 +20,56 @@ from hyperglass.exceptions.public import InputInvalid, QueryTypeNotFound, QueryL
 from hyperglass.exceptions.private import InputValidationError
 
 # Local
+from ..directive import Directive
 from ..config.devices import Device
-
 
 QueryLocation = Annotated[str, StringConstraints(strict=True, min_length=1, strip_whitespace=True)]
 QueryTarget = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]
 QueryType = Annotated[str, StringConstraints(strict=True, min_length=1, strip_whitespace=True)]
+
+
+def resolve_directive_by_name(
+    *, devices: t.Iterable[Device], device: Device, directive_id: str
+) -> t.Optional[Directive]:
+    """Resolve a vendor-specific directive id to `device`'s equivalent directive.
+
+    Builtin directives are vendor-specific by `id` but share a `name` across
+    platforms, so a multi-vendor location selection sends one vendor's id to every
+    selected device. Match on that shared name.
+
+    A device carries either the plain builtin or its table-output variant, never
+    both. Prefer the one the device's own `structured_output` flag selected when its
+    directive list was built: the table variant when structured, the plain builtin
+    otherwise. Every
+    structured-output plugin gates on that same device flag, so the requester's
+    variant carries no signal here.
+    """
+    source: t.Optional[Directive] = None
+
+    for candidate_device in devices:
+        for directive in candidate_device.directives:
+            if directive.id == directive_id:
+                source = directive
+                break
+        if source is not None:
+            break
+
+    if source is None:
+        return None
+
+    candidates = [d for d in device.directives if d.name == source.name]
+
+    if not candidates:
+        return None
+
+    # The plain builtin declares `table_output`; the table variant leaves it unset.
+    wants_table = bool(getattr(device, "structured_output", False))
+
+    for candidate in candidates:
+        if (candidate.table_output is None) == wants_table:
+            return candidate
+
+    return candidates[0]
 
 
 class SimpleQuery(BaseModel):
@@ -52,8 +96,11 @@ class Query(BaseModel):
 
     # Directive `id` field
     query_type: QueryType
+
+    # Selected values of the directive's optional variables
     query_variables: t.Dict[str, str] = {}
     _kwargs: t.Dict[str, t.Any]
+    # The target as validated, before input plugins transform it.
     _validated_target: t.Union[t.List[str], str, None] = None
 
     @field_validator("query_target")
@@ -61,7 +108,11 @@ class Query(BaseModel):
     def validate_query_target_characters(
         cls, value: t.Union[t.List[str], str]
     ) -> t.Union[t.List[str], str]:
-        """Reject control characters and line separators before command construction."""
+        """Reject control characters and line separators in any target (#243).
+
+        A line break inside a target starts a second command on a device CLI, whatever
+        the directive's rules allow.
+        """
         for target in value if isinstance(value, list) else [value]:
             if any(unicodedata.category(char) in ("Cc", "Cf", "Zl", "Zp") for char in target):
                 raise ValueError("Target must not contain control characters")
@@ -71,7 +122,7 @@ class Query(BaseModel):
         """Initialize the query with a UTC timestamp at initialization time."""
         super().__init__(**data)
         self._kwargs = data
-        self.timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        self.timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
         state = use_state()
         self._state = state
@@ -79,9 +130,24 @@ class Query(BaseModel):
         query_directives = self.device.directives.matching(self.query_type)
 
         if len(query_directives) < 1:
-            raise QueryTypeNotFound(query_type=self.query_type)
+            # Builtin directives are vendor-specific by `id` but share a `name` across
+            # platforms, so a multi-vendor location selection sends one vendor's id to
+            # every selected device. Resolve this device's equivalent by that name.
+            fallback = resolve_directive_by_name(
+                devices=self._state.devices,
+                device=self.device,
+                directive_id=self.query_type,
+            )
 
-        self.directive = query_directives[0]
+            if fallback is None:
+                raise QueryTypeNotFound(query_type=self.query_type)
+
+            self.directive = fallback
+            # Re-point `query_type` at the directive that actually runs, so the cache
+            # key, the logs and the query summary name a directive this device has.
+            self.query_type = fallback.id
+        else:
+            self.directive = query_directives[0]
 
         self._input_plugin_manager = InputPluginManager()
         self.query_target = self.directive.normalize_target(self.query_target)
@@ -143,7 +209,56 @@ class Query(BaseModel):
     @property
     def device(self) -> Device:
         """Get this query's device object by query_location."""
-        return self._state.devices[self.query_location]
+        # Return a proxy around the device so we can override
+        # structured_output per-request without mutating global state.
+        device = self._state.devices[self.query_location]
+
+        # Determine effective structured_output based on global params
+        try:
+            params = use_state("params")
+        except Exception:
+            params = None
+
+        # Decide which top-level structured enable flag to consult
+        directive = getattr(self, "directive", None)
+        if directive is None:
+            matches = device.directives.matching(self.query_type)
+            directive = matches[0] if len(matches) else None
+        query_kind = getattr(directive, "query_kind", self.query_type)
+        feature_flag_name = {
+            "traceroute": "enable_for_traceroute",
+            "bgp_route": "enable_for_bgp_route",
+            "bgp_routestr": "enable_for_bgp_route",
+        }.get(query_kind)
+
+        effective_structured = bool(getattr(device, "structured_output", False))
+
+        if params is None or not getattr(params, "structured", None):
+            # Global structured block absent => structured disabled
+            effective_structured = False
+        else:
+            # If structured is present, default is enabled; allow opt-out
+            if feature_flag_name is not None:
+                if getattr(params.structured, feature_flag_name, None) is False:
+                    effective_structured = False
+
+        class _DeviceProxy:
+            """Tiny proxy object that delegates to the real device.
+
+            Overrides ``structured_output``.
+            """
+
+            def __init__(self, real, structured_value: bool) -> None:
+                self._real = real
+                self.structured_output = structured_value
+
+            def __getattr__(self, name: str):
+                return getattr(self._real, name)
+
+            def __repr__(self) -> str:  # pragma: no cover - trivial
+                return repr(self._real)
+
+        return _DeviceProxy(device, effective_structured)
 
     @field_validator("query_location")
     def validate_query_location(cls, value):

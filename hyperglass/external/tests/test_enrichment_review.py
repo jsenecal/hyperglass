@@ -131,4 +131,4 @@ def test_parsers_wait_for_directives_and_traceroute_ui():
 
     assert not hasattr(_builtin, "BGPSTRRoutePluginHuawei")
     assert not hasattr(_builtin, "BGPSTRRoutePluginMikrotik")
-    assert not hasattr(_builtin, "TraceroutePluginFrr")
+    assert hasattr(_builtin, "TraceroutePluginFrr")

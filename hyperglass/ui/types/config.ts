@@ -7,6 +7,7 @@ export type ParsedDataField = [string, keyof Route, 'left' | 'right' | 'center' 
 
 interface _Messages {
   no_input: string;
+  /** @deprecated Accepted but not displayed. Removed in 4.0 (#179). */
   feature_not_enabled: string;
   invalid_input: string;
   general: string;
@@ -45,6 +46,8 @@ interface _Text {
   no_ip: string;
   ip_select: string;
   ip_button: string;
+  ip_lookup_notice: string;
+  ip_lookup_confirm: string;
 }
 
 interface _Greeting {
@@ -96,6 +99,8 @@ interface _Web {
   text: _Text;
   theme: _ThemeConfig;
   location_display_mode: 'auto' | 'gallery' | 'dropdown' | string;
+  my_ip: 'external' | 'server' | 'off';
+  aspath_enrichment: boolean;
   highlight: _Highlight[];
 }
 
@@ -106,12 +111,20 @@ type _DirectiveBase = {
   description: string;
   groups: string[];
   info: string | null;
+  variables?: _DirectiveVariable[];
 };
 
 type _DirectiveOption = {
   name: string;
   value: string;
   description: string | null;
+};
+
+type _DirectiveVariable = {
+  id: string;
+  name: string;
+  required: boolean;
+  options: _DirectiveOption[];
 };
 
 type _DirectiveSelect = _DirectiveBase & {
@@ -180,6 +193,7 @@ export type DeviceGroup = CamelCasedPropertiesDeep<_DeviceGroup>;
 export type Directive = CamelCasedPropertiesDeep<_Directive>;
 export type DirectiveSelect = CamelCasedPropertiesDeep<_DirectiveSelect>;
 export type DirectiveOption = CamelCasedPropertiesDeep<_DirectiveOption>;
+export type DirectiveVariable = CamelCasedPropertiesDeep<_DirectiveVariable>;
 export type Text = CamelCasedProperties<_Text>;
 export type Web = CamelCasedPropertiesDeep<_Web>;
 export type Greeting = CamelCasedProperties<_Greeting>;

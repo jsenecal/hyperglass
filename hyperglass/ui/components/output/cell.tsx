@@ -1,4 +1,14 @@
-import { MonoField, Active, Weight, Age, Communities, RPKIState, ASPath } from './fields';
+import {
+  MonoField,
+  Active,
+  Weight,
+  Age,
+  Communities,
+  RPKIState,
+  ASPath,
+  HideableField,
+  NextHop,
+} from './fields';
 
 import type { CellRenderProps } from '~/types';
 
@@ -7,23 +17,36 @@ interface CellProps {
   rawData: StructuredResponse;
 }
 
-export const Cell = (props: CellProps): JSX.Element => {
+export const Cell = (props: CellProps): JSX.Element | null => {
   const { data, rawData } = props;
   const cellId = data.column.id as keyof Route;
-  const component = {
+  const component: Partial<Record<keyof Route, JSX.Element>> = {
     med: <MonoField v={data.value} />,
     age: <Age inSeconds={data.value} />,
     prefix: <MonoField v={data.value} />,
-    next_hop: <MonoField v={data.value} />,
+    next_hop: (
+      <NextHop
+        ip={data.value}
+        asn={data.row.original.next_hop_asn}
+        org={data.row.original.next_hop_org}
+        country={data.row.original.next_hop_country}
+      />
+    ),
     peer_rid: <MonoField v={data.value} />,
     source_as: <MonoField v={data.value} />,
     active: <Active isActive={data.value} />,
-    source_rid: <MonoField v={data.value} />,
+    source_rid: <HideableField v={data.value} />,
     local_preference: <MonoField v={data.value} />,
     communities: <Communities communities={data.value} />,
-    as_path: <ASPath path={data.value} active={data.row.values.active} />,
+    as_path: (
+      <ASPath
+        path={data.value}
+        active={data.row.values.active}
+        asnOrgs={rawData.asn_organizations}
+      />
+    ),
     rpki_state: <RPKIState state={data.value} active={data.row.values.active} />,
     weight: <Weight weight={data.value} winningWeight={rawData.winning_weight} />,
   };
-  return component[cellId] ?? '';
+  return component[cellId] ?? null;
 };

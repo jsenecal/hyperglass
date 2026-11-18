@@ -42,6 +42,7 @@ def test_logo_width_invalid(value):
     (
         ({}, ("cloudflare", DNS_OVER_HTTPS["cloudflare"])),
         ({"name": "google"}, ("google", DNS_OVER_HTTPS["google"])),
+        ({"name": "server"}, ("server", DNS_OVER_HTTPS["server"])),
         ({"name": "custom", "url": "https://doh.example/q"}, ("custom", "https://doh.example/q")),
         ({"url": "https://doh.example/q"}, ("custom", "https://doh.example/q")),
     ),
@@ -51,7 +52,7 @@ def test_dns_provider_valid(data, expected):
     assert (model.name, model.url) == expected
 
 
-@pytest.mark.parametrize("data", ({"name": "custom"}, {"name": "quad8"}, {"name": "server"}))
+@pytest.mark.parametrize("data", ({"name": "custom"}, {"name": "quad8"}))
 def test_dns_provider_invalid(data):
     """An unknown name, or custom without url, names the key and the providers (#178)."""
     with pytest.raises(ValidationError) as err:

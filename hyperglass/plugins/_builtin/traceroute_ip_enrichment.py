@@ -32,7 +32,8 @@ class ZTracerouteIpEnrichment(OutputPlugin):
         """Apply optional enrichment in the output-processing worker thread."""
         if not isinstance(output, TracerouteResult):
             return output
-        if not use_state("params").structured.ip_enrichment.enrich_traceroute:
+        config = use_state("params").structured.ip_enrichment
+        if not config.enrich_traceroute or config.mode == "async":
             return output
         try:
             asyncio.run(self.enrich(output))

@@ -17,7 +17,17 @@ from hyperglass.exceptions import HyperglassError
 
 # Local
 from .events import check_redis
-from .routes import info, query, device, devices, queries
+from .routes import (
+    dns,
+    info,
+    myip,
+    query,
+    device,
+    devices,
+    queries,
+    aspath_enrich,
+    query_enrichment,
+)
 from .middleware import COMPRESSION_CONFIG, recover_state, create_cors_config
 from .error_handlers import app_handler, http_handler, default_handler, validation_handler
 
@@ -40,13 +50,30 @@ OPEN_API = OpenAPIConfig(
     servers=[Server(url=DOCS.server_url or "/")],
 )
 
+# Per-endpoint documentation from `docs.query`, `docs.devices`, `docs.queries` and `docs.info`.
+for _handler, _endpoint in (
+    (query, "query"),
+    (devices, "devices"),
+    (queries, "queries"),
+    (info, "info"),
+):
+    for _attr, _value in DOCS.endpoint_docs(_endpoint).items():
+        setattr(_handler, _attr, _value)
+
 HANDLERS = [
     device,
     devices,
     queries,
     info,
     query,
+    query_enrichment,
+    myip,
 ]
+
+if STATE.params.web.dns_provider.name == "server":
+    HANDLERS.append(dns)
+if STATE.params.web.aspath_enrichment:
+    HANDLERS.append(aspath_enrich)
 
 if not STATE.settings.disable_ui:
     HANDLERS = [

@@ -15,10 +15,6 @@ from hyperglass.plugins._output import OutputPlugin
 DEFERRED_MODULES = {
     "bgp_routestr_huawei",
     "bgp_routestr_mikrotik",
-    "trace_route_frr",
-    "trace_route_huawei",
-    "trace_route_mikrotik",
-    "trace_route_standard",
 }
 
 

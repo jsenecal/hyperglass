@@ -30,26 +30,81 @@ export declare global {
     source_rid: string;
     peer_rid: string;
     rpki_state: RPKIState;
+    filtered: boolean;
+    next_hop_asn?: string | null;
+    next_hop_org?: string | null;
+    next_hop_country?: string | null;
+  };
+
+  type TracerouteHop = {
+    hop_number: number;
+    ip_address: string | null;
+    display_ip: string | null;
+    hostname: string | null;
+    rtt1: number | null;
+    rtt2: number | null;
+    rtt3: number | null;
+    loss_pct: number | null;
+    sent_count: number | null;
+    last_rtt: number | null;
+    avg_rtt: number | null;
+    best_rtt: number | null;
+    worst_rtt: number | null;
+    asn: string | null;
+    org: string | null;
+    prefix: string | null;
+    country: string | null;
+    rir: string | null;
+    allocated: string | null;
+  };
+
+  type TracerouteResult = {
+    target: string;
+    source: string;
+    hops: TracerouteHop[];
+    max_hops: number;
+    packet_size: number;
+    raw_output: string | null;
   };
 
   type RouteField = { [K in keyof Route]: Route[K] };
+
+  type TracerouteHopField = { [K in keyof TracerouteHop]: TracerouteHop[K] };
 
   type StructuredResponse = {
     vrf: string;
     count: number;
     routes: Route[];
     winning_weight: 'high' | 'low';
+    asn_organizations?: Record<string, { name?: string; country?: string }>;
   };
 
+  type TracerouteStructuredOutput = {
+    vrf: string;
+    target: string;
+    source: string;
+    hops: TracerouteHop[];
+    max_hops: number;
+    packet_size: number;
+    raw_output: string | null;
+    asn_organizations?: Record<string, { name?: string; country?: string }>;
+  };
+
+  type BGPStructuredOutput = StructuredResponse;
+
+  type AllStructuredResponses = BGPStructuredOutput | TracerouteStructuredOutput;
+
   type QueryResponse = {
+    id: string;
     random: string;
     cached: boolean;
     runtime: number;
     level: ResponseLevel;
     timestamp: string;
     keywords: string[];
-    output: string | StructuredResponse;
+    output: string | AllStructuredResponses;
     format: 'text/plain' | 'application/json';
+    enrichment: 'complete' | 'pending' | 'failed';
   };
 
   type RequiredProps<T> = { [P in keyof T]-?: Exclude<T[P], undefined> };

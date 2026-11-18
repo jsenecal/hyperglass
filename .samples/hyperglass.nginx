@@ -38,8 +38,12 @@ server {
   }
 
   location @proxy_to_app {
+    # Configure web.client_ip.header: X-Real-IP and trust the actual proxy peer.
+    # Docker sees the host's bridge address, not this loopback upstream address.
+    # Hyperglass listens on [::1] by default. For Docker Compose, or when
+    # HYPERGLASS_HOST is an IPv4 address, use that address in proxy_pass instead.
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
     proxy_redirect off;

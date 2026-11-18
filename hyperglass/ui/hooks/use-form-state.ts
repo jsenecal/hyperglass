@@ -18,6 +18,7 @@ interface FormValues {
   queryLocation: string[];
   queryTarget: string[];
   queryType: string;
+  queryVariables: Record<string, string>;
 }
 
 /**
@@ -66,6 +67,7 @@ interface FormStateType<Opt extends SingleOption = SingleOption> {
   setTarget(update: Partial<Target>): void;
   getDirective(): Directive | null;
   reset(): Promise<void>;
+  back(): void;
   setFormValue<K extends keyof FormValues>(field: K, value: FormValues[K]): void;
   locationChange(
     locations: string[],
@@ -80,7 +82,7 @@ interface FormStateType<Opt extends SingleOption = SingleOption> {
 
 const formState: StateCreator<FormStateType> = (set, get) => ({
   filtered: { types: [], groups: [] },
-  form: { queryLocation: [], queryTarget: [], queryType: '' },
+  form: { queryLocation: [], queryTarget: [], queryType: '', queryVariables: {} },
   loading: false,
   responses: {},
   selections: { queryLocation: [], queryType: null },
@@ -165,8 +167,14 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
       .filter((device): device is Device => device !== null)
       .map(device => device.directives);
 
-    // Get directive objects that are common between selected locations.
-    const intersectingDirectives = intersectionWith(...allDirectives, isEqual);
+    // Get directive objects that are common between selected locations. Builtin
+    // directives are vendor-specific by `id` but share a `name` across platforms, so
+    // deep equality would intersect a multi-vendor selection to nothing. The backend
+    // resolves the resulting id back to each device's own directive by that name.
+    const intersectingDirectives = intersectionWith(
+      ...allDirectives,
+      (a: Directive, b: Directive) => a.name === b.name,
+    );
 
     // Deduplicate all intersecting directives by ID.
     const directives = dedupObjectArray(intersectingDirectives, 'id');
@@ -185,7 +193,9 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
       const message = `${start} ${locationsAnd} have no ${types} in common.`;
       setError('queryLocation', { message });
     } else if (intersectingDirectives.length === 1) {
-      set(state => ({ form: { ...state.form, queryType: intersectingDirectives[0].id } }));
+      set(state => ({
+        form: { ...state.form, queryType: intersectingDirectives[0].id, queryVariables: {} },
+      }));
     }
   },
 
@@ -199,11 +209,26 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
     return null;
   },
 
+  back(): void {
+    // Return to the form and keep the last query, so it can be changed and resubmitted.
+    const { form } = get();
+    set({ loading: false, responses: {}, status: 'form', resolvedIsOpen: false });
+    for (const queryLocation of form.queryLocation) {
+      const query = {
+        queryLocation,
+        queryTarget: form.queryTarget,
+        queryType: form.queryType,
+        queryVariables: form.queryVariables,
+      };
+      queryClient.removeQueries({ queryKey: ['/api/query', query] });
+    }
+  },
+
   async reset(): Promise<void> {
     const { form } = get();
     set({
       filtered: { types: [], groups: [] },
-      form: { queryLocation: [], queryTarget: [], queryType: '' },
+      form: { queryLocation: [], queryTarget: [], queryType: '', queryVariables: {} },
       loading: false,
       responses: {},
       selections: { queryLocation: [], queryType: null },
@@ -212,7 +237,12 @@ const formState: StateCreator<FormStateType> = (set, get) => ({
       resolvedIsOpen: false,
     });
     for (const queryLocation of form.queryLocation) {
-      const query = { queryLocation, queryTarget: form.queryTarget, queryType: form.queryType };
+      const query = {
+        queryLocation,
+        queryTarget: form.queryTarget,
+        queryType: form.queryType,
+        queryVariables: form.queryVariables,
+      };
       queryClient.removeQueries({ queryKey: ['/api/query', query] });
     }
   },

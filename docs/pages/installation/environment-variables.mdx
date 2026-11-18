@@ -20,3 +20,7 @@ Environment variables may be overridden at the command line, or by placing them 
 | `HYPERGLASS_HOST`           | string  | `[::1]`           | Address on which hyperglass listens for requests.                                                                  |
 | `HYPERGLASS_PORT`           | number  | `8001`            | TCP port on which hyperglass listens for requests.                                                                 |
 | `HYPERGLASS_CA_CERT`        | string  | —                 | Path to CA certificate file for validating HTTPS certificates. If not supplied, system CAs are used.               |
+
+### Docker Compose port binding
+
+`HYPERGLASS_BIND_ADDRESS` defaults to `0.0.0.0` and controls the host address for the published Docker port. Set it to `127.0.0.1` when nginx runs on the Docker host. Put this Compose-only variable in `.env` beside `compose.yaml` or export it in the shell; `hyperglass.env` does not configure Compose. Keep `HYPERGLASS_HOST=0.0.0.0` inside the container. See [Docker client-address setup](docker.mdx#client-addresses-and-host-nginx) for the required proxy trust configuration.
