@@ -1,0 +1,235 @@
+---
+description: Platforms supported by Hyperglass
+---
+
+import { Callout } from "nextra/components";
+import { PlatformTable } from "~/components/platforms";
+
+Hyperglass uses [Netmiko](https://github.com/ktbyers/netmiko) to interact with devices over SSH or Telnet. [Platforms supported by Netmiko](https://github.com/ktbyers/netmiko/blob/develop/PLATFORMS.md) can be configured in Hyperglass when their commands and output match the query type you need.
+
+## Netmiko Platforms
+
+<Callout type="info">
+    Just because Netmiko supports a given platform doesn't mean it will automatically work with Hyperglass. Hyperglass has a limited number of built-in directives (listed below). Any platform other than the ones listed below will require you to [add a custom directive](/configuration/examples/add-your-own-command.mdx) for each command you wish to make available.
+</Callout>
+
+<br />
+
+<PlatformTable />
+
+### Choosing a platform key
+
+Some vendors have more than one `platform` key. Pick the key from this section; the other keys stay valid for existing configurations.
+
+- **Huawei VRP:** see [Huawei VRP 5 and VRP 8](#huawei-vrp-5-and-vrp-8).
+- **Juniper Junos:** use `juniper`. Hyperglass rewrites `juniper_junos` and `junos` to `juniper` when it loads the device, so all three run the same directives and parsers. They connect with the Netmiko `juniper` driver.
+- **MikroTik:** use `mikrotik_routeros` for RouterOS 6 and 7. `mikrotik_switchos` runs the same directives and parsers, and connects with the Netmiko `mikrotik_switchos` driver. Hyperglass rewrites `mikrotik` to `mikrotik_routeros`. See [MikroTik RouterOS 6](#mikrotik-routeros-6) for RouterOS 6 devices.
+- **Cisco:** use `cisco_ios` for IOS and IOS XE, `cisco_xr` for IOS-XR and `cisco_nxos` for NX-OS. These are separate platforms with their own directives, not aliases. Each connects with the Netmiko driver of the same name. Hyperglass rewrites `ios` to `cisco_ios`. The Netmiko key `cisco_xe` has no built-in directives.
+- **Arista EOS:** use `arista_eos`. Hyperglass rewrites `arista` to `arista_eos`.
+- **VyOS:** see [VyOS versions](#vyos-versions).
+- **Extreme:** see [Extreme EXOS and VOSS](#extreme-exos-and-voss).
+- **TNSR:** use `tnsr`. Hyperglass rewrites `tsnr` to `tnsr`. See [Netgate TNSR](#netgate-tnsr).
+- **Arrcus ArcOS:** use `arrcus_arcos`. Hyperglass rewrites `arcos` to `arrcus_arcos`. The device connects with Netmiko's Linux SSH driver and runs `confd_cli`.
+
+### Huawei VRP 5 and VRP 8
+
+Use `huawei`. It connects with the Netmiko `huawei` driver. The lab has no VRP 5 device, so `huawei` is tested only against VRP 8. The Netmiko key `huawei_vrp` has no built-in directives.
+
+`huawei_vrpv8` is the Netmiko name for VRP 8. It runs the same directives and parsers as `huawei`, and connects with the Netmiko `huawei_vrpv8` driver, which differs only in how it commits configuration changes. Hyperglass makes no configuration changes, so both keys behave the same for queries. Both keys returned identical results on all 136 lab queries against a CE12800 and an NE40E, both running VRP 8.180.
+
+VRP 8 has no source option on `tracert ipv6` on some models. Hyperglass sends the IPv6 traceroute with `-a <source6>` first and runs it without the source when the router rejects the option.
+
+### VyOS versions
+
+Use `vyos` for VyOS 1.4 and later. Use `vyos_1_3` for VyOS 1.3, which uses the older `show ip bgp` / `show ipv6 bgp` commands and has no traceroute source option. Both connect with the Netmiko `vyos` driver. Structured output on `vyos_1_3` covers traceroute only; BGP results stay as text.
+
+### Netgate TNSR
+
+Use `tnsr` for TNSR. Hyperglass rewrites `tsnr` to `tnsr`. Netmiko has no TNSR device type, so Hyperglass connects with Netmiko's generic SSH driver to the TNSR CLI (`tnsr#`).
+
+Built-ins provide IPv4/IPv6 BGP route lookups, AS-path searches, community searches, ping and traceroute. BGP queries run FRR `vtysh` through `dataplane shell sudo vtysh`, which is the documented way to read dataplane BGP state from the TNSR CLI. Ping and traceroute use the TNSR CLI `ping` and `traceroute` commands. Configure `attrs.source4` and `attrs.source6`.
+
+Netmiko's generic driver sends no paging command at login, and TNSR CLI has no `terminal length` command, so `disable_paging` defaults to `false` on this platform. `dataplane shell` runs the BGP commands through a shell, so Hyperglass shell-quotes the query target.
+
+Structured output covers traceroute only. BGP results stay as text. Live ISO validation remains pending.
+
+```yaml
+devices:
+  - name: tnsr-edge
+    address: 192.0.2.10
+    platform: tnsr
+    credential:
+      username: tnsr
+      password: tnsr
+    attrs:
+      source4: 192.0.2.1
+      source6: 2001:db8::1
+```
+
+### Cisco IOS BGP communities
+
+The built-in Cisco IOS community query filters with the colon form, for example `show bgp ipv4 unicast community 65000:777`. Configure the router to use the colon form with this global configuration command:
+
+```text
+ip bgp-community new-format
+```
+
+Without it, colon-form community queries fail on the router, and route results show each community as one decimal number (`2437611822` instead of `37195:302`). Hyperglass does not change router configuration, so the router operator must apply the command. The lab's IOSv 15.9 and IOS XE 17.18 routers both set it.
+
+### Cisco IOS IPv6 traceroute
+
+Classic IOS releases before IOS XE 16, such as IOSv 15.9, accept no options after an IPv6 traceroute destination. Set `os_version` on these devices, for example `os_version: "15.9(3)M6"`. Hyperglass then sends `traceroute ipv6 <target>`, and the router traces from its routed source address instead of `source6`. Without `os_version`, Hyperglass sends the full command first, runs the destination-only form when the router rejects it, and logs a warning that names the device.
+
+### MikroTik RouterOS 6
+
+RouterOS 6 has no `routing route` menu. Its BGP routes are in `ip route` and `ipv6 route`. Set `os_version` on RouterOS 6 devices, for example `os_version: "6.49.19"`. Hyperglass then sends the RouterOS 6 commands directly. Without `os_version`, Hyperglass sends the RouterOS 7 command first, runs the RouterOS 6 command when the router rejects it, and logs a warning that names the device.
+
+- BGP route, AS path, community, ping and traceroute queries work on RouterOS 6, as text or with `structured_output: true`.
+- AS path and community queries read IPv4 and IPv6 routes in one command.
+- VRF queries use RouterOS 7 commands only.
+
+### Extreme EXOS and VOSS
+
+Use `extreme_exos` for ExtremeXOS and `extreme_vsp` for VOSS (VSP and Fabric Engine). Both connect with their Netmiko drivers.
+
+- BGP route queries need a prefix, such as `1.1.1.0/24`, because neither platform has a longest-match BGP lookup for an address. EXOS matches the prefix exactly.
+- EXOS reads a community filter only as `AS : value`. Hyperglass converts a `65000:100` target and rejects large and extended communities.
+- VOSS has no BGP filter for an AS path or a community, so those query types are not offered. VOSS BGP results stay as text, because VOSS marks no best path.
+- Hyperglass enters privileged mode on VOSS, because VOSS runs traceroute only there.
+
+### HPE Comware 7
+
+Use `hp_comware` for Comware 7, including VSR1000. Built-ins provide exact-prefix BGP route lookup, ping, and traceroute for IPv4 and IPv6. All three support `vrf` through `vpn-instance`. Set `attrs.source4` and `attrs.source6` for ping; IPv4 traceroute also uses `source4`. IPv6 traceroute selects its source from the routing table because some releases omit its source option.
+
+An address queries a host route (`/32` or `/128`); enter the advertised prefix to inspect a network route. Structured BGP parses the documented Comware detail fields and checks the advertised path count. Unrecognized output, AS sets, and incomplete replies remain text. Route age and router RPKI state remain unknown. Structured traceroute uses the standard numbered-hop parser.
+
+Comware's documented AS-path and community filters require preconfigured ACL/list identifiers. The built-ins do not expose them as arbitrary AS-path or community searches. Configure custom directives for existing router lists. Comware 5 uses different commands and needs custom directives.
+
+Parser tests use attributed vendor-reference excerpts. VSR1000 live captures remain pending; see `lab/configs/comware/README.md` for the optional GoBGP lab.
+
+### SONiC
+
+Use `sonic` for community SONiC. It connects as a Linux shell and runs the FRRouting commands through `vtysh`, so the login user must be able to run `vtysh`. The default `admin` user can. Dell Enterprise SONiC uses a different CLI; configure it as `dell_sonic` with custom directives.
+
+### NVIDIA Cumulus Linux
+
+Use `cumulus_linux` for the Cumulus Linux shell. It connects with Netmiko's `cumulus_linux` driver. Built-ins cover IPv4 and IPv6 BGP route, AS path, community, ping, and traceroute queries, including named VRFs.
+
+BGP commands use `sudo -n vtysh -c 'show bgp ...'`. Ping and traceroute use `sudo -n ip vrf exec default` or the configured VRF. This selects the data-plane routing context even when SSH enters the management VRF. Set `attrs.source4` and `attrs.source6` to addresses assigned in that context.
+
+The login account needs passwordless sudo for these commands. `-n` makes missing sudo permission fail instead of waiting for a password. Structured output uses the shared FRR JSON and Linux traceroute parsers. AS-path JSON omits communities and route age. The parser skips the prefix metadata at the start of Cumulus community detail JSON.
+
+Cumulus VX 5.4 has authentic IPv4 and IPv6 captures for BGP, ping and traceroute in the default VRF and a named VRF. It passes live acceptance in text and structured modes. The optional lab topology is documented in `lab/configs/cumulus/README.md`.
+
+```yaml
+devices:
+  - name: cumulus-leaf
+    address: 192.0.2.10
+    platform: cumulus_linux
+    credential:
+      username: lookingglass
+      key: /etc/hyperglass/keys/cumulus
+    structured_output: true
+    # vrf: BLUE
+    attrs:
+      source4: 192.0.2.1
+      source6: 2001:db8::1
+```
+
+### IP Infusion OcNOS
+
+Use `ipinfusion_ocnos` for OcNOS 6.5+ through its Netmiko driver. Native commands offer IPv4/IPv6 routes, AS-path searches, IPv4 standard-community searches, ping, and traceroute. Ping uses `count 5`; older releases without this option need custom directives. The driver enters privileged mode; configure `driver_config.secret` if the device requires an enable password.
+
+OcNOS detailed route output supports structured parsing. AS-path and community summaries remain text. Traceroute uses the standard numbered-hop parser. Ping and traceroute support named VRFs; built-in BGP queries are omitted on VRF devices until dual-stack VRF forms have live validation. Diagnostics select their source from the routing table. Current tests use attributed vendor-reference examples, not live OcNOS captures.
+
+The optional GoBGP/OcNOS lab is described in `lab/configs/ocnos/README.md`.
+
+### Arrcus ArcOS
+
+Use `arrcus_arcos` for Arrcus ArcOS. Built-ins provide IPv4 and IPv6 exact-prefix BGP lookups. An address queries its `/32` or `/128` host route. Named VRFs use `show network-instance <vrf> protocol BGP BGP`. The default instance name is `BGP`; devices that use another protocol instance name need a custom directive.
+
+The login is a Linux shell that can run `confd_cli`. Queries send `echo 'show network-instance ... | display json' | confd_cli -C`, the ConfD show path used to read OpenConfig BGP state. `confd_cli` runs as the SSH login user, so the device credential's ConfD permissions apply. Structured parsing walks loc-rib `prefix` entries and their next-hop, AS path, communities, local preference and MED. Neighbor session objects are ignored. Unrecognized JSON, AS sets and incomplete paths remain text. The documented show path returns the BGP protocol instance; matching prefixes are selected in the parser. That is suitable for lab-scale tables. Full-table looking-glass use needs a confirmed narrower show path.
+
+Ping, traceroute, AS-path and community searches are omitted until those commands are confirmed on a device. Age and router RPKI state remain unknown. Tests use reconstructed OpenConfig JSON from the documented show tree, not live captures. See `lab/configs/arcos/README.md` for the optional containerlab topology.
+
+The official `arrcus.arcos` Ansible `network_cli` transport hangs on a `config terminal` mode switch against the tested container image. Native support does not use that transport.
+
+### Aruba AOS-CX
+
+Use `aruba_aoscx` for AOS-CX 10.14 command forms. Built-ins provide IPv4/IPv6 exact-prefix BGP lookups, standard-community searches, ping and traceroute. An address queries its `/32` or `/128` host route. Configure `attrs.source4` and `attrs.source6` for diagnostics. Route, ping and traceroute commands support named VRFs.
+
+Structured BGP parses labelled prefix detail, including wrapped communities and multiple paths. AS sets, confederations, incomplete detail and unfamiliar replies remain text. Community results stay text. The command reference does not document an arbitrary AS-path search or dual-stack community VRF forms, so those built-ins are omitted. Age and router RPKI state remain unknown. Traceroute uses the standard numbered-hop parser.
+
+The REST API requires a login session cookie and, from 10.09, a CSRF token. Native support uses the existing Netmiko transport and documented CLI output. A REST adapter needs separately validated operational BGP payloads and session handling; the HTTP transport does not provide that login lifecycle.
+
+Tests use attributed command-reference excerpts and explicitly synthetic IPv6/multipath cases. Live VM validation remains pending. See `lab/configs/aoscx/README.md` for the optional GoBGP lab.
+
+### Dell OS9 and SmartFabric OS10
+
+Use `dell_force10` for OS9/FTOS and `dell_os10` for SmartFabric OS10. Both provide dual-stack exact-prefix BGP routes, standard-community queries, ping and traceroute. Address-only BGP queries become `/32` or `/128` host prefixes. Named-VRF BGP and ping forms exist on both platforms. OS10 also supports named-VRF traceroute. OS9 traceroute VRFs are documented only for E-Series hardware, so its built-in traceroute is omitted on VRF devices.
+
+OS9 offers IPv4 AS-path regular-expression searches through `show ip bgp [vrf NAME] regexp PATTERN`. OS9 9.13 rejects `regexp` after explicit IPv4/IPv6 family selectors. IPv6 AS-path searches need custom directives with configured filter lists. OS10 does not support arbitrary `regexp` queries; use custom directives with configured AS-path filter lists. OS10 standard-community queries require 10.5.2.1 or later.
+
+OS10 uses the documented CLI and `Received from` detail format, not FRR shell commands or JSON. Both platforms parse numbered-next-hop BGP details when `structured_output: true`. Unnumbered next hops, AS sets, confederations and incomplete replies remain text. Community and AS-path summary results remain text. Route age and router RPKI state remain unknown.
+
+Set `attrs.source4` and `attrs.source6` for OS10 diagnostics. OS9 diagnostics select their source from the routing table. OS9's fixed traceroute timing may need a longer query timeout. Its parser joins wrapped IPv6 RTT lines and keeps the original raw output.
+
+OS9 9.13(0.0) and OS10 10.6.1.3P1 have authentic IPv4/IPv6 captures for default and named VRFs. Each platform passes 28 CLI queries, 28 uncached API comparisons and 28 browser queries across text and structured modes. The parser handles OS9's `(Default)` metric annotation and communities printed below their heading on both platforms. Both platforms pass with one prefix per family per VRF. OS10 also passes the complete matrix with 10,000 IPv4 and 9,729 IPv6 routes in the default VRF, plus LAB control routes. A separate OS10 full-table run converges at 1,094,724 IPv4 and 261,579 IPv6 prefixes, but sustained application acceptance remains incomplete after management access stops responding. See `lab/configs/os9/README.md` and `lab/configs/os10/README.md` for setup and coverage.
+
+### FortiGate and PAN-OS
+
+Use `fortinet` for FortiGate and `paloalto_panos` for PAN-OS. Built-ins provide IPv4/IPv6 BGP prefix queries, ping and traceroute. Structured BGP parsers require complete detail replies. AS sets, confederations and unfamiliar output remain text. Age and router RPKI state remain unknown. Traceroute uses the standard numbered-hop parser.
+
+FortiGate queries run in the account's current VDOM. Use a VDOM-scoped account. Explicit `vrf` is not supported by these built-ins. Diagnostic sequences reset options, set five ping probes and source addresses, then reset options after completion. A rejected setup command stops the sequence before probes run. Every query opens and closes its own SSH session. IPv6 traceroute uses `execute tracert6` and automatic source selection; IPv4 traceroute and both ping families require `attrs.source4` or `attrs.source6`.
+
+PAN-OS support targets the classic routing engine. Set `vrf` to its virtual-router name for BGP; the default is `default`. Address-only queries become `/32` or `/128` prefixes. Diagnostics use explicit `attrs.source4` and `attrs.source6` addresses and are omitted on VRF devices. The advanced routing engine uses different commands and requires custom directives.
+
+Neither platform has built-in AS-path or community directives. Configure custom directives for these searches.
+
+In structured mode, a FortiGate BGP route query for a prefix that is not in the table reports that no matching results were found.
+
+FortiGate-VM64-KVM 7.6.8 has authentic captures for IPv4 and IPv6 BGP route detail, prefixes not in the table, ping and traceroute. BGP route, ping and traceroute pass through the API in text and structured modes. PAN-OS tests use attributed published BGP examples and synthetic IPv6 and traceroute cases. PAN-OS live validation remains pending. See `lab/configs/firewalls/README.md`.
+
+### Structured output
+
+FRR, Juniper and Arista enable structured output by default. Additional platforms require `structured_output: true`. Set `structured_output: false` to force text. BGP queries stay text when a platform supports structured traceroute only.
+
+| Platform | Structured BGP source | Limitations |
+| :------- | :-------------------- | :---------- |
+| Arista EOS | `show ip bgp` / `show ipv6 bgp` JSON; `show bgp ... community ... detail` JSON for communities | AS-path results omit communities. Router RPKI state is read when the router validates origins. |
+| Arrcus ArcOS | `show network-instance ... protocol BGP BGP \| display json` OpenConfig loc-rib | Instance-wide show path; matching prefixes selected in the parser. AS-path and community searches are not offered. Age and router RPKI state remain unknown. Live captures pending. |
+| Aruba AOS-CX | `show bgp [vrf ...] ipv4/ipv6 unicast <prefix>` detail text | Community summaries stay text. AS-path searches are not offered. Age and router RPKI state remain unknown. Live captures pending. |
+| Fortinet FortiGate | `get router info[6] bgp network <target>` detail text | One routing context per reply. AS sets and confederations stay text. A prefix not in the table returns no matching results. Age and router RPKI state remain unknown. |
+| Palo Alto PAN-OS | `show routing protocol bgp loc-rib-detail prefix ...` | Classic virtual routers only. Peer IP/router ID, age and router RPKI state are unknown. Live captures pending. |
+| BIRD | `show route all` text | Route age and router RPKI state remain unknown. |
+| Cisco IOS | `show bgp` text | AS-path and community summary results omit communities and route age. Route results read route age only when the router prints the update time in UTC. Router RPKI state is read when the router validates origins. IPv6 route queries need a prefix, because IOS has no longest-match BGP lookup for an IPv6 address. |
+| Cisco IOS-XR | `show bgp` text | AS-path and community summary results omit communities. Route age remains unknown. Router RPKI state is read when the router validates origins. |
+| Cisco NX-OS | `show bgp` text | AS-path and community summary results omit communities. Route age and router RPKI state remain unknown. IPv6 route queries need a prefix, because NX-OS has no longest-match BGP lookup for an IPv6 address. |
+| Dell OS9 / SmartFabric OS10 | `show ip bgp ... <prefix>` detail text | Summary results stay text. Unnumbered next hops, AS sets and confederations stay text. Age and router RPKI state remain unknown. |
+| Extreme EXOS | `show bgp routes detail` text | Route age, originator and router RPKI state remain unknown. EXOS does not print large communities. |
+| Extreme VOSS | Not supported | VOSS marks no best path, so BGP results stay as text. |
+| FRRouting | `show bgp ... json` through `vtysh` | AS-path results omit communities and route age, because `regexp` has no JSON detail form. Router RPKI state remains unknown. |
+| Huawei VRP | `display bgp routing-table` detail text for routes, brief tables for AS path and community | AS-path brief results omit communities. Community brief results omit the AS path, so RPKI state and AS organisations do not apply to them. Brief results omit route age. Router RPKI state remains unknown. |
+| HPE Comware 7 | `display bgp routing-table ipv4/ipv6 unicast <address> <length>` detail text | Exact prefixes only. AS-path and community searches require custom directives for configured lists. Age and router RPKI state remain unknown. Live captures pending. |
+| IP Infusion OcNOS | `show bgp ipv4/ipv6 unicast <prefix>` detail text | AS-path and community summaries stay text. Age and router RPKI state remain unknown. Live captures pending. |
+| Juniper Junos | `show route ... detail \| display xml` | Route queries return the best path only. Router RPKI state is read when the router validates origins. |
+| MikroTik RouterOS | `print detail` text (RouterOS 6 and 7) | Route age remains unknown. Router RPKI state is read when the route detail carries an `rpki` value. |
+| Nokia SR OS | Not supported | Structured output covers traceroute only; BGP results stay as text. |
+| NVIDIA Cumulus Linux | FRR JSON through `sudo -n vtysh` | Shared FRR parser. AS-path results omit communities and route age. Router RPKI state remains unknown. |
+| OpenBGPD | `bgpctl -j show rib detail` JSON | Router RPKI state comes from daemon origin validation. |
+| SONiC | FRR JSON through `vtysh` | AS-path results omit communities and route age. Router RPKI state remains unknown. |
+| TNSR | Not supported | Structured output covers traceroute only; BGP results stay as text. |
+| VyOS 1.4+ | FRR JSON through `vtysh` | AS-path results omit communities and route age. Router RPKI state remains unknown. |
+| VyOS 1.3 | Not supported | Use text BGP results, even with structured traceroute enabled. |
+
+Structured traceroute covers every built-in platform. FRRouting, SONiC and Cumulus Linux share the FRR traceroute parser. Huawei VRP and MikroTik have their own traceroute parsers. Arista EOS, Juniper Junos, Cisco IOS, IOS-XR and NX-OS, Nokia SR OS, BIRD, OpenBGPD, VyOS 1.4+ and 1.3, TNSR, Extreme EXOS and VOSS, HPE Comware 7, IP Infusion OcNOS, Aruba AOS-CX, Dell SmartFabric OS10, FortiGate and PAN-OS use the standard numbered-hop parser. Dell OS9 uses the standard parser after it joins wrapped IPv6 RTT lines. It needs `structured_output: true` on the device, like structured BGP. Set `structured.enable_for_traceroute: false` to return text on every device. Unrecognized formats remain text. Parser support does not mean every hardware version has live validation.
+
+### VRF queries
+
+Built-in VRF forms support EOS, Arrcus ArcOS, Extreme EXOS (`vr`) and VOSS, FRRouting, Huawei VRP, MikroTik RouterOS 7, NVIDIA Cumulus Linux, SONiC, VyOS 1.4+, HPE Comware 7 (`vpn-instance`), IP Infusion OcNOS, Aruba AOS-CX, Dell OS9 and SmartFabric OS10, and PAN-OS (virtual router). FRRouting and SONiC expose only BGP queries when `vrf` is set. Cumulus Linux also supports ping and traceroute in a VRF. The platform sections above list the query types each newer platform offers in a VRF. FortiGate has no VRF selection; queries run in the account's current VDOM. See [device VRF configuration](/configuration/devices.mdx#vrf-queries).
+
+## Other Platforms
+
+| Platform          | Key    |                          Natively Supported                          |
+| :---------------- | :----- | :------------------------------------------------------------------: |
+| Any HTTP Endpoint | `http` | [See HTTP Device Docs](/configuration/devices/http-device.mdx#http-configuration) |

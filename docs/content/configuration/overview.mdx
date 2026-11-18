@@ -1,0 +1,72 @@
+import { Callout } from "nextra/components";
+import { SupportedPlatforms } from "~/components/platforms";
+
+Once you have a basic configuration working, you can customise the Hyperglass interface, query policy, messages, and device behaviour from the configuration files.
+
+## Configuration Files
+
+| File Name    |                         Docs                          | Purpose                                                                    |
+| :----------- | :---------------------------------------------------: | :------------------------------------------------------------------------- |
+| `config`     |     [Config File Docs](/configuration/config.mdx)     | Application-wide configuration such as logging, web UI customization, etc. |
+| `devices`    |    [Devices File Docs](/configuration/devices.mdx)    | Your devices and their associated configurations.                          |
+| `directives` | [Directives File Docs](/configuration/directives.mdx) | Custom directives (commands).                                              |
+
+<Callout type="info">
+    **File Extensions** <br />
+    All the examples in the docs are provided in [YAML](https://yaml.org/) format, but [TOML](https://toml.io/), JSON, and Python files are also supported.
+</Callout>
+
+### Using a Python File
+
+When using a Python file for an Hyperglass configuration, use one of the following methods:
+
+#### Define a Function Named `main`
+
+```python filename="Example: Using a Python function to define configuration parameters"
+def main():
+  return {
+    "org_name": "Your Organization Name",
+    "web": {
+      "theme": {
+        "colors": {
+          "blue": "#0000ff",
+        }
+      }
+    }
+  }
+
+# The main function can also be an async function.
+async def main():
+  config = await some_function_to_fetch_config()
+  return config
+```
+
+#### Define a Dictionary Named `main`
+
+```python filename="Example: Using a Python dictionary to define configuration parameters"
+main = {
+    "org_name": "Your Organization Name",
+    "web": {
+      "theme": {
+        "colors": {
+          "blue": "#0000ff",
+        }
+      }
+    }
+  }
+```
+
+## Built-in Directives
+
+Hyperglass ships with predefined [directives](/configuration/directives.mdx) for the following [platforms](/platforms):
+
+<SupportedPlatforms />
+
+Most built-in ping and traceroute directives require that the following `attrs` be defined on each device using the directive. See [device attributes](/configuration/devices.mdx) for the platforms and VRF forms that do not use them.
+
+| Attribute | Value                                                     |
+| :-------- | :-------------------------------------------------------- |
+| `source4` | IPv4 address used to source Ping and Traceroute commands. |
+| `source6` | IPv6 address used to source Ping and Traceroute commands. |
+
+<Callout type="warning">If you do not use IPv6 in your network, create your own directive that only has IPv4 commands. Hyperglass does not start if a device is missing an attribute that its directives reference.</Callout>

@@ -1,0 +1,37 @@
+export default {
+    index: { title: "Introduction", theme: { breadcrumb: false } },
+    "---": {
+        type: "separator",
+    },
+    "user-guide": "User Guide",
+    installation: "Installation",
+    configuration: "Configuration",
+    platforms: "Platforms",
+    plugins: "Plugins",
+    documentation: {
+        title: "Documentation",
+        type: "menu",
+        items: {
+            installation: {
+                title: "Installation",
+                href: "/installation",
+            },
+            configuration: {
+                title: "Configuration",
+                href: "/configuration/overview",
+            },
+            plugins: {
+                title: "Plugins",
+                href: "/plugins",
+            },
+            changelog: {
+                title: "Changelog",
+                href: "/changelog",
+            },
+            license: {
+                title: "License",
+                href: "/license",
+            },
+        },
+    },
+};

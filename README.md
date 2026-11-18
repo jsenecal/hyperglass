@@ -1,80 +1,162 @@
-<div align="center">
-  <br/>
-  <img src="https://res.cloudinary.com/hyperglass/image/upload/v1593916013/logo-light.svg" width=300></img>
-  <br/>
-  <h3>The network looking glass that tries to make the internet better.</h3>
-  <br/>  
-  A looking glass is implemented by network operators as a way of providing customers, peers, or the general public with a way to easily view elements of, or run tests from the provider's network.
-</div>
+![Hyperglass logo](hyperglass/images/hyperglass-light.svg)
 
-<hr/>
+[Documentation](docs/content/index.mdx) · [Upstream live demo](https://demo.hyperglass.dev/)
 
-<div align="center">
+[![CI](https://github.com/hyperglass-community/hyperglass/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hyperglass-community/hyperglass/actions/workflows/ci.yml)
 
-[**Documentation**](https://hyperglass.dev)&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[**Live Demo**](https://demo.hyperglass.dev/)
+Hyperglass is a network looking glass. It lets customers, peers and other engineers run BGP route, BGP community, BGP AS path, ping and traceroute queries from the routers you choose, through a web interface and a REST API, without touching the routers themselves. You decide which devices, commands, targets and result formats are public.
 
-[![Frontend Tests](https://img.shields.io/github/actions/workflow/status/thatmattlove/hyperglass/frontend.yml?label=Frontend%20Tests&style=for-the-badge)](https://github.com/thatmattlove/hyperglass/actions/workflows/frontend.yml)
-[![Backend Tests](https://img.shields.io/github/actions/workflow/status/thatmattlove/hyperglass/backend.yml?label=Backend%20Tests&style=for-the-badge)](https://github.com/thatmattlove/hyperglass/actions/workflows/backend.yml)
+The community-maintained Hyperglass project incorporates the Ultraglass implementation. The Python package, CLI, configuration paths, environment variables and service names remain `hyperglass`. The migration is tracked in [#390](https://github.com/hyperglass-community/hyperglass/issues/390); the release number remains undecided.
 
-<br/>
+## Add a router in four commands
 
-hyperglass is intended to make implementing a looking glass too easy not to do, with the lofty goal of improving the internet community at large by making looking glasses more common across autonomous systems of any size.
+The `hyperglass onboard` command writes the device entry, proves every published query against the live router, and tells you which features are still off. No hand-written YAML, no guessing at platform attributes, no finding out from a user that a query is broken.
 
-</div>
+```shell
+hyperglass onboard device            # prompts for the router, validates it, writes devices.yaml
+hyperglass onboard test core1        # runs every built-in query the router offers; PASS or FAIL per query
+hyperglass onboard check             # reports feature settings and suggests the config lines to change
+hyperglass onboard directive core1   # optional: build and test a custom command, then save it
+```
 
-### [Changelog](https://hyperglass.dev/changelog)
+| Step | What it does | What you get |
+| --- | --- | --- |
+| `onboard device` | Asks for address, port, platform, credential, OS version, VRF and structured output. Prompts only for the attributes the platform's built-in commands use. Enter `?` to list platform keys. | A validated entry saved to `devices.yaml` with owner-only permissions. Other entries stay untouched. |
+| `onboard test DEVICE` | Sends every built-in IPv4 and IPv6 command the device offers, with default public targets you can override. | One block per query showing the command sent, fallback use, device errors and parsed field coverage, then a PASS/FAIL summary. Exit code `1` on any failure. |
+| `onboard check` | Reads the configuration afresh and reports structured output, RPKI, cache, enrichment, server DNS, My IP, self-hosted fonts and per-device settings. | A PASS/OFF/UNKNOWN table with a `Set:` line for every suggested change, as a dotted config path you paste into YAML. |
+| `onboard directive DEVICE` | Takes a directive ID, a command template with `{target}`, a target rule and a test target. Runs it once on the device. | A tested custom directive saved to `directives.yaml`, ready to add to the device's `directives` list. |
+
+Every command accepts `--json` for scripting. Restart Hyperglass after a save so it loads the new entry. The full walkthrough with example sessions is in the [device onboarding guide](docs/content/configuration/onboarding.mdx).
 
 ## Features
 
-- BGP Route, BGP Community, BGP AS Path, Ping, & Traceroute, or [add your own commands](https://hyperglass.dev/configuration/directives).
-- Full IPv6 support
-- Customizable everything: features, theme, UI/API text, error messages, commands
-- Built-in support for:
-  - Arista EOS
-  - BIRD
-  - Cisco IOS
-  - Cisco NX-OS
-  - Cisco IOS-XR
-  - FRRouting
-  - Huawei VRP
-  - Juniper Junos
-  - Mikrotik
-  - Nokia SR OS
-  - OpenBGPD
-  - TNSR
-  - VyOS
-- Configurable support for any other [supported platform](https://hyperglass.dev/platforms)
-- Optionally access devices via an SSH proxy/jump server
-- Access-list/prefix-list style query control to whitelist or blacklist query targets
-- REST API with automatic, configurable OpenAPI documentation
-- Modern, responsive UI built on [ReactJS](https://reactjs.org/), with [NextJS](https://nextjs.org/) & [Chakra UI](https://chakra-ui.com/), written in [TypeScript](https://www.typescriptlang.org/)
-- Query multiple devices simultaneously
-- Browser-based DNS-over-HTTPS resolution of FQDN queries
+| Area | Feature | Details |
+| --- | --- | --- |
+| Queries | BGP route | Look up an IPv4 or IPv6 prefix in the device's BGP table, optionally within a VRF. |
+| Queries | BGP community | List routes carrying a BGP community value. |
+| Queries | BGP AS path | List routes matching an AS path expression. Per-platform syntax is validated before the command is sent. |
+| Queries | Ping and traceroute | IPv4 and IPv6, sourced from the device's configured source addresses. |
+| Queries | Custom directives | Publish any device command with its own target rules, fixed-choice select fields, per-platform syntax and version-selected fallback commands. |
+| Queries | VRF queries | Built-in VRF command forms for 16 platforms. Set `vrf` on the device entry. |
+| Results | Structured BGP tables | Parsed route tables with prefix, next hop, AS path, communities, MED, local preference, weight, age and RPKI state, plus an interactive AS path graph. Enabled by default for FRR, Juniper and Arista; opt-in for additional platforms. |
+| Results | Structured traceroute | Parsed hops with per-probe RTT, loss and best, worst and last statistics per hop. |
+| Results | RPKI validation | Router-reported state, or external validation through Cloudflare or your own Routinator. |
+| Results | IP enrichment | ASN, organisation, country and IXP metadata, inline or asynchronous. Router-provided traceroute hostnames are preserved without supplemental reverse DNS. |
+| Results | Community policy | Deny or permit listed communities, or append friendly names to them. |
+| Results | Text output | Raw device output with configurable highlighting for devices that stay in text mode. |
+| Devices | 26 built-in platforms | Directives and parsers included. See [Supported platforms](#supported-platforms). |
+| Devices | Any Netmiko platform | Configure other SSH or Telnet platforms with custom directives. |
+| Devices | HTTP devices | Query devices that expose an HTTP API instead of a CLI. |
+| Devices | SSH proxy | Reach devices through a jump host. |
+| Devices | Credentials | Password or private-key authentication, enable secrets and per-device driver settings. |
+| Devices | OS version awareness | Set `os_version` so version-specific command variants are chosen and fallbacks are logged. |
+| Devices | Connection tuning | Per-device timeouts, connection retries and delay factors for slow or rate-limited CLIs. |
+| Onboarding | `hyperglass onboard` | Create, test and check devices and custom directives from the CLI. See [Add a router in four commands](#add-a-router-in-four-commands). |
+| Onboarding | Configuration validation | Hyperglass refuses to start on a device entry that is missing an attribute its directives need, and names the field. |
+| Onboarding | Inspection commands | `hyperglass devices`, `directives`, `plugins`, `params` and `settings` print the effective configuration. |
+| Web UI | Responsive interface | Location, query type and target in one form. Multiple locations per query run concurrently. |
+| Web UI | Hostname targets | Resolve hostnames with Cloudflare or Google DNS-over-HTTPS, a custom resolver URL, or the Hyperglass server's own resolver. |
+| Web UI | My IP | Fill the target with the visitor's address. Server-seen by default, external lookup only after the visitor confirms, or hidden. |
+| Web UI | Branding | Logo, theme colours, fonts, greeting modal, footer links and menus, OpenGraph image and every label and message. |
+| Web UI | Self-hosted fonts | The UI build downloads fonts so visitors never contact Google Fonts. |
+| API | REST API | Every published query is available at `/api/query`. |
+| API | OpenAPI docs | Built-in interactive documentation with configurable title, descriptions and server URL. |
+| Access control | Target rules | Prefix-list and access-list style rules per directive, including reserved, loopback and unspecified address handling. |
+| Access control | Request timeouts | A configurable `request_timeout` bounds every device connection and command. |
+| Operations | Caching | Redis-backed result cache with a configurable timeout. |
+| Operations | Logging | File logs, SSH session logs, syslog, and HTTP webhooks for Slack, Microsoft Teams or any generic endpoint. |
+| Operations | Query samples | Opt-in JSONL capture of raw and parsed query output, with size-based rotation, for debugging and parser fixtures. |
+| Operations | Support bundle | `hyperglass support-bundle` gathers version, runtime and allowlisted error metadata locally. It excludes configuration and free-form log text. Nothing is sent automatically. |
+| Operations | Container images | Build from the included Dockerfile and Compose configuration. Community image publication and scan gates are tracked in [#388](https://github.com/hyperglass-community/hyperglass/issues/388). |
+| Operations | Lab | A Containerlab topology under `lab/` feeds real routing tables to virtual routers for regression testing. |
 
-*To request support for a specific platform, please [submit a Github Issue](https://github.com/thatmattlove/hyperglass/issues/new) with the **feature** label.*
+## Supported platforms
 
-### [Get Started →](https://hyperglass.dev/installation)
+Hyperglass ships directives and parsers for these 26 platforms. Netmiko provides the device connectivity, so other Netmiko platforms work with custom directives. FRR, Juniper and Arista keep structured output enabled by default. Set `structured_output: true` to enable it on additional supported platforms. Set `structured_output: false` to force text output.
+
+| Platform | `platform` key | Structured BGP | Structured traceroute | Built-in VRF queries | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Arista EOS | `arista_eos` | Yes | Yes | Yes |  |
+| Arrcus ArcOS | `arrcus_arcos` | Yes | No built-in | Yes | BGP route lookups only. AS path, community, ping and traceroute are not yet built in. |
+| Aruba AOS-CX | `aruba_aoscx` | Yes | Yes | Yes |  |
+| BIRD | `bird` | Yes | Yes | No |  |
+| Cisco IOS and IOS XE | `cisco_ios` | Yes | Yes | No | Router needs `ip bgp-community new-format`. |
+| Cisco IOS-XR | `cisco_xr` | Yes | Yes | No | Connection retries default to 3. |
+| Cisco NX-OS | `cisco_nxos` | Yes | Yes | No |  |
+| NVIDIA Cumulus Linux | `cumulus_linux` | Yes | Yes | Yes |  |
+| Dell OS9 (Force10) | `dell_force10` | Yes | Yes | Yes | AS path search is IPv4 only. |
+| Dell SmartFabric OS10 | `dell_os10` | Yes | Yes | Yes |  |
+| Extreme EXOS | `extreme_exos` | Yes | Yes | Yes |  |
+| Extreme VOSS | `extreme_vsp` | Text | Yes | Yes |  |
+| Fortinet FortiGate | `fortinet` | Yes | Yes | No |  |
+| FRRouting | `frr` | Yes | Yes | Yes |  |
+| HPE Comware 7 | `hp_comware` | Yes | Yes | Yes |  |
+| Huawei VRP | `huawei`, `huawei_vrpv8` | Yes | Yes | Yes |  |
+| IP Infusion OcNOS | `ipinfusion_ocnos` | Yes | Yes | Yes |  |
+| Juniper Junos | `juniper` | Yes | Yes | No |  |
+| MikroTik RouterOS and SwitchOS | `mikrotik_routeros`, `mikrotik_switchos` | Yes | Yes | RouterOS only | RouterOS 6 and 7. Full-table AS path and community scans can exceed 90 seconds. |
+| Nokia SR OS | `nokia_sros` | Text | Yes | No |  |
+| OpenBGPD | `openbgpd` | Yes | Yes | No |  |
+| Palo Alto PAN-OS | `paloalto_panos` | Yes | Yes | Yes | `vrf` names the virtual router. |
+| SONiC | `sonic` | Yes | Yes | Yes |  |
+| TNSR | `tnsr` | Text | Yes | No | BGP runs through `dataplane shell sudo vtysh`. |
+| VyOS 1.4+ | `vyos` | Yes | Yes | Yes |  |
+| VyOS 1.3 | `vyos_1_3` | Text | Yes | No |  |
+
+Platform keys, per-platform notes and known limits are in the [platforms guide](docs/content/platforms.mdx).
+
+## Quick start
+
+The repository includes a sample configuration with a fake device so you can see the application before connecting a router.
+
+### Docker
+
+```shell
+git clone https://github.com/hyperglass-community/hyperglass.git --depth=1
+cd hyperglass
+mkdir -p /etc/hyperglass
+cp .samples/sample_devices.yaml /etc/hyperglass/devices.yaml
+docker compose up
+```
+
+Open `http://localhost:8001` once the containers are up. The sample device returns fake output. Then add your first real router with `hyperglass onboard device` inside the container.
+
+`.samples/sample_config.yaml` is a complete `config.yaml` that sets every option, with a comment that explains each feature. Use it as a reference when you write your own.
+
+### Manual installation
+
+Manual installation needs Python 3.11 or later and Redis 7. Install the `ui` extra for the web UI, with Node.js 22.13 and pnpm 11 for the frontend build. The optional `performance` extra enables `uvloop`. The full procedure is in the [manual installation guide](docs/content/installation/manual.mdx).
+
+## Documentation
+
+- [Documentation home](docs/content/index.mdx)
+- [Installation](docs/content/installation.mdx)
+- [Device onboarding](docs/content/configuration/onboarding.mdx)
+- [User guide](docs/content/user-guide.mdx)
+- [Configuration](docs/content/configuration/overview.mdx)
+- [Supported platforms](docs/content/platforms.mdx)
+- [Plugins](docs/content/plugins.mdx)
+- [Changelog](CHANGELOG.md)
+- [Hyperglass Wiki](https://github.com/hyperglass-community/hyperglass/wiki)
+- [Clear BSD license](LICENSE)
+
+The existing [documentation site](https://hyperglass.dev) and [live demo](https://demo.hyperglass.dev/) describe the upstream release. Repository guides describe the migration changes.
 
 ## Community
 
 - [Slack](https://netdev.chat/)
 - [Telegram](https://t.me/hyperglasslg)
 
-Any users, potential users, or contributors of hyperglass are welcome to join and discuss usage, feature requests, bugs, and other things.
+## Reporting bugs
 
-**hyperglass is developed with the express intention of being free to the networking community**.
+Use the [bug report form](https://github.com/hyperglass-community/hyperglass/issues/new/choose). Include the Hyperglass version, deployment method, steps to reproduce, expected and observed behaviour, relevant configuration with secrets removed, and the output of `hyperglass onboard test` or `hyperglass support-bundle`. Review either before attaching it. Do not include device passwords, private keys, tokens or unredacted internal addresses.
 
-*However, if you're feeling particularly helpful or generous, small donations are welcome.*
+## Contributing
 
-[![Donate](https://img.shields.io/badge/Donate-blue.svg?logo=paypal&style=for-the-badge)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=ZQFH3BB2B5M3E&source=url)
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Changes should keep the backend and UI checks passing, preserve IPv4 and IPv6 support, and avoid hard-coding text or deployment-specific values that administrators should be able to configure.
 
 ## Acknowledgements
 
-hyperglass is built entirely on open-source software. Here are some of the awesome libraries used, check them out too!
+Hyperglass was created by [Matt Love](https://github.com/thatmattlove) as [thatmattlove/hyperglass](https://github.com/thatmattlove/hyperglass). The community project continues that work under the [Clear BSD License](LICENSE).
 
-- [Netmiko](https://github.com/ktbyers/netmiko)
-- [Litestar](https://litestar.dev)
-- [Pydantic](https://docs.pydantic.dev/latest/)
-- [Chakra UI](https://chakra-ui.com/)
-
-[![GitHub](https://img.shields.io/github/license/thatmattlove/hyperglass?color=330036&style=for-the-badge)](https://github.com/thatmattlove/hyperglass/blob/main/LICENSE)
+Hyperglass uses [Netmiko](https://github.com/ktbyers/netmiko), [Litestar](https://litestar.dev), [Pydantic](https://docs.pydantic.dev/latest/), [React](https://react.dev/), [Next.js](https://nextjs.org/), [Chakra UI](https://chakra-ui.com/), [React Flow](https://reactflow.dev/), and [BGP.tools](https://bgp.tools/).

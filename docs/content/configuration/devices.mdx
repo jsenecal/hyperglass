@@ -1,0 +1,203 @@
+import { Callout } from "nextra/components";
+import { SupportedPlatforms } from "~/components/platforms";
+import { DocsButton } from "~/components/docs-button";
+
+## Device Configuration Parameters
+
+Each configured device may have the following parameters:
+
+| Parameter           | Type            | Default Value | Description                                                                                                                                |
+| :------------------ | :-------------- | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`              | String          |               | Display name of the device.                                                                                                                |
+| `description`       | String          |               | Description of the device, displayed as a subtle label.                                                                                    |
+| `avatar`            | String          |               | Path to an avatar/logo image for this site. The file must exist. Hyperglass scales images wider than 512 pixels down to 512 pixels. Used when [`web.location_display_mode`](/configuration/config/web-ui.mdx) is set to `gallery`. |
+| `address`           | String          |               | IPv4 address, IPv6 address, or hostname of the device. A hostname must resolve when Hyperglass starts. |
+| `group`             | String          |               | Group name, used to visually group devices in the UI.                                                                                      |
+| `port`              | Number          | `22`          | TCP port on which to connect to the device.                                                                                                |
+| `platform`          | String          |               | Device platform/OS. Must be a [supported platform](/platforms.mdx).                                                                        |
+| `os_version` | String | | The device's software version, such as `15.9(3)M6` or `17.18.02`. Built-in directives use it to pick commands that older releases accept. Quote it in YAML so `15.10` is not read as `15.1`. |
+| `structured_output` | Boolean | Platform-dependent | Defaults to `true` for FRR, Juniper and Arista, and `false` for additional platforms. Set `true` for parsed tables on supported platforms or `false` to force text. See [platform support](/platforms.mdx#structured-output). |
+| `vrf` | String | | Run built-in queries in this VRF. Supported on Arista EOS, Arrcus ArcOS, Aruba AOS-CX, NVIDIA Cumulus Linux, Dell OS9 and SmartFabric OS10, Extreme EXOS and VOSS, FRRouting, HPE Comware 7, Huawei VRP, IP Infusion OcNOS, MikroTik RouterOS, PAN-OS, SONiC and VyOS. Built-in query types without a VRF form are hidden. See [VRF queries](#vrf-queries). Define a separate device entry for each VRF. |
+| `directives`        | List of Strings |               | Enable referenced directives configured in the [directives config file](/configuration/directives.mdx). Add a `builtins` entry to disable or select built-in directives, as in the [examples](#examples). |
+| `driver`            | String          | `netmiko`     | Specify which driver to use for this device. Currently, only `netmiko` is supported. HTTP devices use the HTTP client unless `driver` is set. |
+| `driver_config` | Mapping | | Options passed to the connection driver. Values override its defaults. `global_delay_factor` defaults to `0.1`, `1` on MikroTik and `2` on telnet platforms. Raise it for a slow CLI. Valid zero-route results complete without retries. |
+| `disable_paging`    | Boolean         | True (`false` on `tnsr`) | Send the driver's paging and terminal width commands, such as `terminal length 0`, after login. Set to `false` when a login policy rejects them; directives must then disable paging themselves, for example with `\| no-more`. TNSR defaults to `false` because its CLI has no `terminal length` command. |
+| `connect_retries` | Number | `3` on `cisco_xr`, `0` on other platforms | Retries when the device drops a new SSH session before login, with `Error reading SSH protocol banner`, `Connection reset by peer` or `Connection refused`. IOS-XR accepts about one new SSH session per second, so back-to-back queries hit this. Each wait doubles from 1 s to at most 4 s, plus up to 1 s of jitter. Retries stop at half of `request_timeout`. A query that fails after the session opens is never retried. Range `0` to `10`; `0` turns retries off. |
+| `attrs`             | Mapping         |               | Mapping/dict of variables, as referenced in configured directives.                                                                         |
+| `credential`        | Mapping         |               | Mapping/dict of a [credential configuration](/configuration/devices/credentials.mdx). Required on every device, including HTTP devices.     |
+| `http`              | Mapping         |               | Mapping/dict of [HTTP client options](/configuration/devices/http-device.mdx), if this device is connected via HTTP.                       |
+| `proxy`             | Mapping         |               | Mapping/dict of [SSH proxy config](/configuration/devices/ssh-proxy.mdx) to use for this device's requests.                                |
+
+Hyperglass logs a warning at startup for each device key it does not recognise, for example `driver_args` instead of `driver_config`. The key is ignored, so check the warning for the suggested key.
+
+<Callout type="tip">
+
+Hyperglass ships with predefined [directives](/configuration/directives.mdx) (commands) for the following [platforms](/platforms.mdx):
+
+<SupportedPlatforms />
+
+Most built-in ping and traceroute directives require that the following `attrs` be defined on each device using the directive:
+
+| Attribute | Value                                                     |
+| :-------- | :-------------------------------------------------------- |
+| `source4` | IPv4 address used to source Ping and Traceroute commands. |
+| `source6` | IPv6 address used to source Ping and Traceroute commands. |
+
+Dell OS9 (`dell_force10`) and IP Infusion OcNOS (`ipinfusion_ocnos`) built-ins do not use these attributes. FortiGate (`fortinet`) and HPE Comware 7 (`hp_comware`) use `source6` for IPv6 ping only, because their IPv6 traceroute sets no source address. Both platforms still require `source4` and `source6`.
+
+A device with `vrf` set on Arista EOS, FRRouting, Huawei VRP, MikroTik RouterOS, PAN-OS, SONiC or VyOS does not need these attributes, because the VRF command forms do not use them. Aruba AOS-CX, Cumulus Linux, Dell SmartFabric OS10, Extreme EXOS and VOSS, and HPE Comware 7 VRF commands still use them.
+
+Hyperglass does not start if a device is missing an attribute that its directives reference. `hyperglass onboard device` prompts for each attribute the selected platform needs. See [device onboarding](/configuration/onboarding.mdx).
+
+**Example**
+
+```yaml filename="devices.yaml" {5-7} copy
+devices:
+    - name: New York, NY
+      address: 192.0.2.1
+      platform: cisco_ios
+      attrs:
+          source4: 192.0.2.1
+          source6: "2001:db8::1"
+      credential:
+          username: you
+          password: your password
+```
+
+</Callout>
+
+<Callout type="warning">
+    If you do not utilize IPv6 in your network, you'll need to create your own directive that only has IPv4 commands.
+</Callout>
+
+## Examples
+
+### VRF queries
+
+Set `vrf` on a device to use its built-in VRF command forms. The 16 supported platforms are Arista EOS, Arrcus ArcOS (`arrcus_arcos`), Aruba AOS-CX (`aruba_aoscx`), NVIDIA Cumulus Linux (`cumulus_linux`), Dell OS9 (`dell_force10`) and SmartFabric OS10 (`dell_os10`), Extreme EXOS (`extreme_exos`) and VOSS (`extreme_vsp`), FRRouting, HPE Comware 7 (`hp_comware`), Huawei VRP, IP Infusion OcNOS (`ipinfusion_ocnos`), MikroTik RouterOS, PAN-OS (`paloalto_panos`), SONiC (`sonic`), and VyOS 1.4+ (`vyos`). VyOS 1.3 (`vyos_1_3`) and FortiGate (`fortinet`) have no built-in VRF forms. On PAN-OS, `vrf` names the virtual router.
+
+VRF names accept 1–64 letters, digits, underscores, periods, colons, or hyphens. Hyperglass rejects other characters during configuration validation.
+
+```yaml filename="devices.yaml" copy
+devices:
+    - name: London - Customer A
+      address: 192.0.2.1
+      platform: arista_eos
+      vrf: CUSTOMER_A
+      credential:
+          username: looking-glass
+          password: replace-me
+```
+
+On Huawei VRP, `vrf` names the vpn-instance (`ip vpn-instance CUSTOMER_A`). Hyperglass runs the `display bgp vpnv4 vpn-instance` and `display bgp vpnv6 vpn-instance` forms for BGP queries, and `ping -vpn-instance` and `tracert -vpn-instance` for IPv4 ping and traceroute. IPv6 ping and traceroute use `ping ipv6 vpn-instance` and `tracert ipv6 vpn-instance`, without the dash, which is the form VRP 8 accepts. The VRF forms do not set a source address, so the device picks one from the vpn-instance. `source4` and `source6` are not used.
+
+```yaml filename="devices.yaml" copy
+devices:
+    - name: Johannesburg - Customer A
+      address: 192.0.2.2
+      platform: huawei
+      vrf: CUSTOMER_A
+      credential:
+          username: looking-glass
+          password: replace-me
+```
+
+Define separate device entries with distinct names to offer multiple VRFs on one router. Built-in queries without a VRF form are hidden:
+
+- FRRouting and SONiC: ping and traceroute.
+- Aruba AOS-CX: BGP community.
+- Dell OS9: traceroute.
+- IP Infusion OcNOS: BGP route, AS path and community. Only ping and traceroute remain.
+- PAN-OS: ping and traceroute. Only BGP route remains.
+
+Setting `vrf` on a platform without VRF-capable built-ins, such as FortiGate, causes a configuration error unless built-ins are disabled.
+
+Custom directives must provide their own VRF commands. A device's `vrf` setting does not rewrite arbitrary custom commands. Rules can supply `vrf_command` or `vrf_commands` containing the `{vrf}` placeholder.
+
+### Simple
+
+```yaml filename="devices.yaml" copy
+devices:
+    - name: New York, NY
+      address: 192.0.2.1
+      platform: cisco_ios
+      credential:
+          username: you
+          password: your password
+      attrs:
+          source4: 192.0.2.1
+          source6: "2001:db8::1"
+    - name: San Francisco, CA
+      address: 192.0.2.2
+      platform: juniper
+      credential:
+          username: you
+          password: your password
+      attrs:
+          source4: 192.0.2.2
+          source6: "2001:db8::2"
+```
+
+<h3 className="_font-semibold _tracking-tight _text-slate-900 dark:_text-slate-100 _mt-8 _text-2xl">
+    {" "}
+    <DocsButton href="/configuration/directives" /> With Directives
+</h3>
+
+In this example, an additional directive `cisco-show-lldp-neighbors` is added to the built-in directives.
+
+```yaml filename="devices.yaml" copy {8-9}
+devices:
+    - name: New York, NY
+      address: 192.0.2.1
+      platform: cisco_ios
+      credential:
+          username: you
+          password: your password
+      directives:
+          - cisco-show-lldp-neighbors
+      attrs:
+          source4: 192.0.2.1
+          source6: "2001:db8::1"
+```
+
+<h3 className="_font-semibold _tracking-tight _text-slate-900 dark:_text-slate-100 _mt-8 _text-2xl">
+    {" "}
+    <DocsButton href="/configuration/directives" /> Disable Built-in Directives
+</h3>
+
+In this example, _only_ the `cisco-show-lldp-neighbors` directive will be available. Built-in directives are disabled.
+
+```yaml filename="devices.yaml" copy {8-10}
+devices:
+    - name: New York, NY
+      address: 192.0.2.1
+      platform: cisco_ios
+      credential:
+          username: you
+          password: your password
+      directives:
+          - builtins: false
+          - cisco-show-lldp-neighbors
+```
+
+<h3 className="_font-semibold _tracking-tight _text-slate-900 dark:_text-slate-100 _mt-8 _text-2xl">
+    {" "}
+    <DocsButton href="/configuration/directives" /> Enable Specific Built-in Directives
+</h3>
+
+In this example, only specified built-in directives are made available.
+
+```yaml filename="devices.yaml" copy {8-9}
+devices:
+    - name: New York, NY
+      address: 192.0.2.1
+      platform: cisco_ios
+      credential:
+          username: you
+          password: your password
+      directives:
+          - builtins: [bgp_route, traceroute]
+      attrs:
+          source4: 192.0.2.1
+          source6: "2001:db8::1"
+```

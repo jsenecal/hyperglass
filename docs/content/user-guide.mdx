@@ -1,0 +1,77 @@
+---
+title: User Guide
+description: Run network queries from the Hyperglass web interface
+---
+
+import { Callout } from "nextra/components";
+
+# User guide
+
+Hyperglass provides a web form for running the network queries that an administrator has enabled. The available locations, query types, target validation rules, and result fields depend on the deployment configuration.
+
+## Run a query
+
+### Choose a location
+
+Select one or more routers or locations from which the query should run. Each location determines the network path and device that will execute the command.
+
+Deployments with a small number of locations may show them as cards. Larger deployments usually show a dropdown.
+
+When you select multiple locations, Hyperglass shows query types available on every selected device. Devices from different vendors may use different commands for the same query type; Hyperglass selects the correct command for each device.
+
+### Choose a query type
+
+- **Ping** tests reachability and reports round-trip time.
+- **Traceroute** shows the path toward a destination and may include hop latency, packet loss, ASN, organisation, country, IXP, or reverse DNS details.
+- **BGP route** shows routes for an IP address or prefix when the selected device supports the configured directive.
+- **BGP community** finds routes associated with a community value.
+- **BGP AS path** finds routes that contain one or more ASNs.
+
+### Enter a target
+
+Depending on the query type, enter an IP address, hostname, prefix, or ASN. Examples include `8.8.8.8`, `2001:4860:4860::8888`, `8.8.8.0/24`, `google.com`, and `AS15169`.
+
+The deployment may restrict target formats or networks. A rejected target means the administrator's query policy did not allow it, not that the device is unreachable.
+
+### Submit the query
+
+Some query types show additional select fields. Select only the options you need; fields marked as required must have a value.
+
+Select **Submit** to run the query. The page shows the response when the device finishes, or an error message when the query cannot complete.
+
+Use the browser Back button or the in-page back control to return to the form with your last query selections. Select the title link to clear the form.
+
+## Hostname resolution
+
+When you enter a hostname instead of an address, Hyperglass resolves it through the configured DNS provider. The resolver returns available IPv4 and IPv6 addresses, and you choose which address to query.
+
+<Callout type="info">Public DNS-over-HTTPS providers receive requests from your browser. In server mode, Hyperglass resolves the hostname using the server's resolver instead.</Callout>
+
+1. Enter a hostname such as `google.com`.
+2. Select **Submit**.
+3. Select an IPv4 or IPv6 address in the resolution dialog. Hyperglass runs the query against that address.
+
+If no address is returned, check the hostname, the configured DNS provider, and any browser or network policy that blocks the resolver request.
+
+## Use My IP
+
+The **My IP** control offers your detected address as a query target. By default the server detects it. The administrator can instead use external detection, or hide the control.
+
+1. Select **My IP** beside the target field.
+2. Confirm the lookup if the notice says it sends your IP address to myip.wtf.
+3. Choose an available address.
+4. Submit the query as usual.
+
+External detection can return IPv4 and IPv6 addresses. If it fails, the server detects the address instead. Server detection returns only the address family used for your request and does not contact myip.wtf. The detected address can differ from your device address behind NAT, a VPN, or a corporate proxy.
+
+## Read results
+
+The result panel may include raw device output, parsed tables, route metadata, AS path links, traceroute hop details, or a query error. Structured output is available only when both the deployment and the selected device support it.
+
+Traceroute tables preserve device-reported statistics. Where those statistics are absent, Hyperglass derives Last, Best, and Worst from available probe RTTs. It derives Loss only when the parser knows the number of sent probes. A missing RTT alone does not establish packet loss.
+
+Cached results show a cache indicator and the time at which the result was created. A cached response is still a response from a previous query. Run the query again when you need current device output.
+
+## When a query fails
+
+Check the target format first, then try another location if one is available. If the problem continues, report it to the operator of that Hyperglass deployment with the location, query type, target format, approximate time, and visible error message. Do not include credentials or private device output in a public report.

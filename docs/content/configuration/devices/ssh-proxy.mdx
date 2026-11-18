@@ -1,0 +1,35 @@
+When devices sit behind a jump box or other intermediary server, Hyperglass can use SSH local port forwarding to connect to the intermediary first and then to the device.
+
+## SSH Proxy Configuration
+
+| Parameter          | Type    | Default Value | Description                                                                          |
+| :----------------- | :------ | :------------ | :----------------------------------------------------------------------------------- |
+| `proxy.address`    | String  |               | IPv4 address, IPv6 address, or hostname of SSH proxy. A hostname must resolve when Hyperglass starts. |
+| `proxy.port`       | Number  | `22`          | TCP port to use for connecting to the SSH proxy.                                     |
+| `proxy.platform`   | String  | `linux_ssh`   | Optional. Currently, only `linux_ssh` is supported. |
+| `proxy.credential` | Mapping |               | Mapping/dict of a [credential configuration](/configuration/devices/credentials.mdx). |
+
+### Examples
+
+#### Use an SSH Proxy When Connecting to a Device
+
+```yaml filename="devices.yaml" copy
+devices:
+    - name: New York, NY
+      address: 192.0.2.1
+      platform: cisco_ios
+      credential:
+          username: you
+          password: your password
+      proxy:
+          address: 203.0.113.1
+          platform: linux_ssh
+          credential:
+              username: your proxy username
+              password: your proxy password
+      attrs:
+          source4: 192.0.2.1
+          source6: "2001:db8::1"
+```
+
+In the example above, the proxy credentials authenticate the Hyperglass server to the SSH proxy. The device credentials then authenticate the proxy connection to the target device.

@@ -1,0 +1,249 @@
+import { Callout } from "nextra/components";
+
+## What is a directive?
+
+<Callout type="tip">
+
+A <strong style={{color: "#ff5e5b"}}>directive</strong> is a defined configuration for one or more **commands** to run on a device. For example, a BGP Route query is a built-in directive. A directive defines:
+
+-   What command (or commands) to run on the device
+-   Type of UI field, text input or select
+-   If the field can accept multiple values
+-   Help information to show about the directive
+-   Validation rules
+
+</Callout>
+
+Each directive has the following options:
+
+| Parameter            | Type            | Default Value | Description                                                                                                                                                                |
+| :------------------- | :-------------- | :------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`               | String          |               | Display name of the directive.                                                                                                                                             |
+| `rules`              | List of Rules   | One rule with no validation | List of [rule configs](#rules)                                                                                                                                             |
+| `field`              | Mapping         |               | Required. Mapping/dict of [fields config](#fields). Set `null` for a directive without an input field.                                                                    |
+| `info`               | String          |               | File path to markdown-formatted help information about the directive. The file must exist.                                                                                 |
+| `plugins`            | List of Strings |               | File names of [plugins](/plugins.mdx) to use with this directive. The files must be in the `plugins` folder of the Hyperglass app directory. The extension is optional. |
+| `groups`             | List of Strings |               | List of names by which directives are grouped in the UI.                                                                                                                   |
+| `multiple`           | Boolean         | `false`       | Command supports receiving multiple values. For example, Cisco IOS's `show ip bgp community` accepts multiple communities as arguments.                                    |
+| `multiple_separator` | String          | `" "`         | String by which multiple values are separated. For example, a list of values `[65001, 65002, 65003]` would be rendered as `65001 65002 65003` for when the command is run. |
+| `variables`          | Mapping         |               | Mapping/dict of [optional variables](#variables), each with a fixed list of allowed values.                                                                                |
+
+## Rules
+
+A rule is a way of saying "if a query target matches the rule's conditions, run this command".
+
+<Callout type="warning">
+Custom directives do not receive the shell quoting applied to built-in directives. On shell-backed platforms, never interpolate unrestricted input from `condition: null` or `condition: "*"`. Use an IP rule or an anchored allowlist that excludes shell syntax. Field validation alone is not a command-safety boundary.
+</Callout>
+
+| Parameter   | Type            | Default Value | Description                                                                                    |
+| :---------- | :-------------- | :------------ | :--------------------------------------------------------------------------------------------- |
+| `condition` | String          |               | IP prefix in which the target must be contained, or a regular expression the target must match. `null` disables validation. |
+| `action`    | String          | permit        | `permit` or `deny` the directive target when this rule is matched.                             |
+| `commands`  | List of Strings |               | Commands to run when this rule matches. `{target}` is replaced with the query target, and `{mask}` with its IPv4 netmask. Other placeholders are filled from device `attrs` or directive [variables](#variables). `command` is an alias for one command. |
+| `vrf_command` | String | | Single command form used when the device has `vrf` set. Use `{vrf}` for the validated VRF name. |
+| `vrf_commands` | List of Strings | | Multiple-command alternative to `vrf_command`. |
+| `fallback_command` | String | | Command to run when the device rejects `command`, for older software. The device's error output is replaced by the fallback output, and a warning names the device. Applies to SSH devices. A device with `vrf` set runs the rule's `vrf_command` instead, when the rule has one, and then does not use fallbacks. |
+| `fallback_commands` | List of Strings | | Multiple-command alternative to `fallback_command`, matched to `commands` by position. |
+| `fallback_os_version` | String | | Version filter, such as `<16` or `>=12,<16`. A device whose `os_version` meets it runs the fallback commands directly, without trying `command` first. Only the leading dotted numbers of `os_version` are compared. |
+
+### IP Rule
+
+| Parameter           | Type    | Default Value | Description                                                                                                                                                                                                       |
+| :------------------ | :------ | :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ge`                | Number  | 0             | Minimum prefix length to match, inclusive.                                                                                                                                                                        |
+| `le`                | Number  | 32,128        | `32` for IPv4 evaluations, `128` for IPv6 evaluations. Maximum prefix length to match, inclusive.                                                                                                                 |
+| `allow_reserved`    | Boolean | `false`       | Allow reserved targets: IPv4 `240.0.0.0/4` and the IETF reserved IPv6 blocks, such as `::/8` and `100::/8`. RFC1918, documentation ([RFC5737](https://www.rfc-editor.org/rfc/rfc5737.html), `2001:db8::/32`) and benchmarking ranges are not reserved and pass. Use a `deny` rule to block them. |
+| `allow_unspecified` | Boolean | `false`       | Allow unspecified targets (`0.0.0.0` `::`). A default route query such as `0.0.0.0/0` is not unspecified and passes. |
+| `allow_loopback`    | Boolean | `false`       | Allow [loopback](https://www.rfc-editor.org/rfc/rfc1700.html) targets (`127.0.0.0/8` `::1`). |
+
+#### Examples
+
+##### Require IPv4 Queries between /8 and /24
+
+```yaml filename="directives.yaml" {5-6} /{target} {mask}/ copy
+your-directive:
+    name: IP Route
+    rules:
+        - condition: 0.0.0.0/0
+          ge: 8
+          le: 24
+          command: "show ip route {target} {mask}"
+    field:
+        description: IP address or prefix
+```
+
+Given a query target of 198.18.0.0/15, the command run on the device would be:
+
+```none /255.254.0.0/
+show ip route 198.18.0.0/15 255.254.0.0
+```
+
+`{target}` keeps the prefix length. To send only the network address, rewrite the target with an [input plugin](/plugins.mdx#convert-a-cidr-prefix-to-network-and-mask).
+
+##### Deny a Specific Prefix
+
+```yaml filename="directives.yaml" {5} copy
+your directive:
+    name: BGP Route
+    rules:
+        - condition: "192.0.2.0/24"
+          action: deny
+        - condition: "0.0.0.0/0"
+          command: "show ip bgp {target}"
+    field:
+        description: IP address or prefix
+```
+
+In this example, a query of any IP address or prefix contained within 192.0.2.0/24 will result in an error.
+
+##### Run Multiple Commands
+
+```yaml filename="directives.yaml" /{target}/ {6-7} copy
+your-directive:
+    name: BGP Communities
+    rules:
+        - condition: '^65000:[0-9]+$'
+          commands:
+              - "show route table inet.0 community {target} detail"
+              - "show route table inet6.0 community {target} detail"
+    field:
+        description: BGP community
+```
+
+In this example, a query of `65000:1` would result in the following commands being sent to the device:
+
+```none /65000:1/
+show route table inet.0 community 65000:1 detail
+show route table inet6.0 community 65000:1 detail
+```
+
+The output for both commands will be shown as the query result.
+
+### Regex Validation
+
+To validate input by regex pattern, specify a regex pattern as the `condition`. Matching is case-insensitive and starts at the beginning of the target. A `condition` of `*` matches any non-empty target.
+
+```yaml filename="directives.yaml" copy
+your-directive:
+    name: DNS Query
+    rules:
+        - condition: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.example\.net$'
+          command: dig {target}
+    field:
+        description: Host name
+```
+
+### No Validation
+
+```yaml filename="directives.yaml" /{target}/ copy {4}
+your-directive:
+    name: IP Route
+    rules:
+        - condition: null
+          command: show ip route {target}
+    field:
+        description: IP address or prefix
+```
+
+This example disables target validation. Do not publish it on a shell-backed platform. For example, a target of `example text` produces:
+
+```none
+show ip route example text
+```
+
+## Fields
+
+### Text Input
+
+| Parameter     | Type   | Default Value | Description                                           |
+| :------------ | :----- | :------------ | :---------------------------------------------------- |
+| `description` | String |               | Field description, displayed as a label or help text. |
+| `validation`  | String |               | Regex pattern to validate text input.                 |
+
+### Select
+
+| Parameter     | Type            | Default Value | Description                                           |
+| :------------ | :-------------- | :------------ | :---------------------------------------------------- |
+| `description` | String          |               | Field description, displayed as a label or help text. |
+| `options`     | List of Options |               |                                                       |
+
+#### Options
+
+Each select option uses the following schema:
+
+| Parameter     | Type   | Default Value | Description                                              |
+| :------------ | :----- | :------------ | :------------------------------------------------------- |
+| `description` | String |               | Field description, displayed as a label or help text.    |
+| `name`        | String |               | If specified, will be used as the option's display name. |
+| `value`       | String |               | Option value sent to the device.                         |
+
+### Examples
+
+Example of a text directive expecting a string value matching a regex pattern:
+
+```yaml filename="directives.yaml" copy {6-8}
+your-directive:
+    name: IP Route
+    rules:
+        - condition: null
+          command: show ip route {target}
+    field:
+        description: IP of target
+        validation: '[0-9a-f\.\:]+'
+```
+
+Example of a select directive:
+
+```yaml filename="directives.yaml" copy {6-12}
+your-directive:
+    name: BGP Community
+    rules:
+        - condition: null
+          command: show ip bgp community {target}
+    field:
+        description: BGP community to show
+        options:
+            - value: "65001:1"
+              description: Provider A Routes
+            - value: "65001:2"
+              description: Provider B Routes
+```
+
+## Variables
+
+A directive can declare extra template variables next to `{target}`. Each variable appears in the UI as its own select field, and the user can pick only one of the configured values. Hyperglass rejects any other value before it builds the command.
+
+| Parameter  | Type          | Default Value | Description                                                                              |
+| :--------- | :------------ | :------------ | :--------------------------------------------------------------------------------------- |
+| `name`     | String        | Variable key  | Field label in the UI.                                                                   |
+| `command`  | String        | `""`          | Text inserted before the selected value, for example `" group "`.                        |
+| `required` | Boolean       | `false`       | If `false`, the variable can stay empty, and its placeholder renders as an empty string. |
+| `items`    | List of Items |               | Allowed values, at least one. Each item has `name`, `value` and `description`. `value` defaults to `name`. |
+
+Variable keys must be valid identifiers and cannot be `target` or `mask`. A variable placeholder needs no matching device `attrs` entry. On BIRD, FRR, OpenBGPD, SONiC and VyOS devices, Hyperglass shell-quotes the selected value.
+
+```yaml filename="directives.yaml" copy {7-18}
+show-bgp-summary:
+    name: BGP Summary
+    rules:
+        - condition: null
+          command: show bgp summary{instance}{group}
+    field: null
+    variables:
+        instance:
+            name: Routing Instance
+            command: " instance "
+            items:
+                - name: Internet
+                  value: inet
+        group:
+            name: BGP Group
+            command: " group "
+            items:
+                - name: party_x
+```
+
+With no selection, the command is `show bgp summary`. With both selected, the command is `show bgp summary instance inet group party_x`. The API accepts the selection as `queryVariables`, for example `{"queryVariables": {"group": "party_x"}}`.
+
+Set `required: true` to reject queries without a selection. Hyperglass rejects unknown variable keys and values outside `items`. Variable selections form part of the query cache key, so different selections do not share cached results.

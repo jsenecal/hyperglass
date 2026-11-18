@@ -1,0 +1,132 @@
+## Logging
+
+Hyperglass writes logs to a file and can also send them to syslog. It can also send an HTTP webhook for each query.
+
+| Parameter             | Type    | Default Value | Description |
+| :-------------------- | :------ | :------------ | :---------- |
+| `logging.directory`   | String  | /tmp          | Existing directory where Hyperglass writes its log file. |
+| `logging.format`      | String  | text          | Log format, must be `text` or `json`. `text` writes `hyperglass.log`, `json` writes `hyperglass.log.json`. |
+| `logging.max_size`    | String  | 50MB          | Log file size at which Hyperglass rotates the file and starts a new one. |
+| `logging.session_log` | Boolean | false         | Write every SSH session, with each command and its output, to `<directory>/<device id>-<YYYYMMDD>.log`. Netmiko redacts the device password and secret. |
+
+### SSH session logs
+
+```yaml filename="config.yaml" copy
+logging:
+    directory: /var/log/hyperglass
+    session_log: true
+```
+
+Hyperglass appends sessions to a per-device file dated in UTC. Ensure the application can write to the directory. Password redaction does not remove internal addresses or sensitive command output. Review session logs before sharing them and manage their retention separately.
+
+For devices that reject automatic paging or terminal-width commands, set `disable_paging: false` in `devices.yaml`. Directives must then prevent paging themselves, for example with a platform-supported `| no-more` suffix.
+
+### Query samples
+
+`logging.samples` writes each query's request, raw device output and parsed result as one JSON line to `<directory>/hyperglass_query_log.jsonl`. It is off by default. Raw output can contain internal addresses and communities.
+
+| Parameter                        | Type    | Default Value | Description |
+| :------------------------------- | :------ | :------------ | :---------- |
+| `logging.samples.enable`         | Boolean | false         | Write query samples. |
+| `logging.samples.path`           | String  |               | Output file. Defaults to `<directory>/hyperglass_query_log.jsonl`. |
+| `logging.samples.include_raw`    | Boolean | true          | Include the raw device output. |
+| `logging.samples.include_parsed` | Boolean | true          | Include the parsed result. |
+| `logging.samples.max_size`       | String  | 50MB          | File size at which the file rotates to `<name>.1`. |
+| `logging.samples.backup_count`   | Number  | 1             | Rotated files kept, `<name>.1` (newest) to `<name>.<backup_count>`. The minimum is 1. One structured full-table result can be tens of MB, so raise this for fixture capture runs. |
+
+### Syslog
+
+| Parameter               | Type    | Default Value | Description |
+| :---------------------- | :------ | :------------ | :---------- |
+| `logging.syslog.host`   | String  |               | Syslog target host. Required. |
+| `logging.syslog.port`   | Number  | 514           | Syslog target UDP port. |
+| `logging.syslog.enable` | Boolean | true          | Send logs to syslog. Set to `false` to turn syslog off and keep the rest of the block. |
+
+##### Syslog Example
+
+```yaml filename="config.yaml" copy
+logging:
+    syslog:
+        host: log.example.com
+        port: 514
+```
+
+### HTTP Logging
+
+If `logging.http` is set and `enable` is `true`, Hyperglass sends one HTTP `POST` webhook for each query, after it returns the response. The webhook carries the query location, type and target, the requester's address, its network details from BGP.tools, selected request headers and a timestamp. It does not carry log records.
+
+| Parameter              | Type    | Default Value | Description |
+| :--------------------- | :------ | :------------ | :---------- |
+| `logging.http.provider`   | String  | generic | Must be `generic`, `msteams`, or `slack`. |
+| `logging.http.host`       | URL     |         | Webhook URL. Required. Every provider sends to the scheme, host, port, path and query string of this URL. |
+| `logging.http.params`     | Map     |         | URL query parameters added to every webhook request. A key that is also in the query string of `host` replaces it. |
+| `logging.http.headers`    | Map     |         | HTTP headers added to every webhook request. Values are sent as strings. |
+| `logging.http.verify_ssl` | Boolean | true    | Verify the webhook server's TLS certificate. Disabling verification permits interception of webhook data. Use a trusted certificate instead. |
+| `logging.http.timeout`    | Number  | 5       | Webhook request timeout in seconds. |
+| `logging.http.enable`     | Boolean | true    | Send webhooks. Set to `false` to turn webhooks off and keep the rest of the block. |
+
+#### Authentication
+
+`logging.http.authentication` takes HTTP basic authentication or an API key. With `mode: basic`, Hyperglass sends an `Authorization: Basic` header built from `username` and `password`. With `mode: api_key`, it sends `password` as the value of the header named by `header`.
+
+| Parameter                              | Type   | Default Value | Description |
+| :------------------------------------- | :----- | :------------ | :---------- |
+| `logging.http.authentication.mode`     | String | basic         | Must be `basic` or `api_key`. |
+| `logging.http.authentication.username` | String |               | Basic authentication username if `mode` is set to `basic`. |
+| `logging.http.authentication.password` | String |               | Required. Basic authentication password if `mode` is set to `basic`, or API key value if `mode` is set to `api_key`. |
+| `logging.http.authentication.header`   | String | x-api-key     | Header name if `mode` is set to `api_key`. |
+
+#### Examples
+
+##### Generic
+
+```yaml filename="config.yaml" copy
+logging:
+    http:
+        provider: generic
+        host: https://logs.example.net/webhook
+        params:
+            source: hyperglass
+```
+
+In the example above, Hyperglass sends a `POST` request to `https://logs.example.net/webhook?source=hyperglass` for each query. Replace the example endpoint with your own webhook receiver.
+
+##### Microsoft Teams Webhook
+
+```yaml filename="config.yaml" copy
+logging:
+    http:
+        provider: msteams
+        host: <Teams Workflows webhook URL>
+```
+
+Microsoft retired Office 365 connector webhooks in Teams. Create the webhook URL with the Teams Workflows app, for example from the **Send webhook alerts to a channel** template, and paste the full URL, including its query string, into `host`. The `msteams` provider sends an Adaptive Card wrapped in a `message` envelope with an `attachments` list, the format that Teams Workflows webhooks read.
+
+##### Slack
+
+```yaml filename="config.yaml" copy
+logging:
+    http:
+        provider: slack
+        host: <Slack webhook URL>
+```
+
+### Local Support Bundles
+
+Use `hyperglass support-bundle` on the Hyperglass host to create a metadata-only JSON file for manual attachment to a bug report. The command reads local log files only. It makes no network request and adds no frontend endpoint.
+
+Bundle format `2` declares `redaction: "metadata-only"`. It includes the Hyperglass version, Python and operating-system versions, validated timestamps, error severity, known exception types, normalized query kinds and bounded query runtimes. It reads query samples only from `hyperglass_query_log.jsonl` in each log directory.
+
+The bundle replaces all messages and exception values with `[REDACTED]`. It omits configuration, extra log fields, custom identifiers, targets, device names, raw output, parsed results, credentials and filesystem paths. It does not attempt to sanitize free-form text with address patterns. Review the file before attaching it.
+
+Text logs now include severity. The bundle exports `ERROR` and `CRITICAL` metadata under `errors`. Older text logs have no severity; their metadata appears under `unclassified_text` with level `UNKNOWN`, not as confirmed errors.
+
+```shell filename="terminal" copy
+hyperglass support-bundle --output hyperglass-support-bundle.json
+```
+
+Without `--log-directory`, the command reads the system temporary directory and the application directory. If logs are stored elsewhere, provide the directory explicitly. `--log-lines` sets the number of recent lines read from each log, default 200, maximum 5000.
+
+```shell filename="terminal" copy
+hyperglass support-bundle --log-directory /var/log/hyperglass --output hyperglass-support-bundle.json
+```

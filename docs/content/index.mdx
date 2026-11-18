@@ -1,0 +1,38 @@
+---
+title: Introduction
+description: Run a public network looking glass with Hyperglass
+---
+
+import { Cards } from "nextra/components";
+import { SupportedPlatforms } from "~/components/platforms";
+
+## What is Hyperglass?
+
+Hyperglass is an open source network looking glass for network operators. It gives customers, peers, and other network engineers a controlled way to run diagnostics from selected points in your network without exposing device access.
+
+The administrator defines which devices, commands, targets, credentials, and result formats are available. Users get a web interface and REST API for the queries you choose to publish.
+
+Community-maintained Hyperglass incorporates the Ultraglass implementation. The Python package, CLI, configuration paths, environment variables and service names remain `hyperglass`. The migration is tracked in [#390](https://github.com/hyperglass-community/hyperglass/issues/390).
+
+## What you can publish
+
+- BGP route, BGP community, BGP AS path, ping, and traceroute queries.
+- Structured BGP and traceroute results for supported platforms.
+- ASN, organisation, country, IXP and RPKI details when the relevant enrichment is enabled. Traceroute preserves router-provided hostnames.
+- IPv4 and IPv6 queries, including browser-based DNS-over-HTTPS resolution for hostnames.
+- Multiple query locations, VRFs, SSH proxy servers, HTTP devices, and concurrent queries.
+- Prefix-list and access-list style controls for limiting query targets.
+- A responsive web UI and configurable OpenAPI documentation.
+
+## Start here
+
+<Cards>
+    <Cards.Card title="Install with Docker" href="installation/docker" arrow />
+    <Cards.Card title="Install manually" href="installation/manual" arrow />
+    <Cards.Card title="Configure Hyperglass" href="configuration/overview" arrow />
+    <Cards.Card title="Use the web interface" href="user-guide" arrow />
+</Cards>
+
+## Supported platforms
+
+<SupportedPlatforms />

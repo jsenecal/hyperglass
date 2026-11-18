@@ -1,0 +1,386 @@
+import { Callout } from "nextra/components";
+import { Color } from "~/components/color";
+
+## Web UI
+
+Hyperglass provides extensive customisation options for the look and feel of the web UI.
+
+| Parameter                   | Type   | Default Value | Description                                                                                                                                |
+| :-------------------------- | :----- | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------- |
+| `web.location_display_mode` | String | auto          | Show the locations field as a `dropdown` or a `gallery`. `auto` uses `gallery` when there are fewer than 5 location groups and every group has fewer than 9 locations, and `dropdown` otherwise. |
+| `web.custom_javascript`     | String |               | Path to a JavaScript file that is loaded in the page head. The file must exist.                                                            |
+| `web.custom_html`           | String |               | Path to a custom HTML file that is rendered beneath the app. The file must exist.                                                          |
+| `web.my_ip` | String | server | How the My IP button finds the visitor's address. `server` returns the address Hyperglass received the request from, so no third party is contacted. Behind a proxy listed in `web.client_ip.trusted_proxies`, it reads the forwarded client address. Only the address family used for the request is shown, and an address that is not public is not shown. `external` is opt-in: it asks myip.wtf, which can return both IPv4 and IPv6, after showing `web.text.ip_lookup_notice` and waiting for the visitor to confirm. If the myip.wtf lookup for a family fails, the button falls back to the server address for that family. `off` hides the button. |
+
+### DNS over HTTPS
+
+By default, the browser resolves hostname targets using [DNS over HTTPS](https://www.rfc-editor.org/rfc/rfc8484). Set `web.dns_provider.name: server` to send the lookup through the Hyperglass server instead. The server then asks Cloudflare's public resolver.
+
+| Parameter           | Type   | Default Value                          | Description                                                                 |
+| :------------------ | :----- | :------------------------------------- | :-------------------------------------------------------------------------- |
+| `web.dns_provider.name` | String | cloudflare                             | If `cloudflare` or `google` are provided, no URL is necessary. Use `server` to resolve hostnames through `/api/dns` on the Hyperglass server (public A and AAAA records only), so the visitor's browser sends no DNS query to a third party. See [Optional server lookups](#optional-server-lookups). |
+| `web.dns_provider.url`  | String | `https://cloudflare-dns.com/dns-query` | Provide a custom DNS over HTTPS URL if you'd like to use your own resolver. A URL that is not a built-in provider URL sets the provider name to `custom`. |
+
+```yaml filename="config.yaml" copy
+web:
+    dns_provider:
+        name: server
+    my_ip: server
+```
+
+With this configuration the browser asks `/api/dns` for hostname targets and `/api/myip` for the visitor address. The browser contacts no public DNS-over-HTTPS provider and not myip.wtf. The Hyperglass server sends each DNS lookup to Cloudflare's public resolver at `https://1.1.1.1/dns-query`. Font downloads and optional enrichment services have separate network requirements.
+
+Server DNS supports A and AAAA records. Server My IP returns only the address family used for the request. Both endpoints identify the client as described under [Client Address](#client-address). Configure your reverse proxy to overwrite client-address headers with verified values.
+
+### Client Address
+
+Hyperglass needs the visitor's address for server My IP, for the per-client lookup limits and for the webhook `source` field. By default it uses the address of the connection and ignores forwarding headers. Behind a reverse proxy, list the proxy in `web.client_ip.trusted_proxies`. Hyperglass then reads the forwarded address from connections that come from those networks.
+
+| Parameter | Type | Default Value | Description |
+| :-------- | :--- | :------------ | :---------- |
+| `web.client_ip.header` | String | | Single-address request header that the trusted proxy overwrites, such as `X-Real-IP` or `CF-Connecting-IP`. Hyperglass reads it only from a trusted proxy and does not fall back to another header. The name is not case-sensitive. When unset, Hyperglass reads `X-Forwarded-For`. |
+| `web.client_ip.trusted_proxies` | List of networks | `[]` | IPv4 and IPv6 networks of the proxies that connect to Hyperglass. Hyperglass reads client address headers only when the connection comes from one of these networks. Any other connection is treated as the client. When the list is empty, Hyperglass ignores the headers. |
+
+Set `web.client_ip.header` when a CDN is in front of your reverse proxy. The reverse proxy then sees the CDN as its client, so `X-Real-IP` holds a CDN address. The CDN sends the visitor's address in its own header, such as `CF-Connecting-IP` (Cloudflare), `True-Client-IP` (Akamai) or `Fastly-Client-IP` (Fastly).
+
+Set `web.client_ip.trusted_proxies` on every installation behind a reverse proxy. List the networks that connect to Hyperglass directly, which is normally your reverse proxy and not the CDN. Without a `header`, Hyperglass reads `X-Forwarded-For` from the right and uses the last entry that is not a trusted proxy, so an entry that the client added is ignored.
+
+```yaml filename="config.yaml" copy
+web:
+    client_ip:
+        header: CF-Connecting-IP
+        trusted_proxies:
+            - 172.16.0.0/12
+            - fd00::/8
+```
+
+<Callout type="warning">
+Your reverse proxy must pass the CDN header only for requests that come from the CDN. If the proxy also accepts requests from other sources, remove the header from those requests at the proxy.
+</Callout>
+
+### Optional server lookups
+
+The DNS and AS-path enrichment endpoints are disabled by default. Enable them explicitly in `config.yaml`, then restart Hyperglass:
+
+```yaml
+web:
+    dns_provider:
+        name: server
+    aspath_enrichment: true
+    client_ip:
+        trusted_proxies: ["192.0.2.10/32"]
+        # Set this only when the proxy overwrites this single-address header.
+        # header: X-Real-IP
+```
+
+Replace the example proxy address with the address that actually connects to Hyperglass. An empty `trusted_proxies` list ignores all forwarding headers. Without a custom `header`, Hyperglass reads `X-Forwarded-For` from right to left, stopping at the first untrusted address. A custom header has no fallback to other headers. Configure the proxy to overwrite that header and prevent direct access to the application port.
+
+The normal Hyperglass launcher disables Uvicorn's proxy-header rewriting so the application can verify the socket peer. When running Uvicorn directly, pass `--no-proxy-headers`. Otherwise, upstream rewriting can replace the peer before Hyperglass checks it.
+
+Server DNS uses Cloudflare's public HTTPS resolver at `https://1.1.1.1/dns-query`. It does not use operating-system DNS, search domains, environment proxies, or redirects. Only public A and AAAA answers are returned. Internal DNS resolution is not supported by this public endpoint. Browser DNS providers keep the server endpoint disabled.
+
+DNS permits 120 requests per client and 600 requests globally per 60-second window. AS-path enrichment permits 30 requests per client and 120 requests globally per window. Redis shares these limits across workers. Storage failures deny lookups. Both endpoints share eight outbound lookup slots and a five-second lookup deadline. The endpoints return HTTP 429 when request limits are reached and HTTP 503 when outbound capacity or required storage is unavailable.
+
+AS-path requests accept at most 64 ASNs and an 8 KiB body. ASNs must be decimal integers between 1 and 4294967295. Duplicate ASNs are removed before lookup. Results use shared caches: DNS answers for up to 60 seconds, negative DNS responses for 15 seconds, and ASN names for one hour. Disabling `web.aspath_enrichment` also stops the AS-path modal from requesting enrichment.
+
+### My IP and reverse-proxy upgrades
+
+`web.my_ip: server` uses the request address for the My IP button. Non-public addresses return `null`, leaving the input unchanged. This mode does not fall back to a public IP service. Set `web.my_ip: external` explicitly to use a public IP service from the browser. That setting does not change webhook attribution.
+
+**Upgrade requirement:** forwarding headers now require an explicitly trusted proxy. Existing nginx installations must configure `web.client_ip` to retain visitor addresses for My IP, webhook `source`, and per-client limits. An empty `trusted_proxies` list uses the socket peer, so webhooks report the proxy address until configured.
+
+For nginx on the same host, connecting to Hyperglass over loopback, add this to `config.yaml`:
+
+```yaml
+web:
+    my_ip: server
+    client_ip:
+        trusted_proxies: ["127.0.0.1/32", "::1/128"]
+        header: X-Real-IP
+```
+
+In the nginx location that proxies requests to Hyperglass, overwrite the forwarding headers:
+
+```nginx
+location / {
+    proxy_pass http://[::1]:8001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Hyperglass listens on `[::1]` by default. Use the configured `HYPERGLASS_HOST` address and port in `proxy_pass`, for example `http://127.0.0.1:8001` when `HYPERGLASS_HOST=127.0.0.1`. Keep Hyperglass bound to loopback for this setup. Restart Hyperglass and reload nginx after updating both configurations. For a container or remote proxy, trust its actual connecting address instead of loopback. Do not trust all networks. This example assumes visitors connect directly to nginx; a CDN or additional proxy requires its own explicit trust configuration in nginx.
+
+### Logo
+
+| Parameter          | Type             | Default Value | Description                                        |
+| :----------------- | :--------------- | :------------ | :------------------------------------------------- |
+| `web.logo.light`   | String           | Hyperglass light logo | Path to logo to show in light mode. |
+| `web.logo.dark`    | String           | Hyperglass dark logo  | Path to logo to show in dark mode. |
+| `web.logo.favicon` | String           | Hyperglass icon       | Path to icon/logo from which to generate favicons. |
+| `web.logo.width`   | String           | 50%                   | Maximum width of the logo on wide screens, as a percentage from 1 to 100, for example `50%`. A bare number such as `50` is accepted and treated as `50%`. |
+| `web.logo.height`  | String           |                       | Accepted, as a percentage from 1 to 100, and normalised like `width`. The UI ignores it: the logo height follows its width. |
+
+##### Example
+
+```yaml filename="config.yaml" copy
+web:
+    logo:
+        light: /path/to/light-logo.svg
+        dark: /path/to/dark-logo.svg
+        favicon: /path/to/favicon.svg
+        width: 50%
+```
+
+### Greeting
+
+The greeting is an optional modal/popup window that will present itself to users in the Web UI. It can be used for anything you want; for example:
+
+-   A data privacy acknowledgement that must be acknowledged prior to proceeding
+-   Information about your company
+-   Instructions on how to use Hyperglass
+
+| Parameter               | Type    | Default Value | Description                                                                                          |
+| :---------------------- | :------ | :------------ | :--------------------------------------------------------------------------------------------------- |
+| `web.greeting.enable`   | Boolean | `false`       | Enable or disable the greeting.                                                                      |
+| `web.greeting.file`     | String  |               | Path to markdown or plain text file that contains greeting content. Required when `enable` is `true`. |
+| `web.greeting.title`    | String  | Welcome       | Text to be used as the greeting title.                                                               |
+| `web.greeting.button`   | String  | Continue      | Text to be used for the button that acknowledges/closes the greeting.                                |
+| `web.greeting.required` | Boolean | `false`       | If `true`, users cannot close the modal or run any queries until the greeting has been acknowledged. |
+
+##### Example
+
+```yaml filename="config.yaml" copy
+web:
+    greeting:
+        enable: true
+        file: /path/to/your/file.md
+        title: Welcome
+        button: Continue
+        required: false
+```
+
+### OpenGraph
+
+[OpenGraph](https://ogp.me/) controls the image, title, and description shown when you share a link. Hyperglass uses [this OpenGraph image](/opengraph.jpg) by default, but you can provide your own image. The image must be a JPEG or PNG file. Hyperglass resizes it to fit 1200 by 630 pixels and serves it as a JPEG.
+
+| Parameter             | Type   | Default Value | Description                   |
+| :-------------------- | :----- | :------------ | :---------------------------- |
+| `web.opengraph.image` | String |               | Path to your OpenGraph image. |
+
+### Highlighting
+
+Hyperglass can highlight special values in router output and provide users with additional context. For example, an organisation's BGP communities or IP address space can be highlighted with a tooltip.
+
+`web.highlight` is a list. Each value you wish to be highlighted is defined with the following schema:
+
+| Parameter | Type   | Default Value | Description                                             |
+| :-------- | :----- | :------------ | :------------------------------------------------------ |
+| `pattern` | String |               | RegEx pattern or string to match against router output. Required. |
+| `label`   | String |               | Tooltip value when the highlighted text is hovered.     |
+| `color`   | String | primary       | Color name from [`web.theme.colors`](#colors).          |
+
+##### Example
+
+```yaml filename="config.yaml" copy
+web:
+    highlight:
+        - pattern: "65000:1234"
+          label: Special snowflake community that does a thing
+          color: primary
+        - pattern: '^192\.0\.2\.[0-9]+$'
+          label: Magical IP Address
+          color: blue
+```
+
+### Menus
+
+Hyperglass can show customisable menus in the footer. `web.menus` is a list. By default, it contains a Terms menu and a Help menu. Setting `web.menus` replaces both. In menu content, `{site_title}`, `{org_name}` and `{version}` are replaced with their values. Each menu can be configured with the following schema:
+
+| Parameter | Type   | Default Value | Description                                                                                                                |
+| :-------- | :----- | :------------ | :------------------------------------------------------------------------------------------------------------------------- |
+| `title`   | String |               | Menu title, will be the text that shows on footer.                                                                         |
+| `content` | String |               | Plain text or markdown content of the menu or path to a file that contains plain text or markdown content. A value of 260 characters or more is always treated as content. |
+| `side`    | String | left          | Side of the footer with which the menu will be grouped.                                                                    |
+| `order`   | Number | 0             | Optionally specify an order for each menu item. If not specified, menus will be rendered in the order they are configured. |
+
+##### Example
+
+```yaml filename="config.yaml" copy
+web:
+  menus:
+    - title: Terms & Conditions
+      content: |
+        **Don't** break stuff!
+        _please_
+      side: right
+      order: 1
+    - title: Help
+      content: /path/to/help/file.md
+      side: left
+      order: 0
+```
+
+### Links
+
+Hyperglass can show links to resources that users may find helpful. `web.links` is a list. By default, it contains one PeeringDB link to `https://www.peeringdb.com/asn/{primary_asn}`. Setting `web.links` replaces it. In link URLs, `{primary_asn}` is replaced with the `primary_asn` value. Each link can be configured with the following schema:
+
+| Parameter   | Type    | Default Value | Description                                                                                                           |
+| :---------- | :------ | :------------ | :-------------------------------------------------------------------------------------------------------------------- |
+| `title`     | String  |               | Link text.                                                                                                            |
+| `url`       | String  |               | Link URL.                                                                                                             |
+| `show_icon` | Boolean | `true`        | If `true`, an icon indicating the link is an external link is shown.                                                  |
+| `side`      | String  | left          | Side of the footer with which the link will be grouped.                                                               |
+| `order`     | Number  | 0             | Optionally specify an order for each link. If not specified, links will be rendered in the order they are configured. |
+
+##### Example
+
+```yaml filename="config.yaml" copy
+web:
+    links:
+        - title: PeeringDB
+          url: https://www.peeringdb.com/asn/{primary_asn}
+          show_icon: true
+          side: right
+          order: 1
+        - title: Our Website
+          url: https://example.com
+          show_icon: false
+          side: left
+          order: 0
+```
+
+### Credit
+
+| Parameter |  Type   | Default | Description                                                                              |
+| :-------- | :-----: | :-----: | :--------------------------------------------------------------------------------------- |
+| `web.credit.enable` | Boolean | `true`  | Enable or disable the display of Hyperglass and upstream credit in the footer. |
+
+<Callout emoji="❤️" type="info">
+    **Note from the Developer**
+    <br /> If your organization's policy allows, and you don't mind, I request that you keep `credit` enabled. Remember: my goal for this project is get more networks to use looking glasses to make all of our lives easier. Because it's primarily other network operators who will use this tool to begin with, I'd love for any operators that use your looking glass to know where they can get their own.
+</Callout>
+
+### Text
+
+Most of the text in the Hyperglass UI can be overridden to suit your needs.
+
+| Parameter                    | Type   | Default Value                         | Description                                                                                                                                                             |
+| :--------------------------- | :----- | :------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web.text.title_mode`        | String | logo_only                             | See [title mode section](#title-mode)                                                                                                                                   |
+| `web.text.title`             | String | Hyperglass                            | Title text. Maximum 32 characters.                                                                                                                                      |
+| `web.text.subtitle`          | String | Network Looking Glass                 | Subtitle text. Maximum 32 characters.                                                                                                                                   |
+| `web.text.query_location`    | String | Location                              | Text used to label the query location (router) field.                                                                                                                   |
+| `web.text.query_type`        | String | Query Type                            | Text used to label the query type (directive) field.                                                                                                                    |
+| `web.text.query_target`      | String | Target                                | Text used to label the query target field.                                                                                                                              |
+| `web.text.fqdn_tooltip`      | String | Use \{protocol\}                      | Tooltip text used when a user hovers over the FQDN tooltip.                                                                                                             |
+| `web.text.fqdn_message`      | String | Your browser has resolved \{fqdn\} to | Text used when prompting a user to select a resolved IPv4 or IPv6 address for an FQDN query. With `web.dns_provider.name: server`, the default becomes `Hyperglass has resolved {fqdn} to`. |
+| `web.text.fqdn_error`        | String | Unable to resolve \{fqdn\}            | Text used when an FQDN is not resolvable.                                                                                                                               |
+| `web.text.fqdn_error_button` | String | Try Again                             | Button text used when an FQDN is not resolvable.                                                                                                                        |
+| `web.text.cache_prefix`      | String | Results cached for                    | Text displayed with the cache timeout countdown.                                                                                                                        |
+| `web.text.cache_icon`        | String | Cached from \{time\} UTC              | Text used when a user hovers over the cache icon, which is displayed when a response was a cached response. `{time}` is replaced with the _original_ query's timestamp. |
+| `web.text.complete_time`     | String | Completed in \{seconds\}              | Text used when a user hovers over the success icon for a query result. `{seconds}` will be replaced with 'n seconds' where n is the time a query took to complete.      |
+| `web.text.rpki_invalid`      | String | Invalid                               | Text used in table output when a route's RPKI status is invalid.                                                                                                        |
+| `web.text.rpki_valid`        | String | Valid                                 | Text used in table output when a route's RPKI status is valid.                                                                                                          |
+| `web.text.rpki_unknown`      | String | No ROAs Exist                         | Text used in table output when a route's RPKI status is unknown.                                                                                                        |
+| `web.text.rpki_unverified`   | String | Not Verified                          | Text used in table output when a route's RPKI status is unverified.                                                                                                     |
+| `web.text.no_communities`    | String | No Communities                        | Text used in table output when a route has no communities.                                                                                                              |
+| `web.text.ip_error`          | String | Unable to determine IP Address        | Error displayed if Hyperglass is unable to determine the user's IP.                                                                                                     |
+| `web.text.no_ip`             | String | No \{protocol\} Address               | Text displayed if the user doesn't have an IP address of \{protocol\} (IPv4 or IPv6).                                                                                   |
+| `web.text.ip_select`         | String | Select an IP Address                  | Text used to label the IP Address selection for the user's IP.                                                                                                          |
+| `web.text.ip_button`         | String | My IP                                 | Text used for the user IP button.                                                                                                                                       |
+| `web.text.ip_lookup_notice` | String | This sends your IP address to myip.wtf to look it up. | Notice shown before the external My IP lookup. |
+| `web.text.ip_lookup_confirm` | String | Look up my IP | Button that confirms the external My IP lookup. |
+
+#### Title Mode
+
+Available title modes are:
+
+| `title_mode` Value | Action                                                              |
+| :----------------- | :------------------------------------------------------------------ |
+| `logo_only`        | Only the logo is displayed, no title or subtitle will be visible.   |
+| `text_only`        | Only the title and subtitle are displayed, no logo will be visible. |
+| `logo_subtitle`    | Only the logo and subtitle are displayed, no title will be visible. |
+| `all`              | Logo, title, and subtitle will all be visible.                      |
+
+##### Example
+
+```yaml filename="config.yaml"
+web:
+    text:
+        title: Our Looking Glass
+        subtitle: Company Name, Inc.
+        title_mode: text_only
+```
+
+### Theme
+
+Hyperglass allows you to customise the colours and fonts used in the web UI.
+
+| Parameter                      | Type   | Default Value | Description                                                                                                      |
+| :----------------------------- | :----- | :------------ | :--------------------------------------------------------------------------------------------------------------- |
+| `web.theme.default_color_mode` | String |               | Set Hyperglass's default colour mode. By default, the user's system preference is used. Must be `light` or `dark` |
+
+#### Colors
+
+##### Intrinsic Colors
+
+| Parameter                 | Default Value           |
+| :------------------------ | :---------------------- |
+| `web.theme.colors.black`  | <Color hex="#000000" /> |
+| `web.theme.colors.white`  | <Color hex="#ffffff" /> |
+| `web.theme.colors.dark`   | <Color hex="#010101"/>  |
+| `web.theme.colors.light`  | <Color hex="#f5f6f7"/>  |
+| `web.theme.colors.gray`   | <Color hex="#c1c7cc"/>  |
+| `web.theme.colors.filtered` | <Color hex="#c1c7cc"/>  |
+| `web.theme.colors.red`    | <Color hex="#d84b4b"/>  |
+| `web.theme.colors.orange` | <Color hex="#ff6b35"/>  |
+| `web.theme.colors.yellow` | <Color hex="#edae49"/>  |
+| `web.theme.colors.green`  | <Color hex="#35b246"/>  |
+| `web.theme.colors.blue`   | <Color hex="#314cb6"/>  |
+| `web.theme.colors.teal`   | <Color hex="#35b299"/>  |
+| `web.theme.colors.cyan`   | <Color hex="#118ab2"/>  |
+| `web.theme.colors.pink`   | <Color hex="#f2607d"/>  |
+| `web.theme.colors.purple` | <Color hex="#8d30b5"/>  |
+
+##### Functional Colors
+
+| Parameter                    | Default Value          |
+| :--------------------------- | :--------------------- |
+| `web.theme.colors.primary`   | <Color hex="#118ab2"/> |
+| `web.theme.colors.secondary` | <Color hex="#314cb6"/> |
+| `web.theme.colors.success`   | <Color hex="#35b246"/> |
+| `web.theme.colors.warning`   | <Color hex="#edae49"/> |
+| `web.theme.colors.error`     | <Color hex="#ff6b35"/> |
+| `web.theme.colors.danger`    | <Color hex="#d84b4b"/> |
+
+###### Example
+
+To override Hyperglass's primary colour, override its mapped intrinsic colour. For example, to override the default primary colour to <Color hex="#00ffff" noText /> cyan:
+
+```yaml filename="config.yaml"
+web:
+    theme:
+        colors:
+            cyan: "#00ffff"
+```
+
+#### Fonts
+
+Hyperglass's fonts come from [Google Fonts](https://fonts.google.com/). Any Google font name may be specified to override the default fonts. When the UI is built, the server downloads the configured fonts and serves them itself, so visitors' browsers do not contact Google. If the download fails, for example on a server without internet access, the UI links Google Fonts instead.
+
+| Parameter              | Type   | Default Value | Description                                                                              |
+| :--------------------- | :----- | :------------ | :--------------------------------------------------------------------------------------- |
+| `web.theme.fonts.body` | String | Nunito        | Font for all standard body text, including headings.                                     |
+| `web.theme.fonts.mono` | String | Fira Code     | Font for all monospace text such as inline code or code blocks, including device output. |
+
+##### Example
+
+```yaml filename="config.yaml"
+web:
+    theme:
+        fonts:
+            body: Inter
+```

@@ -1,0 +1,44 @@
+## Using Docker
+
+The application keeps the `hyperglass` service and configuration names. Set `RELEASE_TAG` to the published tag you select from the [releases page](https://github.com/hyperglass-community/hyperglass/releases). The migration release number is not yet selected; Ultraglass release numbers do not name community Hyperglass releases.
+
+```shell copy
+cd /opt/hyperglass
+docker compose down
+docker compose rm -f
+git fetch --tags
+git checkout "$RELEASE_TAG"
+docker compose build
+docker compose up
+```
+
+## Manual installation
+
+Update the checked-out release, reinstall the package in the virtual environment, then restart the service. Hyperglass rebuilds the UI at start when the version changes.
+
+```shell copy
+cd /opt/hyperglass
+git fetch --tags
+git checkout "$RELEASE_TAG"
+. .venv/bin/activate
+python -m pip install -e '.[ui]'
+systemctl restart hyperglass
+```
+
+## Migrating from Hyperglass 2.0.4
+
+Back up `config.yaml`, `devices.yaml` and `directives.yaml` before upgrading. The service and configuration names remain `hyperglass`. Validate the configuration with `hyperglass onboard check` before exposing the upgraded service.
+
+This migration adds these changes without selecting a new release number:
+
+- New built-in platforms: `aruba_aoscx`, `cumulus_linux`, `dell_force10`, `dell_os10`, `fortinet`, `hp_comware`, `ipinfusion_ocnos` and `paloalto_panos`. See [devices](/configuration/devices.mdx) for the `attrs` and VRF forms each platform uses.
+- The `hyperglass onboard` command creates and tests device entries, checks feature settings, and scaffolds custom directives. See [device onboarding](/configuration/onboarding.mdx).
+- FRR, Juniper and Arista retain their structured-output defaults. Additional platforms require `structured_output: true`. Set `structured_output: false` to retain text output explicitly.
+- Custom VRF directives remain supported. Numeric VRFs normalize to strings; spaces and slashes remain invalid.
+- Valid zero-route MikroTik results complete without repeated SSH sessions.
+- Cisco IOS and NX-OS IPv6 BGP Route queries require a prefix no longer than `/127`.
+- HTTP devices receive default HTTP configuration when the `http` block is omitted.
+- Forwarding headers require a trusted proxy. An installation behind a reverse proxy must set `web.client_ip.trusted_proxies` to keep visitor addresses for My IP, the webhook `source` and the per-client limits. See [Client Address](/configuration/config/web-ui.mdx#client-address).
+- `/api/dns` and `/api/aspath/enrich` are disabled by default. `web.dns_provider.name: server` enables server DNS, which asks Cloudflare's public resolver and returns public addresses only. `web.aspath_enrichment: true` enables the ASN name lookup in the AS path view.
+- Support bundles export metadata only. They no longer include free-form messages or exception values.
+- The unused upstream BGP community input plugin is removed. Built-in syntax checks and directive rules still validate community targets.

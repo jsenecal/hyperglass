@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Transfer the Ultraglass 3.6.2 application baseline through the staged migration in [#390](https://github.com/hyperglass-community/hyperglass/issues/390), including structured results, router implementations, configuration, onboarding and support tools.
+- Transfer the documentation framework, guides and complete configuration example. Source release history remains in the [Ultraglass repository](https://github.com/WilhelmZA/ultraglass/blob/90e2f3ab260820f49cd99872d779dc8083d9e9b3/CHANGELOG.md); its release numbers are not Hyperglass release numbers.
+
 ### Fixed
 - Reject control characters and line separators in query targets, including targets accepted by custom directives. Restrict IPv6 zone identifiers to letters, digits and hyphens before command construction. Part of [#383](https://github.com/hyperglass-community/hyperglass/issues/383).
 - [#280](https://github.com/thatmattlove/hyperglass/issues/280): Fix: `condition: None` caused error in directive @Jimmy01240397

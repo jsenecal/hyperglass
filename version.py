@@ -11,6 +11,7 @@ import typer
 
 PACKAGE_JSON = Path(__file__).parent / "hyperglass" / "ui" / "package.json"
 PACKAGE_JSON_PATTERN = re.compile(r"\s+\"version\"\:\s\"(.+)\"\,$")
+DOCS_PACKAGE_JSON = Path(__file__).parent / "docs" / "package.json"
 
 PYPROJECT_TOML = Path(__file__).parent / "pyproject.toml"
 PYPROJECT_PATTERN = re.compile(r"^version\s\=\s\"(.+)\"$")
@@ -18,23 +19,12 @@ PYPROJECT_PATTERN = re.compile(r"^version\s\=\s\"(.+)\"$")
 CONSTANTS = Path(__file__).parent / "hyperglass" / "constants.py"
 CONSTANT_PATTERN = re.compile(r"^__version__\s\=\s\"(.+)\"$")
 
-UPGRADE_DOC = Path(__file__).parent / "docs" / "pages" / "installation" / "upgrading.mdx"
-UPGRADE_DOC_PATTERN = re.compile(r"^git\scheckout\sv(.+)$")
-
-UPGRADE_GH_FEATURE = Path(__file__).parent / ".github" / "ISSUE_TEMPLATE" / "1-feature-request.yaml"
-UPGRADE_GH_FEATURE_PATTERN = re.compile(r"^[\s\t]+placeholder\:\sv(.+)$")
-
-UPGRADE_GH_BUG = Path(__file__).parent / ".github" / "ISSUE_TEMPLATE" / "2-bug-report.yaml"
-
-UPGRADE_GH_BUG_PATTERN = re.compile(r"^[\s\t]+placeholder\:\sv(.+)$")
-
+# Guides select a release tag; issue forms accept a tag or SHA. Neither embeds a version.
 UPGRADES = (
     ("package.json", PACKAGE_JSON, PACKAGE_JSON_PATTERN),
+    ("docs/package.json", DOCS_PACKAGE_JSON, PACKAGE_JSON_PATTERN),
     ("pyproject.toml", PYPROJECT_TOML, PYPROJECT_PATTERN),
     ("constants.py", CONSTANTS, CONSTANT_PATTERN),
-    ("upgrading.mdx", UPGRADE_DOC, UPGRADE_DOC_PATTERN),
-    ("1-feature-request.yaml", UPGRADE_GH_FEATURE, UPGRADE_GH_FEATURE_PATTERN),
-    ("2-bug-report.yaml", UPGRADE_GH_BUG, UPGRADE_GH_BUG_PATTERN),
 )
 
 cli = typer.Typer(name="version", no_args_is_help=True)
@@ -114,9 +104,13 @@ class Version:
                     self.old_version = old_version
 
                     if self.old_version != self.new_version:
-                        lines[idx] = re.sub(old_version, self.new_version, line)
+                        start, end = match.span(1)
+                        lines[idx] = line[:start] + str(self.new_version) + line[end:]
                         found_match = True
                     break
+
+            if self.old_version is None:
+                raise ValueError(f"Version pattern did not match {self.name}")
 
             if found_match:
                 file.seek(0)

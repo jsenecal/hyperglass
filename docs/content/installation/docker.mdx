@@ -1,0 +1,102 @@
+---
+title: Using Docker
+description: Install Hyperglass with Docker
+---
+
+import { Cards, Steps, Callout } from "nextra/components";
+
+<Callout type="info">**Docker is the recommended method for running Hyperglass.**</Callout>
+
+<Steps>
+
+### Install Docker
+
+<Cards>
+    <Cards.Card
+        title="Docker Engine Installation Guide"
+        href="https://docs.docker.com/engine/install/"
+        target="_blank"
+        arrow
+    />
+</Cards>
+
+### Download Hyperglass
+
+```shell copy
+mkdir /etc/hyperglass
+touch /etc/hyperglass/hyperglass.env
+git clone https://github.com/hyperglass-community/hyperglass.git --depth=1 /opt/hyperglass
+cd /opt/hyperglass
+```
+
+Clone into `/opt/hyperglass`. The sample `systemd` service runs `docker compose` from that directory. The service also reads `/etc/hyperglass/hyperglass.env`, and `systemd` does not start it if that file is missing.
+
+<Callout type="info">The sample `compose.yaml` builds the image from source. Version-tag builds publish to `ghcr.io/hyperglass-community/hyperglass` after the required checks pass. Pull requests and `main` builds do not publish images. Use the source build until the migration release is available.</Callout>
+
+### Optional: Quickstart
+
+Do this if you want to verify the Hyperglass page with a fake device before connecting real network devices.
+
+```shell copy
+cp /opt/hyperglass/.samples/sample_devices.yaml /etc/hyperglass/devices.yaml
+cd /opt/hyperglass
+docker compose up
+```
+
+Open http://localhost:8001. The first start builds the UI, which takes a few minutes.
+
+### Create a `systemd` service
+
+<Callout type="info">Before you create and start the Hyperglass service, verify whether you need to change any [environment variables](environment-variables.mdx).</Callout>
+
+```shell copy
+cp /opt/hyperglass/.samples/hyperglass-docker.service /etc/hyperglass/hyperglass.service
+ln -s /etc/hyperglass/hyperglass.service /etc/systemd/system/hyperglass.service
+systemctl daemon-reload
+systemctl enable hyperglass
+systemctl start hyperglass
+```
+
+</Steps>
+
+## Client addresses and host nginx
+
+The default Compose setup runs Hyperglass and Redis without a reverse proxy. Keep `web.client_ip.trusted_proxies: []` for direct access. Hyperglass ignores forwarding headers and uses the connecting address. My IP returns `null` for loopback or private addresses, so a local visit does not insert a Docker gateway address.
+
+For nginx on the Docker host, restrict the published application port before trusting proxy headers. Add this to `.env` beside `compose.yaml`:
+
+```dotenv
+HYPERGLASS_BIND_ADDRESS=127.0.0.1
+```
+
+Keep `HYPERGLASS_HOST=0.0.0.0` inside the container. `HYPERGLASS_BIND_ADDRESS` controls the host's published port; it does not change the container listener. Recreate the service to apply the port binding:
+
+```shell
+docker compose up -d hyperglass
+docker compose port hyperglass 8001
+```
+
+For the default port, the second command must show `127.0.0.1:8001`. Point nginx at `http://127.0.0.1:8001`: the supplied `.samples/hyperglass.nginx` uses `http://[::1]:8001` for an installation without Docker, so change its `proxy_pass` line. The sample overwrites `X-Real-IP` and `X-Forwarded-For` with `$remote_addr`.
+
+On Linux Docker bridge networking, Hyperglass sees host nginx through the bridge gateway, not `127.0.0.1`. Find that gateway:
+
+```shell
+docker inspect "$(docker compose ps -q hyperglass)" --format '{{range .NetworkSettings.Networks}}{{println .Gateway}}{{end}}'
+```
+
+Merge the following into `/etc/hyperglass/config.yaml`, replacing `172.18.0.1/32` with that exact gateway address and `/32`:
+
+```yaml
+web:
+    my_ip: server
+    client_ip:
+        header: X-Real-IP
+        trusted_proxies:
+            - 172.18.0.1/32
+```
+
+Do not trust the whole Docker subnet or all private networks. Restart Hyperglass after changing `config.yaml`, then reload nginx. Recheck the gateway if Compose recreates its network. For nginx in another container, trust that proxy container's address instead and keep the application port inaccessible to visitors. A CDN before nginx needs its own explicit trust configuration in nginx.
+
+Verify from a remote client through nginx. `/api/myip?family=4` must return the visitor's public IPv4 address. Supplying a forged `X-Real-IP` header must not change that result. Webhook `source` uses the same trusted address. Direct access to the host's port 8001 must be unavailable remotely.
+
+Docker Desktop or another network layer can replace the visitor address before Hyperglass receives it. Do not trust forwarding headers from that gateway when visitors can connect directly. `web.my_ip: external` enables browser-side public IP lookup, but webhook attribution still requires a correctly configured proxy.

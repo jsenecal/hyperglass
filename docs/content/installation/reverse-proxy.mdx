@@ -1,0 +1,50 @@
+---
+title: Reverse Proxy
+description: Set up a reverse proxy for Hyperglass
+---
+
+import { Cards, Callout } from "nextra/components";
+
+[Caddy](https://caddyserver.com) is recommended, but any reverse proxy ([NGINX](https://www.nginx.com), [Apache2](https://httpd.apache.org)) will work.
+
+## Caddy
+
+<Cards>
+    <Cards.Card
+        title="Install Caddy"
+        target="_blank"
+        href="https://caddyserver.com/docs/install"
+        arrow
+    />
+</Cards>
+
+```shell copy
+cp /opt/hyperglass/.samples/Caddyfile /etc/caddy/Caddyfile
+```
+
+Change the `lg.example.com` and `person@example.com` values to match your Hyperglass FQDN and email address. The email address is used for automatic SSL certificate generation via Let's Encrypt.
+
+<Callout type="info">If you prefer to use other Let's Encrypt validation methods or your own SSL certificate, modify `/etc/caddy/Caddyfile` in accordance with the [Caddy docs](https://caddyserver.com/docs/caddyfile-tutorial).</Callout>
+
+Restart the Caddy service: `systemctl restart caddy{:shell}`
+
+## NGINX
+
+```shell copy
+cp /opt/hyperglass/.samples/hyperglass.nginx /etc/nginx/sites-available/hyperglass
+ln -s /etc/nginx/sites-available/hyperglass /etc/nginx/sites-enabled/hyperglass
+```
+
+Change the `lg.example.com` value to match your Hyperglass FQDN.
+
+Change the `<path to cert chain>` and `<path to key>` values to match the path to your certificate and private key files.
+
+## Client addresses
+
+Hyperglass ignores forwarding headers until you list the proxy in `web.client_ip.trusted_proxies`. Without that setting, the My IP button, the webhook `source` and the per-client limits use the proxy address. See [Client Address](/configuration/config/web-ui.mdx#client-address). For a proxy on the same host:
+
+```yaml filename="config.yaml" copy
+web:
+    client_ip:
+        trusted_proxies: ["127.0.0.1/32", "::1/128"]
+```
