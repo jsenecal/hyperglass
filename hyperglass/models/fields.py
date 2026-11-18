@@ -10,7 +10,7 @@ from pydantic import AfterValidator, BeforeValidator
 IntFloat = t.TypeVar("IntFloat", int, float)
 J = t.TypeVar("J")
 
-SupportedDriver = t.Literal["netmiko", "hyperglass_agent"]
+SupportedDriver = t.Literal["netmiko", "hyperglass_agent", "hyperglass_http_client"]
 HttpAuthMode = t.Literal["basic", "api_key"]
 HttpProvider = t.Literal["msteams", "slack", "generic"]
 LogFormat = t.Literal["text", "json"]

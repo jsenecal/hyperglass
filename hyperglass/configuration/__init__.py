@@ -45,4 +45,5 @@ def init_user_config(
     with state.cache.pipeline() as pipeline:
         pipeline.set("devices", _devices)
         pipeline.set("ui_params", ui_params)
+        # Changes on each configuration load. Plugin readiness is recorded separately.
         pipeline.set("generation", str(uuid4()))

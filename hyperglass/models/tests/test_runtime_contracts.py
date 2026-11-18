@@ -1,12 +1,14 @@
 """Keep runtime consumers compatible with the configuration shipped beside them."""
 
 from types import SimpleNamespace
+from importlib import import_module, reload
 
 import pytest
 from pydantic import ValidationError
 
 from hyperglass.state import use_state
 from hyperglass.constants import DNS_OVER_HTTPS
+from hyperglass.defaults._strings import CREDIT, DEFAULT_HELP, DEFAULT_DETAILS
 from hyperglass.models.api import Query
 from hyperglass.exceptions.private import ConfigError
 from hyperglass.exceptions.public import DeviceCommandError
@@ -124,3 +126,26 @@ def test_vrf_without_usable_directives_is_a_configuration_error():
 
 def test_dns_choices_only_advertise_implemented_providers():
     assert all(not url.startswith("/") for url in DNS_OVER_HTTPS.values())
+
+
+def test_default_credit_and_help_use_hyperglass_links():
+    credit = CREDIT.format(
+        upstream_url="https://github.com/hyperglass-community/hyperglass", version="2.0.4"
+    )
+    assert "hyperglass-community/hyperglass" in credit
+    assert "fork of" not in credit
+    assert "WilhelmZA/ultraglass" not in credit + DEFAULT_HELP + str(DEFAULT_DETAILS)
+    assert "docs/public/traceroute_nanog.pdf" in DEFAULT_HELP
+
+
+@pytest.mark.parametrize(
+    "base_url,expected", [(None, "/"), ("https://lg.example.org/", "https://lg.example.org")]
+)
+def test_openapi_uses_configured_server(monkeypatch, base_url, expected):
+    from hyperglass.settings import Settings
+
+    monkeypatch.setattr(Settings, "disable_ui", True)
+    params = Params(docs={} if base_url is None else {"base_url": base_url})
+    use_state().cache.set("params", params)
+    api = reload(import_module("hyperglass.api"))
+    assert api.app.openapi_schema.servers[0].url == expected

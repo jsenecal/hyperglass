@@ -1,7 +1,9 @@
 """Validate router configuration variables."""
 
 # Standard Library
+import os
 import re
+import difflib
 import typing as t
 from pathlib import Path
 from ipaddress import IPv4Address, IPv6Address
@@ -19,6 +21,8 @@ from hyperglass.constants import (
     DRIVER_MAP,
     SCRAPE_HELPERS,
     LINUX_PLATFORMS,
+    NETMIKO_DEVICE_TYPES,
+    DEFAULT_STRUCTURED_OUTPUT,
     SUPPORTED_STRUCTURED_OUTPUT,
 )
 from hyperglass.exceptions.private import ConfigError, UnsupportedDevice
@@ -83,15 +87,22 @@ class Device(HyperglassModelWithId, extra="allow"):
     proxy: t.Optional[Proxy] = None
     display_name: t.Optional[str] = None
     port: int = 22
-    vrf: t.Optional[str] = None
-    http: HttpConfiguration = HttpConfiguration()
+    http: t.Optional[HttpConfiguration] = None
     platform: str
+    # Software version, such as `15.9(3)M6`. Directives use it to pick commands older
+    # releases accept.
     os_version: t.Optional[str] = None
     structured_output: t.Optional[bool] = None
+    # Run built-in queries in this VRF. Built-ins without a VRF form are not offered.
+    vrf: t.Optional[str] = Field(None, pattern=r"^[A-Za-z0-9_.:-]{1,64}$")
     directives: Directives = Directives()
     driver: t.Optional[SupportedDriver] = None
     driver_config: t.Dict[str, t.Any] = {}
+    # Set to false when a login policy rejects the driver's paging and terminal
+    # width commands. Directives must then disable paging themselves.
     disable_paging: bool = True
+    # Retries when the device drops a new SSH session before login, for example a
+    # session rate limit. Unset uses the platform default: 3 on cisco_xr, else 0.
     connect_retries: t.Optional[int] = Field(None, ge=0, le=10)
     attrs: t.Dict[str, str] = {}
 
@@ -100,8 +111,41 @@ class Device(HyperglassModelWithId, extra="allow"):
         kw = check_legacy_fields(model="Device", data=kw)
         if "id" not in kw:
             kw = self._with_id(kw)
+        platform = kw.get("platform")
+        if platform in SCRAPE_HELPERS:
+            platform = SCRAPE_HELPERS[platform]
+        if kw.get("http") is None and (
+            platform == "http" or kw.get("driver") == "hyperglass_http_client"
+        ):
+            kw["http"] = HttpConfiguration()
+        # Netmiko's generic driver sends no paging command. TNSR CLI has no `terminal length`.
+        if platform == "tnsr" and "disable_paging" not in kw:
+            kw["disable_paging"] = False
         super().__init__(**kw)
+        self._warn_unknown_keys()
         self._validate_directive_attrs()
+
+    def _warn_unknown_keys(self) -> None:
+        """Warn about keys the model does not know, which are otherwise silently ignored (#107)."""
+        known = list(
+            {
+                key: None
+                for name, field in type(self).model_fields.items()
+                for key in (name, field.alias)
+                if key is not None
+            }
+        )
+        for key in self.model_extra or {}:
+            suggestion = sorted(
+                difflib.get_close_matches(key, known, n=2, cutoff=0.6),
+                key=lambda match: -len(os.path.commonprefix((key, match))),
+            )
+            log.bind(device=self.name, key=key, suggestion=suggestion or None).warning(
+                "Device {!r} has unknown key {!r}, which is ignored{}",
+                self.name,
+                key,
+                f"; did you mean {' or '.join(repr(s) for s in suggestion)}?" if suggestion else "",
+            )
 
     @property
     def _target(self):
@@ -171,7 +215,7 @@ class Device(HyperglassModelWithId, extra="allow"):
         """
         if self.platform in LINUX_PLATFORMS:
             return "linux_ssh"
-        return self.platform
+        return NETMIKO_DEVICE_TYPES.get(self.platform, self.platform)
 
     def _validate_directive_attrs(self) -> None:
         keys = directive_attr_keys(self.directives, vrf=getattr(self, "vrf", None) is not None)
@@ -239,16 +283,6 @@ class Device(HyperglassModelWithId, extra="allow"):
                     device=info.data["name"],
                 )
 
-        if value is None:
-            if info.data.get("http") is not None:
-                value = "http"
-            else:
-                # Ensure device platform is defined.
-                raise ConfigError(
-                    "Device '{device}' is missing a 'platform' (Network Operating System) property",
-                    device=info.data["name"],
-                )
-
         if value in SCRAPE_HELPERS.keys():
             # Rewrite platform to helper value if needed.
             value = SCRAPE_HELPERS[value]
@@ -270,7 +304,7 @@ class Device(HyperglassModelWithId, extra="allow"):
 
     @field_validator("structured_output", mode="before")
     def validate_structured_output(cls, value: bool, info: ValidationInfo) -> bool:
-        """Validate structured output is supported on the device & set a default."""
+        """Keep legacy table defaults and require opt-in for additional parsers."""
 
         if value is True:
             if info.data.get("platform") not in SUPPORTED_STRUCTURED_OUTPUT:
@@ -281,11 +315,7 @@ class Device(HyperglassModelWithId, extra="allow"):
                     platform=info.data.get("platform"),
                 )
             return value
-        if value is None and info.data.get("platform") in SUPPORTED_STRUCTURED_OUTPUT:
-            value = True
-        else:
-            value = False
-        return value
+        return value is None and info.data.get("platform") in DEFAULT_STRUCTURED_OUTPUT
 
     @field_validator("directives", mode="before")
     def validate_directives(
@@ -337,7 +367,7 @@ class Device(HyperglassModelWithId, extra="allow"):
 
     @field_validator("os_version", mode="before")
     def validate_os_version(cls, value: t.Any) -> t.Optional[str]:
-        """Require a leading version number, including unquoted YAML numbers."""
+        """Accept an unquoted YAML number such as `15.9` and require a leading version number."""
         if value is None:
             return None
         value = str(value)
@@ -406,9 +436,9 @@ class Devices(MultiModel, model=Device, unique_by="id"):
                         "group": group,
                         "id": device.id,
                         "name": device.name,
-                        "avatar": f"/images/{device.avatar.name}"
-                        if device.avatar is not None
-                        else None,
+                        "avatar": (
+                            f"/images/{device.avatar.name}" if device.avatar is not None else None
+                        ),
                         "description": device.description,
                         "directives": [d.frontend() for d in device.directives],
                     }

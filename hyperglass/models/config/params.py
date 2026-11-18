@@ -52,14 +52,14 @@ class ParamsPublic(HyperglassModel):
         description="Your organization's name. This field is used in the UI & API documentation to set fields such as `<meta/>` HTML tags for SEO and the terms & conditions footer component.",
     )
     site_title: str = Field(
-        "hyperglass",
+        "Hyperglass",
         title="Site Title",
-        description="The name of your hyperglass site. This field is used in the UI & API documentation to set fields such as the `<title/>` HTML tag, and the terms & conditions footer component.",
+        description="The name of your Hyperglass site. This field is used in the UI & API documentation to set fields such as the `<title/>` HTML tag, and the terms & conditions footer component.",
     )
     site_description: str = Field(
         "{org_name} Network Looking Glass",
         title="Site Description",
-        description='A short description of your hyperglass site. This field is used in th UI & API documentation to set the `<meta name="description"/>` tag. `{org_name}` may be used to insert the value of the `org_name` field.',
+        description='A short description of your Hyperglass site. This field is used in th UI & API documentation to set the `<meta name="description"/>` tag. `{org_name}` may be used to insert the value of the `org_name` field.',
     )
 
 
@@ -73,7 +73,7 @@ class Params(ParamsPublic, HyperglassModel):
     fake_output: bool = Field(
         False,
         title="Fake Output",
-        description="If enabled, the hyperglass backend will return static fake output for development/testing purposes.",
+        description="If enabled, the Hyperglass backend will return static fake output for development/testing purposes.",
     )
     cors_origins: t.List[str] = Field(
         [],
@@ -83,12 +83,12 @@ class Params(ParamsPublic, HyperglassModel):
     plugins: t.List[str] = []
 
     # Sub Level Params
-    cache: Cache = Cache()
-    docs: Docs = Docs()
-    logging: Logging = Logging()
-    messages: Messages = Messages()
-    structured: Structured = Structured()
-    web: Web = Web()
+    cache: Cache = Field(default_factory=Cache)
+    docs: Docs = Field(default_factory=Docs)
+    logging: Logging = Field(default_factory=Logging)
+    messages: Messages = Field(default_factory=Messages)
+    structured: Structured = Field(default_factory=Structured)
+    web: Web = Field(default_factory=Web)
 
     def __init__(self, **kw: t.Any) -> None:
         return super().__init__(**self.convert_paths(kw))
@@ -119,6 +119,12 @@ class Params(ParamsPublic, HyperglassModel):
             return [str(f) for f in matching_plugins]
         return []
 
+    @field_validator("messages", mode="after")
+    @classmethod
+    def validate_messages(cls, messages: Messages) -> Messages:
+        """Warn for deprecated message keys set in the operator's config."""
+        return messages.warn_deprecated()
+
     @field_validator("web", mode="after")
     @classmethod
     def validate_web(cls, web: Web, info: ValidationInfo) -> Web:
@@ -131,8 +137,8 @@ class Params(ParamsPublic, HyperglassModel):
 
         for menu in web.menus:
             menu.content = menu.content.format(
-                site_title=info.data.get("site_title", "hyperglass"),
-                org_name=info.data.get("org_name", "hyperglass"),
+                site_title=info.data.get("site_title", "Hyperglass"),
+                org_name=info.data.get("org_name", "Hyperglass"),
                 version=__version__,
             )
         return web
@@ -164,5 +170,7 @@ class Params(ParamsPublic, HyperglassModel):
                 "site_description": ...,
                 "web": ...,
                 "messages": ...,
-            }
+            },
+            # Proxy settings are used by the server only.
+            exclude={"web": {"client_ip"}},
         )

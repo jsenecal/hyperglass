@@ -1,8 +1,8 @@
 """Constant store for large default values."""
 
 CREDIT = """
-Powered by [**hyperglass**](https://hyperglass.dev) version {version}. \
-Source code licensed [_BSD 3-Clause Clear_](https://hyperglass.dev/license/).
+Powered by [**Hyperglass**]({upstream_url}), version {version}. \
+Source code licensed [_BSD 3-Clause Clear_]({upstream_url}/blob/main/LICENSE).
 """
 
 DEFAULT_TERMS = """
@@ -44,7 +44,7 @@ Sends 5 ICMP echo requests to the target.
     "traceroute": """
 Performs UDP Based traceroute to the target. \
 For information about how to interpret traceroute results, [click here]\
-(https://hyperglass.dev/traceroute_nanog.pdf).
+(https://github.com/hyperglass-community/hyperglass/blob/main/docs/public/traceroute_nanog.pdf).
 """,
 }
 
@@ -79,5 +79,5 @@ Sends 5 ICMP echo requests to the target.
 Performs UDP Based traceroute to the target.
 
 For information about how to interpret traceroute results, [click here]\
-(https://hyperglass.dev/traceroute_nanog.pdf).
+(https://github.com/hyperglass-community/hyperglass/blob/main/docs/public/traceroute_nanog.pdf).
 """
