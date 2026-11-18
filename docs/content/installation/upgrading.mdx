@@ -35,6 +35,7 @@ This migration adds these changes without selecting a new release number:
 - The `hyperglass onboard` command creates and tests device entries, checks feature settings, and scaffolds custom directives. See [device onboarding](/configuration/onboarding.mdx).
 - FRR, Juniper and Arista retain their structured-output defaults. Additional platforms require `structured_output: true`. Set `structured_output: false` to retain text output explicitly.
 - Custom VRF directives remain supported. Numeric VRFs normalize to strings; spaces and slashes remain invalid.
+- Custom directives now quote substituted arguments on shell-backed platforms, including permissive rules. Review templates that depend on shell expansion or split one target into multiple arguments. Use explicit placeholders for separate arguments. Never pass visitor input to `eval` or `sh -c`. See [custom directive quoting](/configuration/directives.mdx).
 - Valid zero-route MikroTik results complete without repeated SSH sessions.
 - Cisco IOS and NX-OS IPv6 BGP Route queries require a prefix no longer than `/127`.
 - HTTP devices receive default HTTP configuration when the `http` block is omitted.
