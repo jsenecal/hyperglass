@@ -35,6 +35,9 @@ SUPPORTED_STRUCTURED_OUTPUT = (
     *DEFAULT_STRUCTURED_OUTPUT,
     "juniper_junos", "huawei", "huawei_vrpv8", "mikrotik_routeros", "mikrotik_switchos",
     "cisco_ios", "cisco_xr", "cisco_nxos", "bird", "openbgpd", "vyos",
+    "arrcus_arcos", "aruba_aoscx", "cumulus_linux", "dell_force10", "dell_os10",
+    "extreme_exos", "fortinet", "hp_comware", "ipinfusion_ocnos", "paloalto_panos", "sonic",
+    "nokia_sros", "vyos_1_3", "tnsr", "extreme_vsp",
 )
 
 CONFIG_EXTENSIONS = ("py", "yaml", "yml", "json", "toml")

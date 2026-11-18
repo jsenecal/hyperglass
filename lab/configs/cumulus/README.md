@@ -1,0 +1,55 @@
+# Cumulus VX acceptance lab
+
+This optional topology connects Cumulus VX to a dedicated GoBGP core in the default VRF and `LAB`. It uses a small deterministic table. Captures under `hyperglass/plugins/tests/fixtures/cumulus-live/` identify their software versions and command provenance.
+
+## SSH configuration
+
+SSH enters the management VRF. Separate BGP peers supply distinct IPv4 and IPv6 prefixes to the default and LAB VRFs. Use explicit SSH pacing to avoid reading a prompt before command output:
+
+```yaml
+driver_config:
+  fast_cli: false
+  global_delay_factor: 1
+```
+
+The captured output uses Cumulus VX 5.4.0 with FRR `7.5+cl5.3.0u0`. It does not establish compatibility with a different supplied image.
+
+## Start
+
+Run hardware-dependent appliances inside an isolated lab VM without host device passthrough or host filesystem sharing.
+
+Supply a compatible Cumulus VX container image through `CUMULUS_IMAGE`. The topology defaults to `vrnetlab/nvidia_cumulus-vx:5.16.1`. The BGP peer image comes from `lab/images/core`.
+
+From the repository root:
+
+```sh
+sudo containerlab deploy -t lab/hyperglass-cumulus.clab.yml
+scp lab/configs/cumulus/configure.sh cumulus@192.168.251.12:/tmp/configure-hyperglass.sh
+ssh cumulus@192.168.251.12 'sh /tmp/configure-hyperglass.sh'
+docker exec clab-hyperglass-cumulus-core gobgp neighbor
+docker exec clab-hyperglass-cumulus-core gobgp global rib add -a ipv4 198.51.100.1/32 nexthop 0.0.0.0 aspath "64999 13335" community 65000:777
+docker exec clab-hyperglass-cumulus-core gobgp global rib add -a ipv6 2001:db8:100::1/128 nexthop :: aspath "64999 13335" community 65000:777
+```
+
+The wrapper's documented lab credential is `cumulus` / `Clab123!`. Confirm all four BGP sessions reach `Establ` before testing. Copy the entries in `devices.yaml` into the test installation's devices file. Its network must reach `192.168.251.12`. Repeat with `structured_output: false` to compare text output.
+
+## Capture acceptance evidence
+
+Test both locations with route/ping/traceroute targets `198.51.100.1` and `2001:db8:100::1`, AS path `_64999_`, and community `65000:777`. Check that the VRF location returns `LAB` in structured BGP output. Verify both diagnostic targets respond from each VRF.
+
+Capture the exact command replies over SSH, including the installed version from `cat /etc/os-release`. Store sanitized replies under `hyperglass/plugins/tests/fixtures/cumulus-live/` with the command and version metadata. The following commands illustrate IPv4 capture; repeat with IPv6 and the `vrf LAB` BGP form.
+
+```sh
+ssh cumulus@192.168.251.12 "sudo -n vtysh -c 'show bgp ipv4 unicast 198.51.100.1/32 json'" > route4.json
+ssh cumulus@192.168.251.12 "sudo -n vtysh -c 'show bgp ipv4 unicast regexp _64999_ json'" > aspath4.json
+ssh cumulus@192.168.251.12 "sudo -n vtysh -c 'show bgp ipv4 unicast community 65000:777 json detail'" > community4.json
+ssh cumulus@192.168.251.12 'sudo -n ip vrf exec default traceroute -4 -n -q 1 -w 1 -s 10.252.1.1 198.51.100.1' > trace4.txt
+```
+
+The command-construction tests retain their labelled FRR captures. The separate `test_cumulus_live.py` suite replays the captured VX 5.4 output and checks default/LAB routing contexts, both address families, text preservation and malformed-path rejection.
+
+## Stop
+
+```sh
+sudo containerlab destroy -t lab/hyperglass-cumulus.clab.yml
+```

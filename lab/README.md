@@ -18,6 +18,12 @@ All topology defaults set `privileged: false`. Do not bypass container isolation
 - `hyperglass-lab.clab.yml`: main routers, GoBGP, Redis and two Hyperglass instances.
 - `hyperglass-platforms.clab.yml`: optional router appliances.
 - `hyperglass-firewalls.clab.yml`: optional firewall appliances; see [setup](configs/firewalls/README.md).
+- `hyperglass-aoscx.clab.yml`: AOS-CX; see [setup](configs/aoscx/README.md).
+- `hyperglass-arcos.clab.yml`: ArcOS; see [setup](configs/arcos/README.md).
+- `hyperglass-comware.clab.yml`: Comware; see [setup](configs/comware/README.md).
+- `hyperglass-cumulus.clab.yml`: Cumulus; see [setup](configs/cumulus/README.md).
+- `hyperglass-dell.clab.yml`: Dell OS9; see [setup](configs/os9/README.md).
+- `hyperglass-ocnos.clab.yml`: OcNOS; see [setup](configs/ocnos/README.md).
 - `configs/hyperglass/`: structured-output configuration.
 - `configs/hyperglass-text/`: text-output configuration.
 - `images/`: Dockerfiles and wrappers, not vendor images.

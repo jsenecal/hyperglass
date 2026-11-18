@@ -5,6 +5,15 @@ from .bgp_route_frr import BGPRoutePluginFrr
 from .bgp_route_bird import BGPRoutePluginBird
 from .bgp_route_cisco_ios import BGPRoutePluginCiscoIOS
 from .bgp_route_openbgpd import BGPRoutePluginOpenBGPD
+from .bgp_route_extreme_exos import BGPRoutePluginExtremeEXOS
+from .bgp_route_aoscx import BGPRoutePluginAOSCX
+from .bgp_route_comware import BGPRoutePluginComware
+from .bgp_route_dell import BGPRoutePluginDell
+from .bgp_route_fortinet import BGPRoutePluginFortinet
+from .bgp_route_ocnos import BGPRoutePluginOcNOS
+from .bgp_route_panos import BGPRoutePluginPANOS
+from .bgp_route_arcos import BGPRoutePluginArcOS
+from .trace_route_os9 import TraceroutePluginOS9
 from .remove_command import RemoveCommand
 from .bgp_route_arista import BGPRoutePluginArista
 from .bgp_route_huawei import BGPRoutePluginHuawei
@@ -24,6 +33,15 @@ __all__ = (
     "BGPRoutePluginBird",
     "BGPRoutePluginCiscoIOS",
     "BGPRoutePluginOpenBGPD",
+    "BGPRoutePluginExtremeEXOS",
+    "BGPRoutePluginAOSCX",
+    "BGPRoutePluginComware",
+    "BGPRoutePluginDell",
+    "BGPRoutePluginFortinet",
+    "BGPRoutePluginOcNOS",
+    "BGPRoutePluginPANOS",
+    "BGPRoutePluginArcOS",
+    "TraceroutePluginOS9",
     "BGPRoutePluginFrr",
     "BGPRoutePluginJuniper",
     "BGPRoutePluginHuawei",
