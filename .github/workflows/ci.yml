@@ -261,6 +261,84 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  ssh:
+    name: SSH transport tests
+    runs-on: ubuntu-latest
+    # A real OpenSSH server for the netmiko and paramiko transport. `frr` maps to
+    # netmiko's linux_ssh, so a plain sshd is a representative target.
+    services:
+      sshd:
+        image: lscr.io/linuxserver/openssh-server:10.3_p1-r1-ls238
+        env:
+          PUID: "1000"
+          PGID: "1000"
+          PASSWORD_ACCESS: "true"
+          USER_NAME: hyperglass
+          USER_PASSWORD: hyperglass
+          SUDO_ACCESS: "false"
+        ports:
+          - 2222:2222
+    env:
+      HYPERGLASS_TEST_SSH_HOST: 127.0.0.1
+      HYPERGLASS_TEST_SSH_PORT: 2222
+      HYPERGLASS_TEST_SSH_USERNAME: hyperglass
+      HYPERGLASS_TEST_SSH_PASSWORD: hyperglass
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev pkg-config python3-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements-dev.lock
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip install -r requirements-dev.lock
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Wait for the SSH server
+        run: |
+          for i in $(seq 1 30); do
+            if ssh-keyscan -p 2222 -T 3 127.0.0.1 2>/dev/null | grep -q .; then
+              echo "sshd is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "sshd did not become reachable in time" >&2
+          exit 1
+
+      # The module skips itself without HYPERGLASS_TEST_SSH_HOST, so a skip here
+      # means the job is misconfigured, not that the tests passed.
+      # `shell: bash` sets pipefail, so a pytest failure is not hidden by tee.
+      - name: Test the SSH transport
+        shell: bash
+        run: |
+          pytest hyperglass/execution/drivers/tests/test_ssh_integration.py -v -rs \
+            | tee "$RUNNER_TEMP/ssh.log"
+          if grep -q SKIPPED "$RUNNER_TEMP/ssh.log"; then
+            echo "::error::SSH tests were skipped"
+            exit 1
+          fi
+
   gate:
     name: CI gate
     if: ${{ always() }}
@@ -269,6 +347,7 @@ jobs:
       - frontend
       - package
       - image
+      - ssh
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to pass

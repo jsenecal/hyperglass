@@ -1,0 +1,208 @@
+"""SSH transport integration test (Tier 1).
+
+Exercises the real `NetmikoConnection` driver — and therefore the live
+netmiko/paramiko transport stack — against an actual OpenSSH server, instead
+of mocking it. This is the layer that dependency bumps (netmiko, paramiko)
+most affect (auth, prompt detection, channel read/write, timeouts), which the
+rest of the suite never touches because it relies on ``fake_output``.
+
+`frr` maps to Netmiko's ``linux_ssh`` device type (see
+``Device.get_device_type``), so a plain OpenSSH server is a representative
+target for the linux-based platforms hyperglass actually supports (FRR / BIRD /
+OpenBGPD), not a synthetic stand-in.
+
+The test is skipped unless an SSH server is advertised via environment
+variables. CI starts an ``openssh-server`` service container and sets them; to
+run locally, point these at any reachable SSH server with a POSIX shell::
+
+    docker run -d --name hg-ssh -e PASSWORD_ACCESS=true \
+        -e USER_NAME=hyperglass -e USER_PASSWORD=hyperglass -e SUDO_ACCESS=false \
+        -p 2222:2222 lscr.io/linuxserver/openssh-server
+    HYPERGLASS_TEST_SSH_HOST=127.0.0.1 HYPERGLASS_TEST_SSH_PORT=2222 \
+        pytest hyperglass/execution/drivers/tests/test_ssh_integration.py
+"""
+
+# Standard Library
+import os
+import typing as t
+
+# Third Party
+import pytest
+
+if t.TYPE_CHECKING:
+    # Project
+    from hyperglass.state import HyperglassState
+
+# Project
+from hyperglass.state import use_state
+from hyperglass.state.hooks import _use_state
+from hyperglass.models.api import Query
+from hyperglass.configuration import init_ui_params
+from hyperglass.models.directive import Directives
+from hyperglass.models.config.params import Params
+from hyperglass.models.config.devices import Devices
+from hyperglass.exceptions.public import AuthError
+from hyperglass.execution.drivers import NetmikoConnection
+
+SSH_HOST = os.getenv("HYPERGLASS_TEST_SSH_HOST")
+SSH_PORT = os.getenv("HYPERGLASS_TEST_SSH_PORT")
+SSH_USER = os.getenv("HYPERGLASS_TEST_SSH_USERNAME", "hyperglass")
+SSH_PASS = os.getenv("HYPERGLASS_TEST_SSH_PASSWORD", "hyperglass")
+
+# Skip the whole module (before any fixture runs) unless a server is advertised.
+pytestmark = pytest.mark.skipif(
+    not (SSH_HOST and SSH_PORT),
+    reason="No SSH server advertised; set HYPERGLASS_TEST_SSH_HOST/_PORT to run.",
+)
+
+# A unique marker echoed back over the channel proves end-to-end command flow.
+MARKER = "HG_SSH_OK"
+
+
+@pytest.fixture
+def directives() -> t.Sequence[t.Dict[str, t.Any]]:
+    """Provide a linux directive whose command is a plain shell echo.
+
+    `echo {target}` runs on any POSIX shell, so the round-trip validates the
+    transport without needing a real routing daemon.
+    """
+    return [
+        {
+            "echo_ssh": {
+                "name": "Echo SSH",
+                "rules": [
+                    {
+                        "condition": "0.0.0.0/0",
+                        "action": "permit",
+                        "command": f"echo {MARKER}_{{target}}",
+                    },
+                    {
+                        "condition": "::/0",
+                        "action": "permit",
+                        "command": f"echo {MARKER}_{{target}}",
+                    },
+                ],
+                "field": {"description": "Target"},
+            },
+            # Same shape as the builtin FRR AS path directive: an unrestricted
+            # pattern rule whose target sits inside a double-quoted argument.
+            "echo_pattern": {
+                "name": "Echo Pattern",
+                "rules": [
+                    {
+                        "condition": "*",
+                        "action": "permit",
+                        "command": f'echo "{MARKER}_{{target}}"',
+                    }
+                ],
+                "field": {"description": "Target"},
+            },
+        }
+    ]
+
+
+@pytest.fixture
+def devices() -> t.Sequence[t.Dict[str, t.Any]]:
+    """One reachable `frr`/linux_ssh device and one with bad credentials."""
+    base = {
+        "address": SSH_HOST,
+        "port": int(SSH_PORT),
+        "platform": "frr",
+        "attrs": {},
+        "directives": ["echo_ssh", "echo_pattern"],
+    }
+    return [
+        {**base, "name": "ssh_ok", "credential": {"username": SSH_USER, "password": SSH_PASS}},
+        {
+            **base,
+            "name": "ssh_badauth",
+            "credential": {"username": SSH_USER, "password": "definitely-wrong-password"},
+        },
+    ]
+
+
+@pytest.fixture
+def state(
+    directives: t.Sequence[t.Dict[str, t.Any]],
+    devices: t.Sequence[t.Dict[str, t.Any]],
+) -> t.Generator["HyperglassState", None, None]:
+    """Seed the isolated test store with the SSH devices and directives."""
+    _use_state.cache_clear()
+    _state = use_state()
+    _params = Params()
+    _directives = Directives.new(*directives)
+
+    # Params and directives first: devices and ui_params read them while validating.
+    with _state.cache.pipeline() as pipeline:
+        pipeline.set("params", _params)
+        pipeline.set("directives", _directives)
+
+    _devices = Devices(*devices)
+    with _state.cache.pipeline() as pipeline:
+        pipeline.set("devices", _devices)
+        pipeline.set("ui_params", init_ui_params(params=_params, devices=_devices))
+
+    yield _state
+    _state.clear()
+
+
+@pytest.mark.asyncio
+async def test_netmiko_collects_over_real_ssh(state):
+    """A query runs end-to-end over a real SSH channel and returns its output."""
+    query = Query(queryLocation="ssh_ok", queryTarget="192.0.2.1", queryType="echo_ssh")
+    conn = NetmikoConnection(device=state.devices["ssh_ok"], query_data=query)
+
+    responses = await conn.collect()
+
+    assert responses, "expected at least one command response"
+    assert any(f"{MARKER}_192.0.2.1" in r for r in responses), responses
+
+
+@pytest.mark.asyncio
+async def test_netmiko_bad_credentials_raise_autherror(state):
+    """A bad password surfaces as hyperglass AuthError (paramiko auth path)."""
+    query = Query(queryLocation="ssh_badauth", queryTarget="192.0.2.1", queryType="echo_ssh")
+    conn = NetmikoConnection(device=state.devices["ssh_badauth"], query_data=query)
+
+    with pytest.raises(AuthError):
+        await conn.collect()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Custom directives are not shell-quoted until #407 merges (#383)",
+)
+@pytest.mark.asyncio
+async def test_netmiko_injection_target_stays_literal(state):
+    """A target that closes the quoted argument is echoed back, not executed (#383).
+
+    `echo_pattern` is a custom directive with a permissive rule, the case #383
+    leaves open after the built-in fixes. The device must echo the whole target
+    as one argument, and the injected arithmetic must not run.
+    """
+    target = '_65000"; echo $((6*7))INJ; echo "'
+    query = Query(queryLocation="ssh_ok", queryTarget=target, queryType="echo_pattern")
+    conn = NetmikoConnection(device=state.devices["ssh_ok"], query_data=query)
+
+    responses = await conn.collect()
+
+    output = "".join(responses)
+    assert "42INJ" not in output, responses
+    assert f"{MARKER}_{target}" in output, responses
+
+
+@pytest.mark.asyncio
+async def test_netmiko_shell_significant_target_stays_literal(state):
+    """A valid target with a shell-significant char (`|` alternation) is passed literally.
+
+    `|` is legitimate in an AS-path regular expression, so it passes validation;
+    the constructor must still keep it inside a single shell word so the device
+    echoes it back verbatim instead of treating it as a pipe.
+    """
+    target = "(65000|65001)"
+    query = Query(queryLocation="ssh_ok", queryTarget=target, queryType="echo_pattern")
+    conn = NetmikoConnection(device=state.devices["ssh_ok"], query_data=query)
+
+    responses = await conn.collect()
+
+    assert any(f"{MARKER}_{target}" in r for r in responses), responses
