@@ -33,7 +33,9 @@ Each directive has the following options:
 A rule is a way of saying "if a query target matches the rule's conditions, run this command".
 
 <Callout type="warning">
-Custom directives do not receive the shell quoting applied to built-in directives. On shell-backed platforms, never interpolate unrestricted input from `condition: null` or `condition: "*"`. Use an IP rule or an anchored allowlist that excludes shell syntax. Field validation alone is not a command-safety boundary.
+Custom directives shell-quote complete arguments after substituting targets, device attributes and selected variables on Linux, BIRD, FRR, OpenBGPD, SONiC, ArcOS, Cumulus Linux, VyOS and TNSR. Supported `_ssh` aliases receive the same protection. Quoted placeholders remain within their original argument. Trusted template pipelines and redirections remain operators; visitor input cannot add operators. Malformed quotes and arguments containing line breaks or NUL fail before execution.
+
+Templates support literal command words, quoted arguments, pipelines and redirections. Shell expansions in template words become literal text. Here-documents are rejected because their bodies do not use argument quoting. Do not pass placeholders to `eval`, `sh -c` or another interpreter that executes its arguments as code. Quoting protects one shell parsing layer, not the router command language. Use IP rules or anchored allowlists to restrict which router operations visitors can request. Field validation alone is not a command-safety boundary.
 </Callout>
 
 | Parameter   | Type            | Default Value | Description                                                                                    |
@@ -146,10 +148,10 @@ your-directive:
         description: IP address or prefix
 ```
 
-This example disables target validation. Do not publish it on a shell-backed platform. For example, a target of `example text` produces:
+This example disables target validation. Shell-backed platforms still quote substituted arguments, but the rule does not restrict router operations. Use a restrictive rule for public directives. On a shell-backed platform, a target of `example text` produces:
 
 ```none
-show ip route example text
+show ip route 'example text'
 ```
 
 ## Fields
@@ -221,7 +223,7 @@ A directive can declare extra template variables next to `{target}`. Each variab
 | `required` | Boolean       | `false`       | If `false`, the variable can stay empty, and its placeholder renders as an empty string. |
 | `items`    | List of Items |               | Allowed values, at least one. Each item has `name`, `value` and `description`. `value` defaults to `name`. |
 
-Variable keys must be valid identifiers and cannot be `target` or `mask`. A variable placeholder needs no matching device `attrs` entry. On BIRD, FRR, OpenBGPD, SONiC and VyOS devices, Hyperglass shell-quotes the selected value.
+Variable keys must be valid identifiers and cannot be `target` or `mask`. A variable placeholder needs no matching device `attrs` entry. On shell-backed platforms, Hyperglass expands the configured command prefix first, then substitutes and shell-quotes the selected value within its complete argument.
 
 ```yaml filename="directives.yaml" copy {7-18}
 show-bgp-summary:

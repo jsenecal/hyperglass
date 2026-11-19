@@ -35,7 +35,6 @@ def respond(monkeypatch):
                 return response
 
         monkeypatch.setattr(main, "map_driver", lambda _: Driver)
-        monkeypatch.setattr(main.signal, "alarm", lambda _: None)
 
     return factory
 

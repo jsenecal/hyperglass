@@ -20,6 +20,8 @@ from hyperglass.exceptions.public import InputInvalid
 from hyperglass.exceptions.private import ConfigError
 from hyperglass.models.directive import version_matches
 
+from ._shell import format_shell
+
 if t.TYPE_CHECKING:
     # Third Party
     from loguru import Logger
@@ -130,7 +132,20 @@ class Construct:
         # Values come only from the directive's configured choices. Quote them where a shell
         # parses the command.
         selected = getattr(self.query, "query_variables", None) or {}
-        shell = self.device.platform in (*LINUX_PLATFORMS, "vyos", "vyos_1_3", "cumulus_linux")
+        shell = self.device.platform.removesuffix("_ssh") in (
+            *LINUX_PLATFORMS, "linux", "vyos", "vyos_1_3", "cumulus_linux", "tnsr"
+        )
+        if shell and not self.directive._hyperglass_builtin:
+            # Expand only trusted variable prefixes before splitting the template.
+            # Selected values, targets and attributes are substituted after splitting.
+            data = {**attrs, "target": self.target, "mask": mask}
+            for name, variable in variables.items():
+                if name in keys:
+                    value = selected.get(name)
+                    fragment = "" if value is None else variable.command + "{" + name + "}"
+                    command = command.replace("{" + name + "}", fragment)
+                    data[name] = value
+            return format_shell(command, data)
         values = {
             name: variable.render(selected.get(name), quote=shell)
             for name, variable in variables.items()
