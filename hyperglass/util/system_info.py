@@ -82,6 +82,19 @@ def _quota_cpus(quota: int, period: int) -> t.Optional[int]:
     return max(math.ceil(quota / period), 1)
 
 
+def _visible_ancestors(root: Path, relative: str) -> t.List[Path]:
+    """Walk to the visible controller root without escaping the cgroup namespace."""
+    relative_path = Path(relative.lstrip("/"))
+    if ".." in relative_path.parts:
+        return [root]
+    directory = root / relative_path
+    directories = [directory]
+    while directory != root:
+        directory = directory.parent
+        directories.append(directory)
+    return directories
+
+
 def _cgroup_dirs() -> t.Tuple[t.List[Path], t.List[Path]]:
     """Get candidate cgroup v2 and v1 CPU controller directories for this process."""
     v2_dirs: t.List[Path] = []
@@ -91,45 +104,52 @@ def _cgroup_dirs() -> t.Tuple[t.List[Path], t.List[Path]]:
         if len(parts) != 3:
             continue
         _, controllers, rel = parts
-        rel = rel.lstrip("/")
         if controllers == "":
-            v2_dirs.append(_CGROUP_ROOT / rel)
+            v2_dirs.extend(_visible_ancestors(_CGROUP_ROOT, rel))
         elif "cpu" in controllers.split(","):
             for mount in (controllers, "cpu,cpuacct", "cpu"):
-                v1_dirs.extend((_CGROUP_ROOT / mount / rel, _CGROUP_ROOT / mount))
+                v1_dirs.extend(_visible_ancestors(_CGROUP_ROOT / mount, rel))
     # Inside a container the cgroup namespace makes the root the container's own cgroup.
     v2_dirs.append(_CGROUP_ROOT)
-    return v2_dirs, v1_dirs
+    return list(dict.fromkeys(v2_dirs)), list(dict.fromkeys(v1_dirs))
 
 
 def _cgroup_v2_limit(dirs: t.List[Path]) -> t.Tuple[bool, t.Optional[int]]:
-    """Read the first cgroup v2 ``cpu.max``. Returns (found, limit)."""
+    """Read the smallest visible cgroup v2 quota. Returns (found, limit)."""
+    found = False
+    limits = []
     for directory in dirs:
         raw = _read(directory / "cpu.max")
         if raw is None:
             continue
-        quota, _, period = raw.partition(" ")
-        if quota == "max":
-            return True, None
+        found = True
         try:
-            return True, _quota_cpus(int(quota), int(period))
+            quota, period = raw.split()
+            if quota == "max":
+                continue
+            limit = _quota_cpus(int(quota), int(period))
         except ValueError:
-            return True, None
-    return False, None
+            continue
+        if limit is not None:
+            limits.append(limit)
+    return found, min(limits, default=None)
 
 
 def _cgroup_v1_limit(dirs: t.List[Path]) -> t.Optional[int]:
-    """Read the first cgroup v1 CFS quota and period pair."""
+    """Read the smallest visible cgroup v1 CFS quota and period pair."""
+    limits = []
     for directory in dirs:
         quota = _read(directory / "cpu.cfs_quota_us")
         period = _read(directory / "cpu.cfs_period_us")
         if quota is None or period is None:
             continue
         try:
-            return _quota_cpus(int(quota), int(period))
+            limit = _quota_cpus(int(quota), int(period))
         except ValueError:
-            return None
-    return None
+            continue
+        if limit is not None:
+            limits.append(limit)
+    return min(limits, default=None)
 
 
 def _cgroup_cpu_limit() -> t.Optional[int]:
