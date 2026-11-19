@@ -9,31 +9,24 @@
 
 <hr/>
 
-> ### About this fork — hyperglass-ng
+> [!IMPORTANT]
+> ## hyperglass-ng has moved back upstream
 >
-> **hyperglass-ng** is a maintained fork of [**thatmattlove/hyperglass**](https://github.com/thatmattlove/hyperglass). The upstream project has been quiet for an extended period, so this fork carries production-oriented fixes and dependency modernization that hadn't landed upstream as of v2.0.4.
+> This fork is **archived** and no longer receives updates. Development continues at **[hyperglass-community/hyperglass](https://github.com/hyperglass-community/hyperglass)**, the new home of hyperglass after [Matt Love handed the project over](https://github.com/thatmattlove/hyperglass/issues/387). I'm now one of its maintainers, so the work that went into hyperglass-ng continues there.
 >
-> The rename is **branding and distribution only**: the `hyperglass` import package, the `hyperglass` CLI command, the `HYPERGLASS_` environment prefix, and the `/etc/hyperglass` config layout are unchanged, so existing deployments upgrade in place. The distribution is published as `hyperglass-ng` on PyPI and `ghcr.io/jsenecal/hyperglass-ng` on GHCR.
+> **What this means for you**
 >
-> **Container images** are published to GHCR on every push to `main` and on tag pushes:
+> - **Issues and pull requests:** please open them on [hyperglass-community/hyperglass](https://github.com/hyperglass-community/hyperglass/issues).
+> - **Container images:** `ghcr.io/jsenecal/hyperglass-ng` images stay available but won't be updated. Upstream publishes `ghcr.io/hyperglass-community/hyperglass` from version tags. 3.0.0 is currently a release candidate.
+> - **Upgrading:** follow upstream's [upgrade guide](https://github.com/hyperglass-community/hyperglass/blob/main/docs/content/installation/upgrading.mdx). The `hyperglass` package, CLI, `HYPERGLASS_*` environment variables and `/etc/hyperglass` layout are the same.
 >
-> | Tag | Updated by | Use case |
-> | --- | --- | --- |
-> | `ghcr.io/jsenecal/hyperglass-ng:2.1.1` | tag push | immutable, recommended for production |
-> | `ghcr.io/jsenecal/hyperglass-ng:sha-<short>` | every build | per-commit immutable |
-> | `ghcr.io/jsenecal/hyperglass-ng:main` | every push to `main` | rolling HEAD |
-> | `ghcr.io/jsenecal/hyperglass-ng:latest` | every build | rolling whatever's freshest |
+> **Where hyperglass-ng's changes went**
 >
-> **Issues** belong in the [fork's tracker](https://github.com/jsenecal/hyperglass/issues), not upstream's.
-
-#### Changes from upstream v2.0.4
-
-- **[#356](https://github.com/thatmattlove/hyperglass/issues/356)** — Worker count is now cgroup- and affinity-aware (`os.process_cpu_count` / `sched_getaffinity`), capped at 8 by default, and overridable via the new `HYPERGLASS_WORKERS` env var. Stops containerized deployments on high-core hosts from OOM-killing themselves at startup.
-- **[#354](https://github.com/thatmattlove/hyperglass/pull/354) / [#318](https://github.com/thatmattlove/hyperglass/issues/318)** — Pass `request_timeout` to netmiko's `send_command()` so long-running commands like traceroute don't fail at the 10s default.
-- **[#341](https://github.com/thatmattlove/hyperglass/issues/341) / [#348](https://github.com/thatmattlove/hyperglass/issues/348)** — Pin `click<8.2` so fresh Docker / `pip install -e .` installs don't pick up a click release that's incompatible with `typer 0.9.0` and crash on startup.
-- **[#330](https://github.com/thatmattlove/hyperglass/issues/330)** — Make the `Device.http` field optional so the existing "platform: http but no http params" validator branch is actually reachable.
-- **[#334](https://github.com/thatmattlove/hyperglass/issues/334)** — Targeted CVE patches: bump Next.js to 13.5.11, Pillow ≥10.4, httpx ≥0.27, h11 ≥0.16, base image to rolling `python:3.12-alpine` with `apk upgrade`, setuptools ≥78.1.1.
-- **CI** — Tag- and push-triggered multi-tag GHCR publish workflow (lifted from upstream's never-merged `docker-build` branch).
+> - Already upstream: cgroup-aware worker count, the command-injection fix for [#383](https://github.com/hyperglass-community/hyperglass/issues/383) (reimplemented upstream), the SSH transport integration test, and the Renovate configuration.
+> - In review upstream: HTTP 400 for invalid queries ([#412](https://github.com/hyperglass-community/hyperglass/pull/412)), exact query-type resolution ([#426](https://github.com/hyperglass-community/hyperglass/pull/426)), and a consistent BGP origin AS ([#459](https://github.com/hyperglass-community/hyperglass/pull/459)).
+> - Still to be proposed upstream: `/api/health` and Prometheus metrics, shareable result links, and per-browser query history.
+>
+> Thanks to everyone who used, tested and contributed to hyperglass-ng.
 
 <hr/>
 
