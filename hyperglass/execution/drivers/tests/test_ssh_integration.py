@@ -168,16 +168,12 @@ async def test_netmiko_bad_credentials_raise_autherror(state):
         await conn.collect()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Custom directives are not shell-quoted until #407 merges (#383)",
-)
 @pytest.mark.asyncio
 async def test_netmiko_injection_target_stays_literal(state):
     """A target that closes the quoted argument is echoed back, not executed (#383).
 
-    `echo_pattern` is a custom directive with a permissive rule, the case #383
-    leaves open after the built-in fixes. The device must echo the whole target
+    `echo_pattern` is a custom directive with a permissive rule, covering #383.
+    The device must echo the whole target
     as one argument, and the injected arithmetic must not run.
     """
     target = '_65000"; echo $((6*7))INJ; echo "'
